@@ -3,18 +3,24 @@
 
 [Setup]
 AppName=Exult
-AppVerName=Exult Git Snapshot
+AppVerName=Exult 1.7.0git Snapshot
 AppPublisher=The Exult Team
 AppPublisherURL=http://exult.sourceforge.net/
 AppSupportURL=http://exult.sourceforge.net/
 AppUpdatesURL=http://exult.sourceforge.net/
-DefaultDirName={code:GetExultInstDir|{pf}\Exult}
+; Setup exe version number:
+VersionInfoVersion=1.7.0
+DisableDirPage=no
+DefaultDirName={code:GetExultInstDir|{autopf}\Exult}
+DisableProgramGroupPage=no
 DefaultGroupName={code:GetExultGroupDir|Exult}
 OutputBaseFilename=Exultwin32
 Compression=lzma
-SolidCompression=true
+SolidCompression=yes
 InternalCompressLevel=max
 OutputDir=.
+DisableWelcomePage=no
+WizardStyle=modern
 
 [Tasks]
 
@@ -36,13 +42,12 @@ Source: Exult\Exult.exe; DestDir: {app}; Flags: ignoreversion; Components: Exult
 
 Source: Exult\COPYING.txt; DestDir: {app}; Flags: ignoreversion; Components: GPL
 
-Source: Exult\SDL2.dll; DestDir: {app};  Flags: ignoreversion; Components: Exult
+Source: Exult\*.dll; DestDir: {app};  Flags: ignoreversion; Components: Exult
 Source: Exult\README-SDL.txt; DestDir: {app}; Flags: ignoreversion; Components: Exult
 
 Source: Exult\AUTHORS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
 Source: Exult\bgdefaultkeys.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
 Source: Exult\ChangeLog.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\exult.cfg.example; DestDir: {app}; Flags: ignoreversion; Components: Docs
 Source: Exult\faq.html; DestDir: {app}; Flags: ignoreversion; Components: Docs
 Source: Exult\FAQ.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
 Source: Exult\NEWS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
@@ -70,12 +75,12 @@ Source: exconfig.dll; Flags: dontcopy
 Name: {group}\Exult; Filename: {app}\Exult.exe; WorkingDir: {app}; Flags: createonlyiffileexists; Components: Icons
 Name: {group}\reset video settings; Filename: {app}\Exult.exe; Parameters: --reset-video; WorkingDir: {app}; Flags: createonlyiffileexists; Components: Icons
 Name: {group}\Uninstall Exult; Filename: {uninstallexe}; Components: Icons
-Name: {group}\COPYING; Filename: {app}\COPYING.txt; Flags: createonlyiffileexists; Components: Icons
-Name: {group}\ChangeLog; Filename: {app}\ChangeLog.txt; Flags: createonlyiffileexists; Components: Icons
 Name: {group}\FAQ; Filename: {app}\FAQ.html; Flags: createonlyiffileexists; Components: Icons
 Name: {group}\Readme; Filename: {app}\ReadMe.html; Flags: createonlyiffileexists; Components: Icons
-Name: {group}\Readme Win32; Filename: {app}\README.win32.txt; Flags: createonlyiffileexists; Components: Icons
-Name: {group}\NEWS; Filename: {app}\NEWS.txt; Flags: createonlyiffileexists; Components: Icons
+; Name: {group}\COPYING; Filename: {app}\COPYING.txt; Flags: createonlyiffileexists; Components: Icons
+; Name: {group}\ChangeLog; Filename: {app}\ChangeLog.txt; Flags: createonlyiffileexists; Components: Icons
+; Name: {group}\Readme Win32; Filename: {app}\README.win32.txt; Flags: createonlyiffileexists; Components: Icons
+; Name: {group}\NEWS; Filename: {app}\NEWS.txt; Flags: createonlyiffileexists; Components: Icons
 
 [Run]
 Filename: {app}\Exult.exe; Description: {cm:LaunchProgram,Exult}; WorkingDir: {app}; Flags: nowait postinstall skipifsilent skipifdoesntexist
@@ -92,19 +97,19 @@ var
   SIEdit: TEdit;
 
 // Get Paths from Exult.cfg
-procedure GetExultGamePaths(sExultDir, sBGPath, sSIPath: String; iMaxPath: Integer);
+procedure GetExultGamePaths(sExultDir, sBGPath, sSIPath: AnsiString; iMaxPath: Integer);
 external 'GetExultGamePaths@files:exconfig.dll stdcall';
 
 // Write Paths into Exult.cfg
-procedure SetExultGamePaths(sExultDir, sBGPath, sSIPath: String);
+procedure SetExultGamePaths(sExultDir, sBGPath, sSIPath: AnsiString);
 external 'SetExultGamePaths@files:exconfig.dll stdcall';
 
 // Verify BG Dir
-function VerifyBGDirectory(sPath: String) : Integer;
+function VerifyBGDirectory(sPath: AnsiString) : Integer;
 external 'VerifyBGDirectory@files:exconfig.dll stdcall';
 
 // Verify SI Dir
-function VerifySIDirectory(sPath: String) : Integer;
+function VerifySIDirectory(sPath: AnsiString) : Integer;
 external 'VerifySIDirectory@files:exconfig.dll stdcall';
 
 
@@ -225,8 +230,8 @@ end;
 //
 procedure CurPageChanged(CurPageID: Integer);
 var
-  sBGPath: String;
-  sSIPath: String;
+  sBGPath: AnsiString;
+  sSIPath: AnsiString;
 begin
   if CurPageID = DataDirPage.ID then begin
     if bSetPaths = False then begin
@@ -266,6 +271,16 @@ begin
           Result := True;
         end else
           Result := False;
+      end else if (iBGVerified = 0)  AND (iSIVerified = 1) then begin
+        if MsgBox ('Warning: No valid installation of Ultima VII: The Black Gate. Do you wish to continue?', mbError, MB_YESNO or MB_DEFBUTTON2) = IDYES then begin
+          Result := True;
+        end else
+          Result := False;
+      end else if (iSIVerified = 0)  AND (iBGVerified = 1) then begin
+        if MsgBox ('Warning: No valid installation of Ultima VII Part 2: Serpent Isle. Do you wish to continue?', mbError, MB_YESNO or MB_DEFBUTTON2) = IDYES then begin
+          Result := True;
+        end else
+          Result := False;
       end else
         Result := True;
   end else
@@ -281,7 +296,7 @@ var
   sSIPath: String;
 begin
   if PageID = DataDirPage.ID then begin
-    Result := (IsComponentSelected('Paths') = False);
+    Result := (WizardIsComponentSelected('Paths') = False);
 
     if Result = True then begin
       if bSetPaths = False then begin
@@ -298,7 +313,7 @@ begin
     end
 
   end else if PageID = wpSelectProgramGroup then begin
-    Result := (IsComponentSelected('Icons') = False);
+    Result := (WizardIsComponentSelected('Icons') = False);
   end else
     Result := False;
 end;
@@ -312,7 +327,7 @@ begin
   begin
     SetExultGamePaths(ExpandConstant('{app}'), BGEdit.Text, SIEdit.Text );
     RegWriteStringValue(HKEY_LOCAL_MACHINE, 'Software\Exult', 'Path', ExpandConstant('{app}'));
-    if IsComponentSelected('Icons') then
+    if WizardIsComponentSelected('Icons') then
       RegWriteStringValue(HKEY_LOCAL_MACHINE, 'Software\Exult', 'ShellObjectFolder', ExpandConstant('{groupname}'));
   end
 end;

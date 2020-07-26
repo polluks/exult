@@ -16,25 +16,30 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#ifndef _VIDEOOPTIONS_GUMP_H
-#define _VIDEOOPTIONS_GUMP_H
+#ifndef VIDEOOPTIONS_GUMP_H
+#define VIDEOOPTIONS_GUMP_H
 
 #include "Modal_gump.h"
+#include <array>
+#include <memory>
 #include <string>
 #include "imagewin/imagewin.h"
 
 class Gump_button;
 
 class VideoOptions_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS_I(VideoOptions_gump, Modal_gump(0, 0, 0, 0))
+	UNREPLICATABLE_CLASS(VideoOptions_gump)
 	static VideoOptions_gump *video_options_gump;
-private:
 
+private:
 	uint32 resolution;
 	int scaling;
 	int scaler;
 	int fullscreen;
 	uint32 game_resolution;
+	std::vector<uint32> resolutions;
+	std::vector<uint32> win_resolutions;
+	std::vector<uint32> game_resolutions;
 	int fill_scaler;
 	Image_window::FillMode fill_mode;
 	bool has_ac;
@@ -47,23 +52,17 @@ private:
 	uint32 o_game_resolution;
 	int o_fill_scaler;
 	Image_window::FillMode o_fill_mode;
+	bool highdpi;
+	bool o_highdpi;
 
-	static uint32 *resolutions;
-	static int num_resolutions;
-
-	static uint32 *win_resolutions;
-	static int num_win_resolutions;
-
-	static uint32 game_resolutions[3];
-	static int num_game_resolutions;
-
-	static Image_window::FillMode startup_fill_mode;
+	Image_window::FillMode startup_fill_mode;
 
 	enum button_ids {
 	    id_first = 0,
 	    id_apply = id_first,
 	    id_fullscreen,
 	    id_share_settings,
+	    id_high_dpi,
 	    id_resolution,  // id_resolution and all past it
 	    id_scaler,      // are deleted by rebuild_buttons
 	    id_scaling,
@@ -73,22 +72,21 @@ private:
 	    id_has_ac,
 	    id_count
 	};
-	Gump_button *buttons[id_count];
+	std::array<std::unique_ptr<Gump_button>, id_count> buttons;
 
 public:
 	VideoOptions_gump();
-	virtual ~VideoOptions_gump();
 	static VideoOptions_gump *get_instance() {
 		return video_options_gump;
 	}
 
 	// Paint it and its contents.
-	virtual void paint();
-	virtual void close();
+	void paint() override;
+	void close() override;
 
 	// Handle events:
-	virtual bool mouse_down(int mx, int my, int button);
-	virtual bool mouse_up(int mx, int my, int button);
+	bool mouse_down(int mx, int my, int button) override;
+	bool mouse_up(int mx, int my, int button) override;
 
 	void toggle(Gump_button *btn, int state);
 	void rebuild_buttons();
@@ -115,6 +113,61 @@ public:
 	}
 	void set_fill_mode(Image_window::FillMode f_mode) {
 		fill_mode = f_mode;
+	}
+
+	void toggle_resolution(int state) {
+		if (fullscreen) resolution = resolutions[state];
+		else resolution = win_resolutions[state];
+	}
+
+	void toggle_scaling(int state) {
+		scaling = state;
+	}
+
+	void toggle_scaler(int state) {
+		scaler = state;
+		rebuild_dynamic_buttons();
+	}
+
+	void toggle_fullscreen(int state) {
+		if (share_settings)
+			fullscreen = state;
+		else {
+			load_settings(state); // overwrites old settings
+			rebuild_buttons();
+		}
+	}
+
+	void toggle_game_resolution(int state) {
+		game_resolution = game_resolutions[state];
+	}
+
+	void toggle_fill_scaler(int state) {
+		fill_scaler = state;
+	}
+
+	void toggle_fill_mode(int state) {
+		if (state == 0) {
+			fill_mode = Image_window::Fill;
+		} else if (state == 3) {
+			fill_mode = startup_fill_mode;
+		} else {
+			fill_mode = static_cast<Image_window::FillMode>((state << 1) | (has_ac ? 1 : 0));
+		}
+		rebuild_dynamic_buttons();
+	}
+
+	void toggle_aspect_correction(int state) {
+		has_ac = state != 0;
+		fill_mode = static_cast<Image_window::FillMode>((fill_mode&~1) | (has_ac ? 1 : 0));
+	}
+
+	void toggle_share_settings(int state) {
+		share_settings = state;
+	}
+
+	void toggle_high_dpi(int state) {
+		highdpi = state;
 	}
 };
 

@@ -28,8 +28,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wparentheses"
+#if !defined(__llvm__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+#else
+#pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
+#endif
 #endif  // __GNUC__
 #include <gtk/gtkradiomenuitem.h>
 #ifdef __GNUC__
@@ -53,7 +59,8 @@ using EStudio::Alert;
 
 static int Find_highest_map(
 ) {
-	int n = 0, next;
+	int n = 0;
+	int next;
 
 	while ((next = Find_next_map(n + 1, 10)) != -1)
 		n = next;
@@ -80,7 +87,7 @@ C_EXPORT void on_main_map_activate(
     gpointer udata
 ) {
 	ignore_unused_variable_warning(udata);
-	on_map_activate(item, static_cast<gpointer>(0));
+	on_map_activate(item, nullptr);
 }
 
 /*
@@ -97,7 +104,7 @@ C_EXPORT void on_newmap_activate(
 }
 void ExultStudio::new_map_dialog(
 ) {
-	GtkWidget *win = glade_xml_get_widget(app_xml, "newmap_dialog");
+	GtkWidget *win = get_widget("newmap_dialog");
 	gtk_window_set_modal(GTK_WINDOW(win), true);
 	int highest = Find_highest_map();
 	set_spin("newmap_num", highest + 1, 1, 100);
@@ -119,7 +126,8 @@ static bool Copy_static_file(
     int frommap,            // # of map to copy from.
     int tomap           // # of map to copy to.
 ) {
-	char srcname[128], destname[128];
+	char srcname[128];
+	char destname[128];
 	Get_mapped_name(pname, tomap, destname);
 	Get_mapped_name(pname, frommap, srcname);   // Patch?
 	if (U7exists(srcname) && EStudio::Copy_file(srcname, destname))
@@ -138,10 +146,10 @@ C_EXPORT void on_newmap_ok_clicked(
     gpointer         user_data
 ) {
 	ignore_unused_variable_warning(menuitem, user_data);
-	char fname[128], sname[128];
+	char fname[128];
+	char sname[128];
 	ExultStudio *studio = ExultStudio::get_instance();
-	GtkWidget *win = glade_xml_get_widget(studio->get_xml(),
-	                                      "newmap_dialog");
+	GtkWidget *win = studio->get_widget("newmap_dialog");
 	int num = studio->get_spin("newmap_num");
 
 	if (U7exists(Get_mapped_name("<PATCH>/", num, fname)) ||
@@ -155,7 +163,8 @@ C_EXPORT void on_newmap_ok_clicked(
 		Copy_static_file(U7MAP, PATCH_U7MAP, frommap, num);
 	if (studio->get_toggle("newmap_copy_fixed")) {
 		for (int schunk = 0; schunk < 12 * 12; schunk++) {
-			char pname[128], sname[128];
+			char pname[128];
+			char sname[128];
 			sprintf(pname, "%s%02x", PATCH_U7IFIX, schunk);
 			sprintf(sname, "%s%02x", U7IFIX, schunk);
 			if (!Copy_static_file(sname, pname, frommap, num))
@@ -186,10 +195,10 @@ C_EXPORT void on_newmap_ok_clicked(
 void ExultStudio::setup_maps_list(
 ) {
 	GtkWidget *maps = gtk_menu_item_get_submenu(
-	                      GTK_MENU_ITEM(glade_xml_get_widget(app_xml, "map1")));
+	                      GTK_MENU_ITEM(get_widget("map1")));
 	GList *items = gtk_container_get_children(GTK_CONTAINER(maps));
 	GList *each = g_list_last(items);
-	GSList *group = NULL;
+	GSList *group = nullptr;
 	int curmap = 0;
 
 	while (each) {
@@ -199,8 +208,7 @@ void ExultStudio::setup_maps_list(
 		if (strcmp(text, "Main") == 0) {
 			group = gtk_radio_menu_item_get_group(
 			            GTK_RADIO_MENU_ITEM(item));
-			gtk_object_set_user_data(GTK_OBJECT(item),
-			                         reinterpret_cast<gpointer>(0));
+			gtk_object_set_user_data(GTK_OBJECT(item), nullptr);
 			if (curmap == 0)
 				gtk_check_menu_item_set_active(
 				    GTK_CHECK_MENU_ITEM(item), TRUE);
@@ -218,7 +226,7 @@ void ExultStudio::setup_maps_list(
 	while ((num = Find_next_map(num + 1, 10)) != -1) {
 		char name[40];
 		sprintf(name, "Map #%02x", num);
-		gpointer ptrnum = reinterpret_cast<gpointer>(uintptr(num));
+		auto *ptrnum = reinterpret_cast<gpointer>(uintptr(num));
 		GtkWidget *item =
 		    Add_menu_item(maps, name, GTK_SIGNAL_FUNC(on_map_activate), ptrnum, group);
 		gtk_object_set_user_data(GTK_OBJECT(item), ptrnum);

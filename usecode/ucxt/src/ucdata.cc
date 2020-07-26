@@ -46,8 +46,7 @@ using std::ostream;
 
 const string CLASSNAME = "class";
 
-UCData::UCData() : _symtbl(0), _search_opcode(-1), _search_intrinsic(-1) {
-}
+UCData::UCData() = default;
 
 UCData::~UCData() {
 	_file.close();
@@ -91,7 +90,7 @@ void UCData::parse_params(const unsigned int argc, char **argv) {
 		else if (argv[i][0] != '-') {
 			char *stopstr;
 			/* Disassembly mode */
-			unsigned int search_func = static_cast<unsigned int>(strtoul(argv[i], &stopstr, 16));
+			auto search_func = static_cast<unsigned int>(strtoul(argv[i], &stopstr, 16));
 			if (stopstr - argv[i] < static_cast<int>(strlen(argv[i])))
 				/* Invalid number */
 			{ /* Do Nothing */
@@ -130,7 +129,7 @@ void UCData::disassamble(ostream &o) {
 	analyse_classes();
 
 	if (options.verbose) {
-		for (vector<unsigned int>::iterator i = search_funcs.begin(); i != search_funcs.end(); ++i)
+		for (auto i = search_funcs.begin(); i != search_funcs.end(); ++i)
 			o << "Looking for function number " << setw(8) << (*i) << endl;
 		o << endl;
 	}
@@ -148,7 +147,7 @@ void UCData::disassamble(ostream &o) {
 		o << endl;
 	}
 
-	Usecode_class_symbol *cls = 0;
+	Usecode_class_symbol *cls = nullptr;
 	bool _foundfunc = false; //did we find and print the function?
 	for (unsigned int i = 0; i < _funcs.size(); i++) {
 		if (options.mode_all || (options.mode_dis && count(search_funcs.begin(), search_funcs.end(), _funcs[i]->_funcid))) {
@@ -168,7 +167,7 @@ void UCData::disassamble(ostream &o) {
 					if (cls) {
 						o << CLASSNAME << " " << cls->get_name();
 						// Does the class inherit from another?
-						InheritMap::const_iterator it = _clsmap.find(cls);
+						auto it = _clsmap.find(cls);
 						int initvar = 0;
 						if (it != _clsmap.end()) {
 							// Yes; print base class.
@@ -196,7 +195,7 @@ void UCData::disassamble(ostream &o) {
 			}
 
 			// if we haven't printed one by now, we'll print an asm output.
-			if (options.output_asm || (_func_printed == false))
+			if (options.output_asm || (!_func_printed))
 				_funcs[i]->output_asm(o, _funcmap, uc_intrinsics, options, _symtbl);
 		}
 	}
@@ -229,12 +228,12 @@ void UCData::dump_flags(ostream &o) {
 	vector<FlagData> flags;
 
 	// *BLEH* ugly!
-	for (vector<UCFunc *>::iterator func = _funcs.begin(); func != _funcs.end(); ++func)
-		for (vector<UCc>::iterator op = (*func)->_opcodes.begin(); op != (*func)->_opcodes.end(); ++op) {
+	for (auto func = _funcs.begin(); func != _funcs.end(); ++func)
+		for (auto op = (*func)->_opcodes.begin(); op != (*func)->_opcodes.end(); ++op) {
 			if (op->_id == 0x42)
-				flags.push_back(FlagData((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::GETFLAG));
+				flags.emplace_back((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::GETFLAG);
 			else if (op->_id == 0x43)
-				flags.push_back(FlagData((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::SETFLAG));
+				flags.emplace_back((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::SETFLAG);
 		}
 
 	o << "Number of flags found: " << setbase(10) << flags.size() << endl << endl;
@@ -267,7 +266,7 @@ void UCData::dump_flags(ostream &o) {
 		sort(flags.begin(), flags.end(), SortFlagDataLessFlag());
 
 		o << setbase(16) << setfill('0');
-		unsigned int currflag = static_cast<unsigned int>(-1);
+		auto currflag = static_cast<unsigned int>(-1);
 		for (unsigned int i = 0; i < flags.size(); i++) {
 			if (currflag != flags[i].flag()) {
 				o << "Flag: " << setw(4) << flags[i].flag() << endl;
@@ -292,7 +291,7 @@ void UCData::file_open(const string &filename) {
 		_file.clear();
 		U7open(_file, filename.c_str(), false);
 	} catch (const std::exception &err) {
-		_file.setstate(_file.failbit);
+		_file.setstate(std::ifstream::failbit);
 	}
 }
 
@@ -362,7 +361,7 @@ void UCData::load_funcs(ostream &o) {
 
 	bool eof = false;
 	while (!eof) {
-		UCFunc *ucfunc = new UCFunc();
+		auto *ucfunc = new UCFunc();
 
 		if (options.game_u7())
 			readbin_U7UCFunc(_file, *ucfunc, options, _symtbl);
@@ -394,7 +393,7 @@ void UCData::load_funcs(ostream &o) {
 
 	if (options.verbose) o << "Creating function map..." << endl;
 
-	for (vector<UCFunc *>::iterator i = _funcs.begin(); i != _funcs.end(); ++i) {
+	for (auto i = _funcs.begin(); i != _funcs.end(); ++i) {
 		int funcid = (*i)->_funcid;
 		Usecode_symbol::Symbol_kind kind;
 		if ((*i)->_sym)
@@ -407,7 +406,7 @@ void UCData::load_funcs(ostream &o) {
 			kind = Usecode_symbol::fun_defined;
 		_funcmap.insert(FuncMapPair((*i)->_funcid, UCFuncSet(funcid, (*i)->_num_args,
 		                                                     (*i)->return_var, (*i)->aborts,
-		                                                     (*i)->_cls != 0, (*i)->funcname,
+		                                                     (*i)->_cls != nullptr, (*i)->funcname,
 		                                                     kind, (*i)->_varmap)));
 	}
 	/*  for(map<unsigned int, UCFuncSet>::iterator i=_funcmap.begin(); i!=_funcmap.end(); ++i)
@@ -421,11 +420,14 @@ void UCData::analyse_classes() {
 	// Class 0 can't inherit from any others.
 	for (int i = 1; i < nclasses; i++) {
 		Usecode_class_symbol *cls = _symtbl->get_class(i);
+		if (!cls) {
+			continue;
+		}
 		// Can only inherit from previously-defined classes.
 		for (int j = i - 1; j >= 0; j--) {
 			Usecode_class_symbol *base = _symtbl->get_class(j);
 			// If "base" has more variables or more methods than "cls", it can't be a base class of "cls".
-			if (base->get_num_vars() > cls->get_num_vars() || base->get_num_methods() > cls->get_num_methods())
+			if (!base || base->get_num_vars() > cls->get_num_vars() || base->get_num_methods() > cls->get_num_methods())
 				continue;
 			// Assume this is a base class.
 			bool is_base = true;
@@ -453,7 +455,7 @@ void UCData::output_extern_header(ostream &o) {
 	}
 	load_funcs(o);
 
-	for (vector<UCFunc *>::iterator func = _funcs.begin(); func != _funcs.end(); ++func) {
+	for (auto func = _funcs.begin(); func != _funcs.end(); ++func) {
 		//(*func)->output_ucs_funcname(o << "extern ", _funcmap, (*func)->_funcid, (*func)->_num_args, (*func)->return_var) << ';' << endl;
 		(*func)->output_ucs_funcname(o << "extern ", _funcmap, _symtbl) << ';' << endl;
 	}

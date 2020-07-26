@@ -54,7 +54,7 @@ ToneBank
 *drumset[128]={&standard_drumset};
 
 /* This is a special instrument, used for all melodic programs */
-Instrument *default_instrument=0;
+Instrument *default_instrument=nullptr;
 
 /* This is only used for tracks that don't specify a program */
 int default_program=DEFAULT_PROGRAM;
@@ -68,12 +68,10 @@ int fast_decay=0;
 
 static void free_instrument(Instrument *ip)
 {
-	Sample *sp;
-	int i;
 	if (!ip) return;
-	for (i=0; i<ip->samples; i++)
+	for (int i=0; i<ip->samples; i++)
 	{
-		sp=&(ip->sample[i]);
+		Sample *sp = &(ip->sample[i]);
 		free(sp->data);
 	}
 	free(ip->sample);
@@ -82,23 +80,20 @@ static void free_instrument(Instrument *ip)
 
 static void free_bank(int dr, int b)
 {
-	int i;
 	ToneBank *bank=((dr) ? drumset[b] : tonebank[b]);
-	for (i=0; i<128; i++)
+	for (int i=0; i<128; i++)
 		if (bank->tone[i].instrument)
 		{
 			/* Not that this could ever happen, of course */
 			if (bank->tone[i].instrument != MAGIC_LOAD_INSTRUMENT)
 				free_instrument(bank->tone[i].instrument);
-			bank->tone[i].instrument=0;
+			bank->tone[i].instrument=nullptr;
 		}
 }
 
 static sint32 convert_envelope_rate(uint8 rate)
 {
-	sint32 r;
-
-	r=3-((rate>>6) & 0x3);
+	sint32 r=3-((rate>>6) & 0x3);
 	r*=3;
 	r = (rate & 0x3f) << r; /* 6.9 fixed point */
 
@@ -158,13 +153,13 @@ static sint32 convert_vibrato_rate(uint8 rate)
 
 static void reverse_data(sint16 *sp, sint32 ls, sint32 le)
 {
-	sint16 s, *ep=sp+le;
+	sint16 *ep=sp+le;
 	sp+=ls;
 	le-=ls;
 	le/=2;
 	while (le--)
 	{
-		s=*sp;
+		sint16 s=*sp;
 		*sp++=*ep;
 		*ep--=s;
 	}
@@ -190,15 +185,17 @@ static Instrument *load_instrument(char *name, int percussion,
 	Sample *sp;
 	FILE *fp;
 	uint8 tmp[1024];
-	int i,j,noluck=0;
+	int i;
+	int j;
+	int noluck=0;
 #ifdef PATCH_EXT_LIST
 	static const char *patch_ext[] = PATCH_EXT_LIST;
 #endif
 
-	if (!name) return 0;
+	if (!name) return nullptr;
 
 	/* Open patch file */
-	if ((fp=open_file(name, 1, OF_NORMAL)) == NULL)
+	if ((fp=open_file(name, 1, OF_NORMAL)) == nullptr)
 	{
 		noluck=1;
 #ifdef PATCH_EXT_LIST
@@ -210,7 +207,7 @@ static Instrument *load_instrument(char *name, int percussion,
 				char path[1024];
 				strcpy(path, name);
 				strcat(path, patch_ext[i]);
-				if ((fp=open_file(path, 1, OF_NORMAL)) != NULL)
+				if ((fp=open_file(path, 1, OF_NORMAL)) != nullptr)
 				{
 					noluck=0;
 					break;
@@ -224,7 +221,7 @@ static Instrument *load_instrument(char *name, int percussion,
 	{
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL,
 		          "Instrument `%s' can't be found.", name);
-		return 0;
+		return nullptr;
 	}
 
 	ctl->cmsg(CMSG_INFO, VERB_NOISY, "Loading instrument %s", current_filename);
@@ -239,7 +236,7 @@ static Instrument *load_instrument(char *name, int percussion,
 	{
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "%s: not an instrument", name);
 		close_file(fp);
-		return 0;
+		return nullptr;
 	}
 
 	if (tmp[82] != 1 && tmp[82] != 0) /* instruments. To some patch makers,
@@ -248,7 +245,7 @@ static Instrument *load_instrument(char *name, int percussion,
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL,
 		          "Can't handle patches with %d instruments", tmp[82]);
 		close_file(fp);
-		return 0;
+		return nullptr;
 	}
 
 	if (tmp[151] != 1 && tmp[151] != 0) /* layers. What's a layer? */
@@ -256,7 +253,7 @@ static Instrument *load_instrument(char *name, int percussion,
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL,
 		          "Can't handle instruments with %d layers", tmp[151]);
 		close_file(fp);
-		return 0;
+		return nullptr;
 	}
 
 	ip=safe_Malloc<Instrument>();
@@ -291,7 +288,7 @@ static Instrument *load_instrument(char *name, int percussion,
 			free(ip->sample);
 			free(ip);
 			close_file(fp);
-			return 0;
+			return nullptr;
 		}
 
 		sp=&(ip->sample[i]);
@@ -432,8 +429,9 @@ static Instrument *load_instrument(char *name, int percussion,
 		if (!(sp->modes & MODES_16BIT)) /* convert to 16-bit data */
 		{
 			sint32 i=sp->data_length;
-			uint8 *cp=reinterpret_cast<uint8 *>(sp->data);
-			uint16 *tmp,*new_dat;
+			auto *cp=reinterpret_cast<uint8 *>(sp->data);
+			uint16 *tmp;
+			uint16 *new_dat;
 			tmp=new_dat=safe_Malloc<uint16>(sp->data_length);
 			while (i--)
 				*tmp++ = static_cast<uint16>(*cp++) << 8;
@@ -450,9 +448,11 @@ static Instrument *load_instrument(char *name, int percussion,
 		{
 			sint32 i=sp->data_length/2;
 #ifdef LOOKUP_HACK
-			sint16 *tmp=reinterpret_cast<sint16 *>(sp->data), s;
+			sint16 *tmp=reinterpret_cast<sint16 *>(sp->data);
+			sint16 *s;
 #else
-			sample_t *tmp=sp->data, s;
+			sample_t *tmp=sp->data;
+			sample_t s;
 #endif
 			while (i--)
 			{
@@ -502,11 +502,11 @@ static Instrument *load_instrument(char *name, int percussion,
 			 This is a very crude adjustment, but things sound more
 			 balanced with it. Still, this should be a runtime option. */
 			sint32 i=sp->data_length/2;
-			sint16 maxamp=0,a;
+			sint16 maxamp=0;
 			sint16 *tmp = sp->data;
 			while (i--)
 			{
-				a=*tmp++;
+				sint16 a=*tmp++;
 				if (a<0) a=-a;
 				if (a>maxamp)
 					maxamp=a;
@@ -571,7 +571,8 @@ static Instrument *load_instrument(char *name, int percussion,
 
 static int fill_bank(int dr, int b)
 {
-	int i, errors=0;
+	int i;
+	int errors=0;
 	ToneBank *bank=((dr) ? drumset[b] : tonebank[b]);
 	if (!bank)
 	{
@@ -607,7 +608,7 @@ static int fill_bank(int dr, int b)
 							MAGIC_LOAD_INSTRUMENT;
 					}
 				}
-				bank->tone[i].instrument=0;
+				bank->tone[i].instrument=nullptr;
 				errors++;
 			}
 			else if (!(bank->tone[i].instrument=
@@ -637,9 +638,10 @@ static int fill_bank(int dr, int b)
 	return errors;
 }
 
-int load_missing_instruments(void)
+int load_missing_instruments()
 {
-	int i=128,errors=0;
+	int i=128;
+	int errors=0;
 	while (i--)
 	{
 		if (tonebank[i])
@@ -650,7 +652,7 @@ int load_missing_instruments(void)
 	return errors;
 }
 
-void free_instruments(void)
+void free_instruments()
 {
 	int i=128;
 	while(i--)

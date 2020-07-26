@@ -74,11 +74,11 @@ void Keyring::addkey(int qual) {
 }
 
 bool Keyring::checkkey(int qual) {
-	return (keys.find(qual) != keys.end());
+	return keys.find(qual) != keys.end();
 }
 
 bool Keyring::removekey(int qual) {
-	std::set<int>::iterator ent = keys.find(qual);
+	auto ent = keys.find(qual);
 	if (ent == keys.end())
 		return false;
 	else {

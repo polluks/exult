@@ -24,6 +24,8 @@
 #include "tqueue.h"
 #include "palette.h"
 
+#include <memory>
+
 /*
  *  The number of times that the game clock ticks in one game minute.
  */
@@ -34,7 +36,7 @@ const int ticks_per_minute = 25;
  */
 class Game_clock : public Time_sensitive {
 	Time_queue *tqueue;     // The time queue.
-	short hour, minute;     // Time (0-23, 0-59).
+	short hour, minute, ticks;     // Time (0-23, 0-59).
 	int day;            // Keep track of days played.
 	int light_source_level;     // Last set light source level.
 	int old_light_level;        // Last set light source level.
@@ -46,17 +48,16 @@ class Game_clock : public Time_sensitive {
 	bool was_overcast;
 	int fog;            // >0 if there is fog.
 	bool was_foggy;
-	Palette_transition *transition; // For smooth palette transitions.
+	std::unique_ptr<Palette_transition> transition; // For smooth palette transitions.
 	unsigned short time_rate;
-	void set_time_palette();
+	void set_time_palette(bool force);
 	void set_light_source_level(int lev);
 	void check_hunger() const;
 public:
-	Game_clock(Time_queue *tq) : tqueue(tq), hour(6), minute(0), day(0),
+	Game_clock(Time_queue *tq) : tqueue(tq), hour(6), minute(0), ticks(0), day(0),
 		light_source_level(0), old_light_level(0), old_special_light(false),
 		old_infravision(false), old_invisible(false), dungeon(255),
-		overcast(0), was_overcast(false), fog(0), was_foggy(false),
-		transition(0), time_rate(1)
+		overcast(0), was_overcast(false), fog(0), was_foggy(false), time_rate(1)
 	{ }
 	int get_hour() const {
 		return hour;
@@ -69,6 +70,12 @@ public:
 	}
 	void set_minute(int m) {
 		minute = m;
+	}
+	int get_ticks() const {
+		return ticks;
+	}
+	void set_ticks(int m) {
+		ticks = m;
 	}
 	int get_day() const {
 		return day;
@@ -83,6 +90,7 @@ public:
 		return get_total_hours() * 60 + minute;
 	}
 	void set_palette();     // Set palette for current hour.
+	void reset_palette();
 	// Set light source.  MUST be fast,
 	//   since it's called during paint().
 	void set_light_source(int lev, int dun) {
@@ -96,13 +104,12 @@ public:
 		old_infravision = false;
 		old_invisible = false;
 		dungeon = 255;
-		delete transition;
-		transition = 0;
+		transition.reset();
 	}
 	void set_overcast(bool onoff);  // Start/end cloud cover.
 	void set_fog(bool onoff);   // Start/end cloud cover.
 	void increment(int num_minutes);// Increment clock.
-	virtual void handle_event(unsigned long curtime, uintptr udata);
+	void handle_event(unsigned long curtime, uintptr udata) override;
 	void fake_next_period();    // For debugging.
 	int get_time_rate() const {
 		return time_rate;

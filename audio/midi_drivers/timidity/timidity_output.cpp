@@ -44,7 +44,7 @@ PlayMode *play_mode_list[] = {
 #ifdef DEFAULT_PLAY_MODE
 	DEFAULT_PLAY_MODE,
 #endif
-	0
+	nullptr
 };
 
 #ifdef DEFAULT_PLAY_MODE
@@ -56,11 +56,10 @@ PlayMode *play_mode_list[] = {
 
 void s32tos8(void *dp, sint32 *lp, sint32 c)
 {
-	sint8 *cp=static_cast<sint8 *>(dp);
-	sint32 l;
+	auto *cp=static_cast<sint8 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-8-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-8-GUARD_BITS);
 		if (l>127) l=127;
 		else if (l<-128) l=-128;
 		*cp++ = static_cast<sint8>(l);
@@ -69,11 +68,10 @@ void s32tos8(void *dp, sint32 *lp, sint32 c)
 
 void s32tou8(void *dp, sint32 *lp, sint32 c)
 {
-	uint8 *cp=static_cast<uint8 *>(dp);
-	sint32 l;
+	auto *cp=static_cast<uint8 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-8-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-8-GUARD_BITS);
 		if (l>127) l=127;
 		else if (l<-128) l=-128;
 		*cp++ = 0x80 ^ static_cast<uint8>(l);
@@ -82,11 +80,10 @@ void s32tou8(void *dp, sint32 *lp, sint32 c)
 
 void s32tos16(void *dp, sint32 *lp, sint32 c)
 {
-	sint16 *sp=static_cast<sint16 *>(dp);
-	sint32 l;
+	auto *sp=static_cast<sint16 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-16-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-16-GUARD_BITS);
 		if (l > 32767) l=32767;
 		else if (l<-32768) l=-32768;
 		*sp++ = static_cast<sint16>(l);
@@ -95,11 +92,10 @@ void s32tos16(void *dp, sint32 *lp, sint32 c)
 
 void s32tou16(void *dp, sint32 *lp, sint32 c)
 {
-	uint16 *sp=static_cast<uint16 *>(dp);
-	sint32 l;
+	auto *sp=static_cast<uint16 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-16-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-16-GUARD_BITS);
 		if (l > 32767) l=32767;
 		else if (l<-32768) l=-32768;
 		*sp++ = 0x8000 ^ static_cast<uint16>(l);
@@ -108,11 +104,10 @@ void s32tou16(void *dp, sint32 *lp, sint32 c)
 
 void s32tos16x(void *dp, sint32 *lp, sint32 c)
 {
-	sint16 *sp=static_cast<sint16 *>(dp);
-	sint32 l;
+	auto *sp=static_cast<sint16 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-16-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-16-GUARD_BITS);
 		if (l > 32767) l=32767;
 		else if (l<-32768) l=-32768;
 		*sp++ = XCHG_SHORT(static_cast<sint16>(l));
@@ -121,11 +116,10 @@ void s32tos16x(void *dp, sint32 *lp, sint32 c)
 
 void s32tou16x(void *dp, sint32 *lp, sint32 c)
 {
-	uint16 *sp=static_cast<uint16 *>(dp);
-	sint32 l;
+	auto *sp=static_cast<uint16 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-16-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-16-GUARD_BITS);
 		if (l > 32767) l=32767;
 		else if (l<-32768) l=-32768;
 		*sp++ = XCHG_SHORT(0x8000 ^ static_cast<uint16>(l));
@@ -134,11 +128,10 @@ void s32tou16x(void *dp, sint32 *lp, sint32 c)
 
 void s32toulaw(void *dp, sint32 *lp, sint32 c)
 {
-	uint8 *up=static_cast<uint8 *>(dp);
-	sint32 l;
+	auto *up=static_cast<uint8 *>(dp);
 	while (c--)
 	{
-		l=(*lp++)>>(32-13-GUARD_BITS);
+		sint32 l=(*lp++)>>(32-13-GUARD_BITS);
 		if (l > 4095) l=4095;
 		else if (l<-4096) l=-4096;
 		*up++ = _l2u[l];

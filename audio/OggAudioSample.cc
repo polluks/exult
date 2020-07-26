@@ -21,45 +21,40 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "headers/exceptions.h"
 #include "databuf.h"
 #include <SDL.h>
+#include <new>
 
 namespace Pentagram {
 
 ov_callbacks OggAudioSample::callbacks = {
 	&read_func,
 	&seek_func,
-	0,
+	nullptr,
 	&tell_func
 };
 
-OggAudioSample::OggAudioSample(IDataSource *oggdata_)
-	: AudioSample(0, 0), oggdata(oggdata_)
+OggAudioSample::OggAudioSample(std::unique_ptr<IDataSource> oggdata_)
+	: AudioSample(nullptr, 0), oggdata(std::move(oggdata_))
 {
 	frame_size = 4096;
 	decompressor_size = sizeof(OggDecompData);
-	bits = 16;
-	locked = false;
-
-
-}
-
-OggAudioSample::OggAudioSample(uint8 *buffer, uint32 size)
-	: AudioSample(buffer, size), oggdata(0)
-{
-	frame_size = 4096;
-	decompressor_size = sizeof(OggDecompData);
+	decompressor_align = alignof(OggDecompData);
 	bits = 16;
 	locked = false;
 }
 
-OggAudioSample::~OggAudioSample()
+OggAudioSample::OggAudioSample(std::unique_ptr<uint8[]> buffer, uint32 size)
+	: AudioSample(std::move(buffer), size), oggdata(nullptr)
 {
-	delete oggdata;
-	oggdata = 0;
+	frame_size = 4096;
+	decompressor_size = sizeof(OggDecompData);
+	decompressor_align = alignof(OggDecompData);
+	bits = 16;
+	locked = false;
 }
 
 size_t OggAudioSample::read_func  (void *ptr, size_t size, size_t nmemb, void *datasource)
 {
-	IDataSource *ids = static_cast<IDataSource*>(datasource);
+	auto *ids = static_cast<IDataSource*>(datasource);
 	//if (ids->eof()) return 0;
 	size_t limit = ids->getSize() - ids->getPos();
 	if (limit == 0) return 0;
@@ -69,7 +64,7 @@ size_t OggAudioSample::read_func  (void *ptr, size_t size, size_t nmemb, void *d
 }
 int    OggAudioSample::seek_func  (void *datasource, ogg_int64_t offset, int whence)
 {
-	IDataSource *ids = static_cast<IDataSource*>(datasource);
+	auto *ids = static_cast<IDataSource*>(datasource);
 	switch(whence)
 	{
 	case SEEK_SET:
@@ -86,7 +81,7 @@ int    OggAudioSample::seek_func  (void *datasource, ogg_int64_t offset, int whe
 }
 long   OggAudioSample::tell_func  (void *datasource)
 {
-	IDataSource *ids = static_cast<IDataSource*>(datasource);
+	auto *ids = static_cast<IDataSource*>(datasource);
 	return ids->getPos();
 }
 
@@ -94,7 +89,7 @@ bool OggAudioSample::isThis(IDataSource *oggdata)
 {
 	OggVorbis_File vf;
 	oggdata->seek(0);
-	int res = ov_test_callbacks(oggdata,&vf,0,0,callbacks);
+	int res = ov_test_callbacks(oggdata,&vf,nullptr,0,callbacks);
 	ov_clear(&vf);
 
 	return res == 0;
@@ -103,23 +98,23 @@ bool OggAudioSample::isThis(IDataSource *oggdata)
 
 void OggAudioSample::initDecompressor(void *DecompData) const
 {
-	OggDecompData *decomp = static_cast<OggDecompData *>(DecompData);
+	auto *decomp = new (DecompData) OggDecompData;
 
 	if (locked)
 		throw exult_exception("Attempted to play OggAudioSample on more than one channel at the same time.");
 
 	if (this->oggdata)
 	{
-		*const_cast<bool*>(&locked) = true;
-		decomp->datasource = this->oggdata;
+		locked = true;
+		decomp->datasource = this->oggdata.get();
 	}
 	else
 	{
-		decomp->datasource = new IBufferDataSource(buffer,buffer_size);
+		decomp->datasource = new IBufferDataView(buffer, buffer_size);
 	}
 
 	decomp->datasource->seek(0);
-	ov_open_callbacks(decomp->datasource,&decomp->ov,NULL,0,callbacks);
+	ov_open_callbacks(decomp->datasource,&decomp->ov,nullptr,0,callbacks);
 	decomp->bitstream = 0;
 
 	vorbis_info *info = ov_info(&decomp->ov,-1);
@@ -128,33 +123,28 @@ void OggAudioSample::initDecompressor(void *DecompData) const
 	decomp->freed = false;
 }
 
-void OggAudioSample::rewind(void *DecompData) const
-{
-	freeDecompressor(DecompData);
-	initDecompressor(DecompData);
-}
-
 void OggAudioSample::freeDecompressor(void *DecompData) const
 {
-	OggDecompData *decomp = static_cast<OggDecompData *>(DecompData);
+	auto *decomp = static_cast<OggDecompData *>(DecompData);
 	if (decomp->freed)
 		return;
 	decomp->freed = true;
 	ov_clear(&decomp->ov);
 
-	if (this->oggdata) *const_cast<bool*>(&locked) = false;
+	if (this->oggdata) locked = false;
 	else delete decomp->datasource;
 
-	decomp->datasource = 0;
+	decomp->datasource = nullptr;
+	decomp->~OggDecompData();
 }
 
 uint32 OggAudioSample::decompressFrame(void *DecompData, void *samples) const
 {
-	OggDecompData *decomp = static_cast<OggDecompData *>(DecompData);
+	auto *decomp = static_cast<OggDecompData *>(DecompData);
 
 	vorbis_info *info = ov_info(&decomp->ov,-1);
 
-	if (info == 0) return 0;
+	if (info == nullptr) return 0;
 
 	*const_cast<uint32*>(&sample_rate) = decomp->last_rate;
 	*const_cast<bool*>(&stereo) = decomp->last_stereo;

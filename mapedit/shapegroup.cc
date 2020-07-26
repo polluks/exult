@@ -43,6 +43,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 using std::vector;
 using std::ios;
 using std::string;
+using std::unique_ptr;
+using std::make_unique;
 using EStudio::Alert;
 
 /*
@@ -58,11 +60,12 @@ Shape_group::Shape_group(
 		return;
 	// Add shapes for builtin group.
 	ExultStudio *es = ExultStudio::get_instance();
-	Shapes_vga_file *vgafile = static_cast<Shapes_vga_file *>(
+	auto *vgafile = static_cast<Shapes_vga_file *>(
 	                           es->get_vgafile()->get_ifile());
 	// Read info. the first time.
 	vgafile->read_info(es->get_game_type(), true);
-	int i, cnt = vgafile->get_num_shapes();
+	int i;
+	int cnt = vgafile->get_num_shapes();
 	bool modified = file->modified;
 
 	if (builtin >= 0 && builtin <= 15) {
@@ -202,11 +205,24 @@ void Shape_group::swap(
 void Shape_group::add(
     int id
 ) {
-	for (vector<int>::const_iterator it = begin(); it != end(); ++it)
+	for (auto it = begin(); it != end(); ++it)
 		if ((*it) == id)
 			return;     // Already there.
 	push_back(id);
 	file->modified = true;
+}
+
+/*
+ *  Save shape group to a file.
+ */
+void Shape_group::write(
+    ODataSource& out
+) {
+	// Name, #entries, entries(2-bytes).
+	out.write(name.c_str(), name.size() + 1);
+	out.write2(size());    // # entries.
+	for (auto elem : *this)
+		out.write2(elem);
 }
 
 /*
@@ -216,32 +232,29 @@ void Shape_group::add(
 Shape_group_file::Shape_group_file(
     const char *nm          // Basename.
 ) : name(nm), modified(false) {
-	Flex *flex = 0;
+	unique_ptr<Flex> flex;
 	std::string patchname = "<PATCH>/" + name;
 	std::string staticname = "<STATIC>/" + name;
 	if (U7exists(patchname))    // First try 'patch' directory.
-		flex = new FlexFile(patchname.c_str());
+		flex = make_unique<FlexFile>(patchname.c_str());
 	else if (U7exists(staticname))
-		flex = new FlexFile(staticname.c_str());
+		flex = make_unique<FlexFile>(staticname.c_str());
 	if (flex) {         // Exists?
 		int cnt = flex->number_of_objects();
 		for (int i = 0; i < cnt; i++) {
 			// Get each group.
 			std::size_t len;
-			char *buf = flex->retrieve(i, len);
-			const char *gname = buf;  // Starts with name.
-			const unsigned char *ptr = reinterpret_cast<const unsigned char *>(
-			                     gname) + strlen(gname) + 1;
+			auto buf = flex->retrieve(i, len);
+			const char *gname = reinterpret_cast<const char*>(buf.get());  // Starts with name.
+			const unsigned char *ptr = buf.get() + strlen(gname) + 1;
 			size_t sz = Read2(ptr); // Get # entries.
-			assert((len - (reinterpret_cast<const char *>(ptr) - buf)) / 2 == sz);
-			Shape_group *grp = new Shape_group(gname, this);
+			assert((len - (ptr - buf.get())) / 2 == sz);
+			auto *grp = new Shape_group(gname, this);
 			grp->reserve(sz);
 			for (size_t j = 0; j < sz; j++)
 				grp->push_back(Read2(ptr));
 			groups.push_back(grp);
-			delete buf;
 		}
-		delete flex;
 	}
 }
 
@@ -254,10 +267,9 @@ Shape_group_file::Shape_group_file(
 int Shape_group_file::find(
     const char *nm
 ) {
-	for (vector<Shape_group *>::const_iterator it = groups.begin();
-	        it != groups.end(); ++it)
+	for (auto it = groups.begin(); it != groups.end(); ++it)
 		if ((*it)->name == nm)
-			return (it - groups.begin());
+			return it - groups.begin();
 	return -1;
 }
 
@@ -267,7 +279,7 @@ int Shape_group_file::find(
 
 Shape_group_file::~Shape_group_file(
 ) {
-	for (vector<Shape_group *>::iterator it = groups.begin();
+	for (auto it = groups.begin();
 	        it != groups.end(); ++it)
 		delete(*it);        // Delete each group.
 }
@@ -301,7 +313,7 @@ Shape_group *Shape_group_file::get_builtin(
 	    Shape_group::last_builtin_group - Shape_group::first_group;
 	if (menindex < grpdelta)
 		type = menindex + Shape_group::ammo_group;
-	else switch (menindex - (grpdelta + 1)) {
+	else switch (menindex - grpdelta) {
 		case 0:
 			type = Shape_info::unusable;
 			break;
@@ -346,7 +358,7 @@ Shape_group *Shape_group_file::get_builtin(
 			break;
 		}
 	if (type < 0 || type >= Shape_group::last_builtin_group)
-		return 0;
+		return nullptr;
 	if (builtins.size() <= unsigned(type))
 		builtins.resize(type + 1);
 	if (!builtins[type])        // Create if needed.
@@ -360,33 +372,17 @@ Shape_group *Shape_group_file::get_builtin(
 
 void Shape_group_file::write(
 ) {
-	std::ofstream out;
 	std::string patchname = "<PATCH>/" + name;
-	U7open(out, patchname.c_str());
-	int cnt = groups.size();    // # groups.
-	Flex_writer gfile(out, "ExultStudio shape groups", cnt);
-	int i;              // Write each group.
-	for (i = 0; i < cnt; i++) {
-		Shape_group *grp = groups[i];
-		const char *nm = grp->get_name();
-		int sz = grp->size();
-		// Name, #entries, entries(2-bytes).
-		long len = strlen(nm) + 1 + 2 + 2 * sz;
-		unsigned char *buf = new unsigned char[len];
-		strcpy(reinterpret_cast<char *>(buf), nm);
-		unsigned char *ptr = buf + strlen(nm) + 1;
-		Write2(ptr, sz);    // # entries.
-		for (vector<int>::iterator it = grp->begin();
-		        it != grp->end(); ++it)
-			Write2(ptr, *it);
-		assert(ptr - buf == len);
-		// Write out to file.
-		out.write(reinterpret_cast<char *>(buf), len);
-		delete [] buf;
-		gfile.mark_section_done();
-	}
-	if (!gfile.close())
+	try {
+		OFileDataSource out(patchname.c_str());
+		Flex_writer gfile(out, "ExultStudio shape groups", groups.size());
+		// Write each group.
+		for (auto *grp : groups) {
+			gfile.write_object(grp);
+		}
+	} catch (exult_exception &e) {
 		Alert("Error writing '%s'", patchname.c_str());
+	}
 	modified = false;
 }
 
@@ -481,7 +477,7 @@ on_group_list_row_deleted(GtkTreeModel *model,
                           GtkTreePath *path,
                           gpointer user_data) {
 	ignore_unused_variable_warning(user_data);
-	ExultStudio::get_instance()->groups_changed(model, path, 0);
+	ExultStudio::get_instance()->groups_changed(model, path, nullptr);
 }
 
 C_EXPORT void
@@ -500,6 +496,13 @@ enum {
     GRP_NUM_COLUMNS
 };
 
+extern "C" {
+	void gulong_deleter(gpointer data) {
+		auto *ptr = static_cast<gulong*>(data);
+		delete ptr;
+	}
+}
+
 /*
  *  Initialize the list of shape groups for the file being shown in the
  *  browser.
@@ -513,10 +516,12 @@ void ExultStudio::setup_groups(
 		return;
 	}
 	GtkTreeView *tview = GTK_TREE_VIEW(
-	                         glade_xml_get_widget(app_xml, "group_list"));
+	                         get_widget("group_list"));
 	GtkTreeModel *oldmod = gtk_tree_view_get_model(tview);
 	GtkTreeStore *model;
-	gulong addsig = 0, delsig = 0, chgsig = 0;
+	gulong addsig = 0;
+	gulong delsig = 0;
+	gulong chgsig = 0;
 	if (!oldmod) {          // Create model first time.
 		model = gtk_tree_store_new(GRP_NUM_COLUMNS,
 		                           G_TYPE_STRING, G_TYPE_POINTER);
@@ -524,36 +529,33 @@ void ExultStudio::setup_groups(
 		g_object_unref(model);
 		// Create column.
 		GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
-		g_object_set(renderer, "xalign", 0.0, NULL);
+		g_object_set(renderer, "xalign", 0.0, nullptr);
 		gint col_offset = gtk_tree_view_insert_column_with_attributes(
 		                      tview,
 		                      -1, "Names",
 		                      renderer, "text",
-		                      GRP_FILE_COLUMN, NULL);
+		                      GRP_FILE_COLUMN, nullptr);
 		GtkTreeViewColumn *column = gtk_tree_view_get_column(tview,
 		                            col_offset - 1);
 		gtk_tree_view_column_set_clickable(column, TRUE);
 		addsig = g_signal_connect(G_OBJECT(model), "row-inserted",
 		                          GTK_SIGNAL_FUNC(on_group_list_row_inserted), this);
 		// Store signal id with model.
-		g_object_set_data(G_OBJECT(model), "row-inserted",
-		                  reinterpret_cast<gpointer>(addsig));
+		g_object_set_data_full(G_OBJECT(model), "row-inserted",
+		                  new gulong(addsig), gulong_deleter);
 		delsig = g_signal_connect(G_OBJECT(model), "row-deleted",
 		                          GTK_SIGNAL_FUNC(on_group_list_row_deleted), this);
-		g_object_set_data(G_OBJECT(model), "row-deleted",
-		                  reinterpret_cast<gpointer>(delsig));
+		g_object_set_data_full(G_OBJECT(model), "row-deleted",
+		                  new gulong(delsig), gulong_deleter);
 		chgsig = g_signal_connect(G_OBJECT(model), "row-changed",
 		                          GTK_SIGNAL_FUNC(on_group_list_row_changed), this);
-		g_object_set_data(G_OBJECT(model), "row-changed",
-		                  reinterpret_cast<gpointer>(delsig));
+		g_object_set_data_full(G_OBJECT(model), "row-changed",
+		                  new gulong(delsig), gulong_deleter);
 	} else {
 		model = GTK_TREE_STORE(oldmod);
-		addsig = reinterpret_cast<gulong>(g_object_get_data(G_OBJECT(model),
-		                                    "row-inserted"));
-		delsig = reinterpret_cast<gulong>(g_object_get_data(G_OBJECT(model),
-		                                    "row-deleted"));
-		chgsig = reinterpret_cast<gulong>(g_object_get_data(G_OBJECT(model),
-		                                    "row-changed"));
+		addsig = *static_cast<gulong*>(g_object_get_data(G_OBJECT(model), "row-inserted"));
+		delsig = *static_cast<gulong*>(g_object_get_data(G_OBJECT(model), "row-deleted"));
+		chgsig = *static_cast<gulong*>(g_object_get_data(G_OBJECT(model), "row-changed"));
 	}
 	// Block this signal during creation.
 	g_signal_handler_block(model, addsig);
@@ -568,7 +570,7 @@ void ExultStudio::setup_groups(
 	GtkTreeIter iter;
 	for (int i = 0; i < cnt; i++) {
 		Shape_group *grp = groups->get(i);
-		gtk_tree_store_append(model, &iter, NULL);
+		gtk_tree_store_append(model, &iter, nullptr);
 		gtk_tree_store_set(model, &iter,
 		                   GRP_FILE_COLUMN, grp->get_name(),
 		                   GRP_GROUP_COLUMN, grp,
@@ -589,7 +591,7 @@ void ExultStudio::setup_group_controls(
 ) {
 	set_visible("groups_frame", true);
 	GtkTreeView *tview = GTK_TREE_VIEW(
-	                         glade_xml_get_widget(app_xml, "group_list"));
+	                         get_widget("group_list"));
 	GtkTreeSelection *list = gtk_tree_view_get_selection(tview);
 	if (list) {
 //		int row = static_cast<int>(list->data);
@@ -614,15 +616,15 @@ void ExultStudio::add_group(
 	if (!curfile)
 		return;
 	GtkTreeView *tview = GTK_TREE_VIEW(
-	                         glade_xml_get_widget(app_xml, "group_list"));
+	                         get_widget("group_list"));
 	GtkTreeStore *model = GTK_TREE_STORE(gtk_tree_view_get_model(tview));
 	const char *nm = get_text_entry("groups_new_name");
 	Shape_group_file *groups = curfile->get_groups();
 	// Make sure name isn't already there.
 	if (nm && *nm && groups->find(nm) < 0) {
-		Shape_group *grp = new Shape_group(nm, groups);
+		auto *grp = new Shape_group(nm, groups);
 		GtkTreeIter iter;
-		gtk_tree_store_append(model, &iter, NULL);
+		gtk_tree_store_append(model, &iter, nullptr);
 		gtk_tree_store_set(model, &iter,
 		                   GRP_FILE_COLUMN, nm,
 		                   GRP_GROUP_COLUMN, grp,
@@ -636,7 +638,7 @@ void ExultStudio::del_group(
 	if (!curfile)
 		return;
 	GtkTreeView *tview = GTK_TREE_VIEW(
-	                         glade_xml_get_widget(app_xml, "group_list"));
+	                         get_widget("group_list"));
 	GtkTreeSelection *list = gtk_tree_view_get_selection(tview);
 	if (!list)
 		return;
@@ -659,8 +661,8 @@ void ExultStudio::del_group(
 	vector<GtkWindow *> toclose;
 	vector<GtkWindow *>::const_iterator it;
 	for (it = group_windows.begin(); it != group_windows.end(); ++it) {
-		Object_browser *chooser = static_cast<Object_browser *>(
-		                          gtk_object_get_data(GTK_OBJECT(*it), "browser"));
+		auto *chooser = static_cast<Object_browser *>(
+		                          g_object_get_data(G_OBJECT(*it), "browser"));
 		if (chooser->get_group() == grp)
 			// A match?
 			toclose.push_back(*it);
@@ -686,10 +688,10 @@ void ExultStudio::groups_changed(
 	if (!loc)
 		groups->remove(row, false);
 	else {
-		void *grpaddr = 0;
+		void *grpaddr = nullptr;
 		gtk_tree_model_get(model, loc, GRP_GROUP_COLUMN, &grpaddr,
 		                   -1);
-		Shape_group *grp = static_cast<Shape_group *>(grpaddr);
+		auto *grp = static_cast<Shape_group *>(grpaddr);
 		if (value)      // Changed?
 			groups->set(grp, row);
 		else
@@ -716,8 +718,8 @@ C_EXPORT void
 on_group_up_clicked(GtkToggleButton *button,
                     gpointer     user_data) {
 	ignore_unused_variable_warning(user_data);
-	Object_browser *chooser = static_cast<Object_browser *>(gtk_object_get_data(
-	                              GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
+	auto *chooser = static_cast<Object_browser *>(g_object_get_data(
+	                              G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
 	                              "browser"));
 	Shape_group *grp = chooser->get_group();
 	int i = chooser->get_selected();
@@ -730,8 +732,8 @@ C_EXPORT void
 on_group_down_clicked(GtkToggleButton *button,
                       gpointer     user_data) {
 	ignore_unused_variable_warning(user_data);
-	Object_browser *chooser = static_cast<Object_browser *>(gtk_object_get_data(
-	                              GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
+	auto *chooser = static_cast<Object_browser *>(g_object_get_data(
+	                              G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
 	                              "browser"));
 	Shape_group *grp = chooser->get_group();
 	int i = chooser->get_selected();
@@ -744,8 +746,8 @@ C_EXPORT void
 on_group_shape_remove_clicked(GtkToggleButton *button,
                               gpointer     user_data) {
 	ignore_unused_variable_warning(user_data);
-	Object_browser *chooser = static_cast<Object_browser *>(gtk_object_get_data(
-	                              GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
+	auto *chooser = static_cast<Object_browser *>(g_object_get_data(
+	                              G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(button))),
 	                              "browser"));
 	Shape_group *grp = chooser->get_group();
 	int i = chooser->get_selected();
@@ -762,7 +764,7 @@ on_group_shape_remove_clicked(GtkToggleButton *button,
 void ExultStudio::open_group_window(
 ) {
 	GtkTreeView *tview = GTK_TREE_VIEW(
-	                         glade_xml_get_widget(app_xml, "group_list"));
+	                         get_widget("group_list"));
 	GtkTreeSelection *list = gtk_tree_view_get_selection(tview);
 	if (!list || !curfile || !vgafile || !palbuf)
 		return;
@@ -785,12 +787,12 @@ void ExultStudio::open_builtin_group_window(
 	if (!curfile || !vgafile || !palbuf)
 		return;
 	Shape_group_file *groups = curfile->get_groups();
-	int index = get_optmenu("builtin_group");
-	GtkButton *btn = GTK_BUTTON(
-	                     glade_xml_get_widget(app_xml, "builtin_group"));
-	GtkLabel *label = GTK_LABEL(GTK_BIN(btn)->child);
-	Shape_group *grp = groups->get_builtin(index,
-	                                       gtk_label_get_text(label));
+	GtkComboBox *btn = GTK_COMBO_BOX(get_widget("builtin_group"));
+	assert(btn != nullptr);
+	int index = gtk_combo_box_get_active(btn);
+	gchar * label = gtk_combo_box_get_active_text(btn);
+	Shape_group *grp = groups->get_builtin(index, label);
+	g_free(label);
 	if (grp)
 		open_group_window(grp);
 }
@@ -802,22 +804,29 @@ void ExultStudio::open_builtin_group_window(
 void ExultStudio::open_group_window(
     Shape_group *grp
 ) {
-	GladeXML *xml = glade_xml_new(glade_path, "group_window", NULL);
-	glade_xml_signal_autoconnect(xml);
-	GtkWidget *grpwin = glade_xml_get_widget(xml, "group_window");
-	Object_browser *chooser = curfile->create_browser(vgafile, palbuf, grp);
+	GError* error = nullptr;
+	GtkBuilder *xml = gtk_builder_new();
+	const gchar *objects[] = {"group_window", nullptr};
+	if (!gtk_builder_add_objects_from_file(xml, glade_path, const_cast<gchar **>(objects), &error)) {
+		g_warning ("Couldn't load group window: %s", error->message);
+		g_error_free(error);
+		exit(1);
+	}
+	gtk_builder_connect_signals(xml, nullptr);
+	GtkWidget *grpwin = get_widget(xml, "group_window");
+	Object_browser *chooser = curfile->create_browser(vgafile, palbuf.get(), grp);
 	// Set xml as data on window.
-	gtk_object_set_data(GTK_OBJECT(grpwin), "xml", xml);
-	gtk_object_set_data(GTK_OBJECT(grpwin), "browser", chooser);
+	g_object_set_data(G_OBJECT(grpwin), "xml", xml);
+	g_object_set_data(G_OBJECT(grpwin), "browser", chooser);
 	// Set window title, name field.
 	string title("Exult Group:  ");
 	title += grp->get_name();
 	gtk_window_set_title(GTK_WINDOW(grpwin), title.c_str());
-	GtkWidget *field = glade_xml_get_widget(xml, "group_name");
+	GtkWidget *field = get_widget(xml, "group_name");
 	if (field)
 		gtk_entry_set_text(GTK_ENTRY(field), grp->get_name());
 	// Attach browser.
-	GtkWidget *browser_box = glade_xml_get_widget(xml, "group_shapes");
+	GtkWidget *browser_box = get_widget(xml, "group_shapes");
 	gtk_widget_show(browser_box);
 	gtk_box_pack_start(GTK_BOX(browser_box), chooser->get_widget(),
 	                   TRUE, TRUE, 0);
@@ -837,17 +846,17 @@ void ExultStudio::close_group_window(
     GtkWidget *grpwin
 ) {
 	// Remove from list.
-	for (vector<GtkWindow *>::iterator it = group_windows.begin();
+	for (auto it = group_windows.begin();
 	        it != group_windows.end(); ++it) {
 		if (*it == GTK_WINDOW(grpwin)) {
 			group_windows.erase(it);
 			break;
 		}
 	}
-	GladeXML *xml = static_cast<GladeXML *>(gtk_object_get_data(GTK_OBJECT(grpwin),
+	auto *xml = static_cast<GtkBuilder *>(g_object_get_data(G_OBJECT(grpwin),
 	                "xml"));
-	Object_browser *chooser = static_cast<Object_browser *>(gtk_object_get_data(
-	                              GTK_OBJECT(grpwin), "browser"));
+	auto *chooser = static_cast<Object_browser *>(g_object_get_data(
+	                              G_OBJECT(grpwin), "browser"));
 	delete chooser;
 	gtk_widget_destroy(grpwin);
 	g_object_unref(G_OBJECT(xml));
@@ -895,10 +904,9 @@ bool ExultStudio::groups_modified(
 void ExultStudio::update_group_windows(
     Shape_group *grp        // Group, or 0 for all.
 ) {
-	for (vector<GtkWindow *>::const_iterator it = group_windows.begin();
-	        it != group_windows.end(); ++it) {
-		Object_browser *chooser = static_cast<Object_browser *>(
-		                          gtk_object_get_data(GTK_OBJECT(*it), "browser"));
+	for (auto it = group_windows.begin(); it != group_windows.end(); ++it) {
+		auto *chooser = static_cast<Object_browser *>(
+		                          g_object_get_data(G_OBJECT(*it), "browser"));
 		if (!grp || chooser->get_group() == grp) {
 			// A match?
 			chooser->setup_info();

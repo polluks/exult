@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <config.h>
 #endif
 
-#include <stdio.h>
+#include <cstdio>
 #include <cassert>
 #include <string>
 #include <vector>
@@ -48,7 +48,7 @@ using std::vector;
 using std::map;
 using std::pair;
 
-Uc_scope Uc_function::globals(0);   // Stores intrinic symbols.
+Uc_scope Uc_function::globals(nullptr);   // Stores intrinic symbols.
 vector<Uc_intrinsic_symbol *> Uc_function::intrinsics;
 int Uc_function::num_global_statics = 0;
 int Uc_function::add_answer = -1, Uc_function::remove_answer = -1,
@@ -66,22 +66,12 @@ Uc_function::Uc_function(
     Uc_function_symbol *p,
     Uc_scope *parent
 ) : top(parent), proto(p), cur_scope(&top), num_parms(0),
-	num_locals(0), num_statics(0), text_data(0), text_data_size(0),
-	statement(0) {
+	num_locals(0), num_statics(0), text_data(nullptr), text_data_size(0),
+	statement(nullptr) {
 	add_global_function_symbol(proto, parent);// Add prototype to globals.
-#if 0
-	const char *nm = proto->get_name();
-	if (!globals.search(nm))
-		globals.add(proto);
-	else {
-		char buf[100];
-		sprintf(buf, "Name '%s' already defined", nm);
-		Uc_location::yyerror(buf);
-	}
-#endif
 	const std::vector<Uc_var_symbol *> &parms = proto->get_parms();
 	// Add backwards.
-	for (std::vector<Uc_var_symbol *>::const_reverse_iterator it = parms.rbegin();
+	for (auto it = parms.rbegin();
 	        it != parms.rend(); ++it)
 		add_symbol(*it);
 	num_parms = num_locals;     // Set counts.
@@ -102,16 +92,16 @@ Uc_function::~Uc_function(
 /*
  *  Add a new variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
     char *nm
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = new Uc_var_symbol(nm, num_parms + num_locals++);
+	auto *var = new Uc_var_symbol(nm, num_parms + num_locals++);
 	cur_scope->add(var);
 	return var;
 }
@@ -119,7 +109,7 @@ Uc_var_symbol *Uc_function::add_symbol(
 /*
  *  Add a new variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
@@ -127,7 +117,7 @@ Uc_var_symbol *Uc_function::add_symbol(
     Uc_class *c
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	Uc_var_symbol *var = new Uc_class_inst_symbol(nm, c, num_parms + num_locals++);
 	cur_scope->add(var);
@@ -137,7 +127,7 @@ Uc_var_symbol *Uc_function::add_symbol(
 /*
  *  Add a new variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
@@ -145,7 +135,7 @@ Uc_var_symbol *Uc_function::add_symbol(
     Uc_struct_symbol *s
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	Uc_var_symbol *var = new Uc_struct_var_symbol(nm, s, num_parms + num_locals++);
 	cur_scope->add(var);
@@ -155,14 +145,14 @@ Uc_var_symbol *Uc_function::add_symbol(
 /*
  *  Add a new variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
     Uc_var_symbol *var
 ) {
 	if (cur_scope->is_dup(var->get_name()))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	var->set_offset(num_parms + num_locals++);
 	cur_scope->add(var);
@@ -172,7 +162,7 @@ Uc_var_symbol *Uc_function::add_symbol(
 /*
  *  Add an alias to variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_alias(
@@ -180,9 +170,9 @@ Uc_var_symbol *Uc_function::add_alias(
     Uc_var_symbol *var
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_alias_symbol *alias = new Uc_alias_symbol(nm, var);
+	auto *alias = new Uc_alias_symbol(nm, var);
 	cur_scope->add(alias);
 	return alias;
 }
@@ -190,7 +180,7 @@ Uc_var_symbol *Uc_function::add_alias(
 /*
  *  Add an alias to variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_alias(
@@ -199,9 +189,9 @@ Uc_var_symbol *Uc_function::add_alias(
     Uc_struct_symbol *struc
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = static_cast<Uc_var_symbol *>(v->get_sym());
+	auto *var = static_cast<Uc_var_symbol *>(v->get_sym());
 	Uc_alias_symbol *alias = new Uc_struct_alias_symbol(nm, var, struc);
 	cur_scope->add(alias);
 	return alias;
@@ -210,7 +200,7 @@ Uc_var_symbol *Uc_function::add_alias(
 /*
  *  Add an alias to variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_function::add_alias(
@@ -219,9 +209,9 @@ Uc_var_symbol *Uc_function::add_alias(
     Uc_class *c
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = static_cast<Uc_var_symbol *>(v->get_sym());
+	auto *var = static_cast<Uc_var_symbol *>(v->get_sym());
 	Uc_alias_symbol *alias = new Uc_class_alias_symbol(nm, var, c);
 	cur_scope->add(alias);
 	return alias;
@@ -280,7 +270,7 @@ Uc_symbol *Uc_function::add_string_symbol(
     char *text
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	Uc_symbol *sym = new Uc_string_symbol(nm, add_string(text));
 	cur_scope->add(sym);
@@ -290,7 +280,7 @@ Uc_symbol *Uc_function::add_string_symbol(
 /*
  *  Add a new integer constant variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_symbol *Uc_function::add_int_const_symbol(
@@ -299,9 +289,9 @@ Uc_symbol *Uc_function::add_int_const_symbol(
     int opcode
 ) {
 	if (cur_scope->is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_const_int_symbol *var = new Uc_const_int_symbol(nm, value, static_cast<UsecodeOps>(opcode));
+	auto *var = new Uc_const_int_symbol(nm, value, static_cast<UsecodeOps>(opcode));
 	cur_scope->add(var);
 	return var;
 }
@@ -309,7 +299,7 @@ Uc_symbol *Uc_function::add_int_const_symbol(
 /*
  *  Add a new integer constant variable to the global scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_symbol *Uc_function::add_global_int_const_symbol(
@@ -318,9 +308,9 @@ Uc_symbol *Uc_function::add_global_int_const_symbol(
     int opcode
 ) {
 	if (globals.is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_const_int_symbol *var = new Uc_const_int_symbol(nm, value, static_cast<UsecodeOps>(opcode));
+	auto *var = new Uc_const_int_symbol(nm, value, static_cast<UsecodeOps>(opcode));
 	globals.add(var);
 	return var;
 }
@@ -385,7 +375,7 @@ int Uc_function::add_string(
     char *text
 ) {
 	// Search for an existing string.
-	std::map<std::string, int>::const_iterator exist = text_map.find(text);
+	auto exist = text_map.find(text);
 	if (exist != text_map.end())
 		return (*exist).second;
 	int offset = text_data_size;    // This is where it will go.
@@ -415,8 +405,7 @@ int Uc_function::find_string_prefix(
 ) {
 	int len = strlen(text);
 	// Find 1st entry >= text.
-	std::map<std::string, int>::const_iterator exist =
-	    text_map.lower_bound(text);
+	auto exist = text_map.lower_bound(text);
 	if (exist == text_map.end() ||
 	        strncmp(text, (*exist).first.c_str(), len) != 0) {
 		char *buf = new char[len + 100];
@@ -426,7 +415,7 @@ int Uc_function::find_string_prefix(
 		delete [] buf;
 		return 0;
 	}
-	std::map<std::string, int>::const_iterator next = exist;
+	auto next = exist;
 	++next;
 	if (next != text_map.end() &&
 	        strncmp(text, (*next).first.c_str(), len) == 0) {
@@ -448,10 +437,9 @@ int Uc_function::find_string_prefix(
 int Uc_function::link(
     Uc_function_symbol *fun
 ) {
-	for (std::vector<Uc_function_symbol *>::const_iterator it = links.begin();
-	        it != links.end(); ++it)
+	for (auto it = links.begin(); it != links.end(); ++it)
 		if (*it == fun)     // Found it?  Return offset.
-			return (it - links.begin());
+			return it - links.begin();
 	int offset = links.size();  // Going to add it.
 	links.push_back(fun);
 	return offset;
@@ -461,7 +449,7 @@ static int Remove_dead_blocks(
     vector<Basic_block *> &blocks
 ) {
 	int niter = 0;
-	while (1) {
+	while (true) {
 		niter++;
 		size_t i = 0;
 		int nremoved = 0;
@@ -482,7 +470,7 @@ static int Remove_dead_blocks(
 			}
 			if (remove) {
 				++nremoved;
-				vector<Basic_block *>::iterator it = blocks.begin() + i;
+				auto it = blocks.begin() + i;
 				blocks.erase(it);
 				delete block;
 				continue;
@@ -500,7 +488,7 @@ static int Optimize_jumps(
     bool returns
 ) {
 	int niter = 0;
-	while (1) {
+	while (true) {
 		niter++;
 		size_t i = 0;
 		int nremoved = 0;
@@ -611,7 +599,7 @@ static int Optimize_jumps(
 				++nremoved;
 				aux->unlink_descendants();
 				aux->unlink_predecessors();
-				vector<Basic_block *>::iterator it = blocks.begin() + i + 1;
+				auto it = blocks.begin() + i + 1;
 				blocks.erase(it);
 				delete aux;
 				continue;
@@ -632,7 +620,7 @@ static inline int Compute_locations(
 	locs.push_back(0);  // First block is at zero.
 	// Get locations.
 	Basic_block *back = blocks.back();
-	for (vector<Basic_block *>::iterator it = blocks.begin();
+	for (auto it = blocks.begin();
 	        *it != back; ++it)
 		locs.push_back(locs.back() + (*it)->get_block_size());
 	return locs.back() + back->get_block_size();
@@ -654,13 +642,13 @@ static int Set_32bit_jump_flags(
     vector<Basic_block *> &blocks
 ) {
 	int niter = 0;
-	while (1) {
+	while (true) {
 		niter++;
 		int nchanged = 0;
 		vector<int> locs;
 		Compute_locations(blocks, locs);
 		// Determine base distances and which are 32-bit.
-		for (vector<Basic_block *>::iterator it = blocks.begin();
+		for (auto it = blocks.begin();
 		        it != blocks.end(); ++it) {
 			Basic_block *block = *it;
 			// If the jump is already 32-bit, or if there is
@@ -671,21 +659,6 @@ static int Set_32bit_jump_flags(
 			if (is_sint_32bit(Compute_jump_distance(block, locs))) {
 				nchanged++;
 				block->set_32bit_jump();
-#if 0
-				// Doing this not only is unneccessary, but it also
-				// slows UCC down to a crawl for large functions
-				// with lots of blocks. In the absence of this block,
-				// most cases will work correctly with one iteraction.
-				// The only problematic cases are borderline jumps
-				// with offsets very close to requiring 32-bit integers
-				// and which might be pushed over the edge by the
-				// increased block lengths. These cases are dealt with
-				// by the multiple passes.
-				if (block->get_jump_size())
-					// Adjust positions of all that follow.
-					for (int j = i + 1; j < blocks.size(); j++)
-						locs[j] += 2;
-#endif
 			}
 		}
 		if (!nchanged)
@@ -702,15 +675,15 @@ void Uc_function::gen(
     std::ostream &out
 ) {
 	map<string, Basic_block *> label_blocks;
-	for (std::set<string>::iterator it = labels.begin();
+	for (auto it = labels.begin();
 	        it != labels.end(); ++it)
 		// Fill up label <==> basic block map.
 		label_blocks.insert(pair<string, Basic_block *>(*it, new Basic_block()));
-	Basic_block *initial = new Basic_block(-1);
-	Basic_block *endblock = new Basic_block(-1);
+	auto *initial = new Basic_block(-1);
+	auto *endblock = new Basic_block(-1);
 	vector<Basic_block *> fun_blocks;
 	fun_blocks.reserve(300);
-	Basic_block *current = new Basic_block();
+	auto *current = new Basic_block();
 	initial->set_taken(current);
 	fun_blocks.push_back(current);
 	if (statement)
@@ -726,7 +699,7 @@ void Uc_function::gen(
 	if (!fun_blocks.empty() && !fun_blocks.back()->is_end_block())
 		fun_blocks.back()->set_targets(UC_INVALID, endblock);
 	// Labels map is no longer needed.
-	for (map<string, Basic_block *>::iterator it = label_blocks.begin();
+	for (auto it = label_blocks.begin();
 	        it != label_blocks.end(); ++it) {
 		Basic_block *label = it->second;
 		if (!label->is_reachable()) {
@@ -734,7 +707,7 @@ void Uc_function::gen(
 			// Remove it from map and unlink references to it.
 			label->unlink_descendants();
 			label->unlink_predecessors();
-			it->second = 0;
+			it->second = nullptr;
 			delete label;
 		}
 	}
@@ -761,7 +734,7 @@ void Uc_function::gen(
 
 		code.reserve(size);
 		// Output code.
-		for (vector<Basic_block *>::iterator it = fun_blocks.begin();
+		for (auto it = fun_blocks.begin();
 		        it != fun_blocks.end(); ++it) {
 			Basic_block *block = *it;
 			block->write(code);
@@ -787,7 +760,7 @@ void Uc_function::gen(
 	}
 
 	// Free up the blocks.
-	for (vector<Basic_block *>::iterator it = fun_blocks.begin();
+	for (auto it = fun_blocks.begin();
 	        it != fun_blocks.end(); ++it)
 		delete *it;
 	fun_blocks.clear();
@@ -829,26 +802,25 @@ void Uc_function::gen(
 	Write2(out, num_locals);
 	Write2(out, num_links);
 	// Write external links.
-	for (std::vector<Uc_function_symbol *>::const_iterator it =
-	            links.begin(); it != links.end(); ++it)
+	for (auto it = links.begin(); it != links.end(); ++it)
 		Write2(out, (*it)->get_usecode_num());
 	char *ucstr = &code[0];     // Finally, the code itself.
 	out.write(ucstr, codelen);
 	out.flush();
 }
 
-#ifndef __STRING
+#ifndef TO_STRING
 #if defined __STDC__ && __STDC__
-#define __STRING(x) #x
+#define TO_STRING(x) #x
 #else
-#define __STRING(x) "x"
+#define TO_STRING(x) "x"
 #endif
 #endif
 
 /*
  *  Tables of usecode intrinsics:
  */
-#define USECODE_INTRINSIC_PTR(NAME) __STRING(UI_##NAME)
+#define USECODE_INTRINSIC_PTR(NAME) TO_STRING(UI_##NAME)
 
 const char *bg_intrinsic_table[] = {
 #include "../bgintrinsics.h"
@@ -907,7 +879,7 @@ void Uc_function::set_intrinsics(
 			get_usecode_fun = i;
 		else if (!strncmp(nm, "UI_get_item_shape", sizeof("UI_get_item_shape")))
 			get_item_shape = i;
-		Uc_intrinsic_symbol *sym = new Uc_intrinsic_symbol(nm, i);
+		auto *sym = new Uc_intrinsic_symbol(nm, i);
 		intrinsics[i] = sym;    // Store in indexed list.
 		if (!globals.search(nm))
 			// ++++Later, get num parms.

@@ -2,6 +2,7 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif  // __GNUC__
 }
@@ -70,13 +71,13 @@ static char *Find_name
 	while (*name && *name != '"')	// Find start of filename.
 		name++;
 	if (!*name)
-		return 0;
+		return nullptr;
 	name++;				// Point to name.
 	ename = name;			// Find end.
 	while (*ename && *ename != '"')
 		ename++;
 	if (!*ename)
-		return 0;
+		return nullptr;
 	*ename = 0;
 	return name;
 	}
@@ -111,7 +112,6 @@ static void Include
 	char *yytext			// ->text containing name.
 	)
 	{
-	char msg[180];
 	if (bufstack.size() > 20)
 		{
 		Uc_location::yyerror("#includes are nested too deeply");
@@ -142,6 +142,7 @@ static void Include
 		}
 	if (!yyin)
 		{
+		char msg[180];
 		sprintf(msg, "Can't open '%s'", name);
 		Uc_location::yyerror(msg);
 		exit(1);
@@ -249,6 +250,7 @@ char *Handle_string
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #if !defined(__llvm__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 #else
@@ -432,7 +434,7 @@ sonic_damage	return SONIC_DAMAGE;
 			return INT_LITERAL;
 			}
 0x[0-9a-fA-F]+		{
-			yylval.intval = strtol(yytext + 2, 0, 16);
+			yylval.intval = strtol(yytext + 2, nullptr, 16);
 			return INT_LITERAL;
 			}
 

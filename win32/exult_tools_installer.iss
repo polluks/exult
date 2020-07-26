@@ -4,21 +4,32 @@
 [Setup]
 AppName=Exult Tools
 AppVerName=Exult Tools Git
-DefaultDirName={pf}\Exult\Tools
+AppPublisher=The Exult Team
+AppPublisherURL=http://exult.sourceforge.net/
+AppSupportURL=http://exult.sourceforge.net/
+AppUpdatesURL=http://exult.sourceforge.net/
+; Setup exe version number:
+VersionInfoVersion=1.7.0
+DisableDirPage=no
+DefaultDirName={autopf}\Exult\Tools
+DisableProgramGroupPage=yes
 DefaultGroupName=Exult Tools
 OutputBaseFilename=ExultTools
 Compression=lzma
-SolidCompression=true
+SolidCompression=yes
 InternalCompressLevel=max
 AppendDefaultDirName=false
 AllowNoIcons=true
-ShowLanguageDialog=yes
 OutputDir=.
 DirExistsWarning=no
 AlwaysUsePersonalGroup=true
+DisableWelcomePage=no
+WizardStyle=modern
 
 [Files]
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+Source: Exult\COPYING.txt; DestDir: {app}; Flags: onlyifdoesntexist
+Source: Exult\AUTHORS.txt; DestDir: {app}; Flags: onlyifdoesntexist
 Source: Tools\ucxt.exe; DestDir: {app}; Flags: ignoreversion
 Source: Tools\data\bginclude.uc; DestDir: {app}\data\; Flags: ignoreversion
 Source: Tools\data\events.data; DestDir: {app}\data\; Flags: ignoreversion
@@ -35,13 +46,12 @@ Source: Tools\tools\intrins1.txt; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\intrins2.txt; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\ipack.exe; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\ipack.txt; DestDir: {app}\tools\; Flags: ignoreversion
-Source: Tools\tools\libsmooth_randomize.dll; DestDir: {app}\tools\; Flags: ignoreversion
-Source: Tools\tools\libsmooth_smooth.dll; DestDir: {app}\tools\; Flags: ignoreversion
-Source: Tools\tools\libsmooth_stream.dll; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\mklink.exe; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\mockup.exe; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\rip.exe; DestDir: {app}\tools\; Flags: ignoreversion
-Source: Tools\tools\SDL.dll; DestDir: {app}\tools\
+Source: Tools\tools\*.dll; DestDir: {app}\tools\; Flags: ignoreversion
+Source: Tools\*.dll; DestDir: {app}\;
+Source: Exult\README-SDL.txt; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\shp2pcx.exe; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\shp2pcx.txt; DestDir: {app}\tools\; Flags: ignoreversion
 Source: Tools\tools\smooth.exe; DestDir: {app}\tools\; Flags: ignoreversion

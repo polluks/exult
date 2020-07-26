@@ -81,10 +81,10 @@ bool Bg_dont_wake(
 ) {
 	ignore_unused_variable_warning(gwin);
 	int num;
-	return (Game::get_game_type() == BLACK_GATE &&
+	return Game::get_game_type() == BLACK_GATE &&
 	        (npc->get_info().has_translucency() ||
 	         // Horace or Penumbra?
-	         (num = npc->Actor::get_npc_num()) == 141 || num == 150));
+	         (num = npc->Actor::get_npc_num()) == 141 || num == 150);
 }
 
 /*
@@ -95,7 +95,7 @@ void Npc_proximity_handler::handle_event(
     unsigned long curtime,
     uintptr udata
 ) {
-	Npc_actor *npc = reinterpret_cast<Npc_actor *>(udata);
+	auto *npc = reinterpret_cast<Npc_actor *>(udata);
 	int extra_delay = 5;        // For next time.
 	// See if still on visible screen.
 	Rectangle tiles = gwin->get_win_tile_rect().enlarge(10);
@@ -107,7 +107,7 @@ void Npc_proximity_handler::handle_event(
 		npc->clear_nearby();
 		return;
 	}
-	Schedule::Schedule_types sched =
+	auto sched =
 	    static_cast<Schedule::Schedule_types>(npc->get_schedule_type());
 	// Sleep schedule?
 	if (npc->get_schedule() &&
@@ -128,33 +128,6 @@ void Npc_proximity_handler::handle_event(
 		npc->start(0, 10000);
 		extra_delay = 11;   // And don't run Usecode while up.
 	}
-#if 0       // Trying out new thing in schedule.cc.
-	else if (!(curtime < wait_until) && !cheat.in_map_editor() &&
-	         // Do it 50% of the time
-	         (rand() % 2 == 1) &&
-	         // And not for party members.
-	         !npc->is_in_party() &&
-	         // And not if walking to sched. spot.
-	         sched != Schedule::walk_to_schedule &&
-	         // Waiter-sched. does this itself.
-	         sched != Schedule::waiter &&
-	         // And not for patrollers/monsters
-	         //  in SI. !!Guessing.
-	         (Game::get_game_type() != SERPENT_ISLE ||
-	          (sched != Schedule::patrol &&
-	           sched != Schedule::wait &&
-	           sched != Schedule::horiz_pace &&
-	           sched != Schedule::vert_pace &&
-	           !npc->is_monster())))
-
-	{
-		int ucfun = npc->get_usecode();
-		gwin->get_usecode()->call_usecode(ucfun, npc,
-		                                  Usecode_machine::npc_proximity);
-		extra_delay += 3;
-		curtime = Game::get_ticks();// Time may have passed.
-	}
-#endif
 	add(curtime, npc, extra_delay); // Add back for next time.
 }
 

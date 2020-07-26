@@ -23,6 +23,8 @@ class Image_window8;
 struct File_spec;
 class U7multiobject;
 
+#include <memory>
+
 /*
  *  Palette #'s in 'palettes.flx':
  */
@@ -33,15 +35,13 @@ const int PALETTE_NIGHT = 2;
 const int PALETTE_INVISIBLE = 3;    // When Avatar is invisible.
 const int PALETTE_OVERCAST = 4;     // When raining or overcast during daytime
 const int PALETTE_FOG = 5;
-// 6 looks a little brighter than #2.
-// 7 is somewhat warmer.  Torch?
+const int PALETTE_SPELL = 6; // light spell.
+const int PALETTE_CANDLE = 7; // is somewhat warmer, candles.
 const int PALETTE_RED = 8;      // Used when hit in combat.
 // 9 has lots of black.
 const int PALETTE_LIGHTNING = 10;
 const int PALETTE_SINGLE_LIGHT = 11;
 const int PALETTE_MANY_LIGHTS = 12;
-
-
 
 class Palette {
 	Image_window8 *win;
@@ -59,12 +59,11 @@ class Palette {
 	static unsigned char border[3];
 public:
 	Palette();
-	Palette(Palette *pal);      // Copy constructor.
-	~Palette();
+	Palette(Palette *pal);      // "Copy" constructor.
 	void take(Palette *pal);    // Copies a palette into another.
 	// Fade palette in/out.
 	void fade(int cycles, int inout, int pal_num = -1);
-	bool is_faded_out() {
+	bool is_faded_out() const {
 		return faded_out;
 	}
 	void flash_red();   // Flash red for a moment.
@@ -73,7 +72,7 @@ public:
 	         bool repaint = true);
 	void set(unsigned char palnew[768], int new_brightness = -1,
 	         bool repaint = true, bool border255 = false);
-	int get_brightness() {  // Percentage:  100 = normal.
+	int get_brightness() const {  // Percentage:  100 = normal.
 		return brightness;
 	}
 	//   the user.
@@ -86,32 +85,36 @@ public:
 
 	void apply(bool repaint = true);
 	void load(const File_spec &fname0, int index,
-	          const char *xfname = 0, int xindex = -1);
+	          const char *xfname = nullptr, int xindex = -1);
 	void load(const File_spec &fname0, const File_spec &fname1,
-	          int index, const char *xfname = 0, int xindex = -1);
+	          int index, const char *xfname = nullptr, int xindex = -1);
 	void load(const File_spec &fname0, const File_spec &fname1,
 	          const File_spec &fname2, int index,
-	          const char *xfname = 0, int xindex = -1);
+	          const char *xfname = nullptr, int xindex = -1);
 	void set_brightness(int bright);
-	void set_max_val(int max);
-	int get_max_val();
+	void set_max_val(int max) {
+		max_val = max;
+	}
+	int get_max_val() const {
+		return max_val;
+	}
 	void fade_in(int cycles);
 	void fade_out(int cycles);
-	int find_color(int r, int g, int b, int last = 0xe0);
-	void create_palette_map(Palette *to, unsigned char *&buf);
-	Palette *create_intermediate(Palette *to, int nsteps, int pos);
+	int find_color(int r, int g, int b, int last = 0xe0) const;
+	void create_palette_map(const Palette *to, unsigned char *&buf) const;
+	std::unique_ptr<Palette> create_intermediate(const Palette &to, int nsteps, int pos) const;
 	void create_trans_table(unsigned char br, unsigned bg,
-	                        unsigned bb, int alpha, unsigned char *table);
+	                        unsigned bb, int alpha, unsigned char *table) const;
 	void show();
 
 	void set_color(int nr, int r, int g, int b);
-	unsigned char get_red(int nr) {
+	unsigned char get_red(int nr) const {
 		return pal1[3 * nr];
 	}
-	unsigned char get_green(int nr) {
+	unsigned char get_green(int nr) const {
 		return pal1[3 * nr + 1];
 	}
-	unsigned char get_blue(int nr) {
+	unsigned char get_blue(int nr) const {
 		return pal1[3 * nr + 2];
 	}
 	void set_palette(unsigned char palnew[768]);
@@ -121,7 +124,7 @@ public:
 		border[2] = b;
 	}
 
-	unsigned char get_border_index() {
+	unsigned char get_border_index() const {
 
 		return border255 ? 255 : 0;
 	}
@@ -132,23 +135,24 @@ public:
  */
 
 class Palette_transition {
-	Palette *start, *end, *current;
+	Palette start, end;
+	std::unique_ptr<Palette> current;
 	int step, max_steps;
-	int start_hour, start_minute, rate;
+	int start_hour, start_minute, start_ticks;
+	int rate;
 public:
-	Palette_transition(int from, int to, int ch = 0, int cm = 0, int r = 4,
-	                   int nsteps = 15, int sh = 0, int smin = 0);
-	Palette_transition(Palette *from, Palette *to, int ch = 0, int cm = 0,
-	                   int r = 4, int nsteps = 15, int sh = 0, int smin = 0);
-	Palette_transition(Palette *from, int to, int ch = 0, int cm = 0,
-	                   int r = 4, int nsteps = 15, int sh = 0, int smin = 0);
-	~Palette_transition();
+	Palette_transition(int from, int to, int ch, int cm, int ct, int,
+	                   int nsteps, int sh, int smin, int stick);
+	Palette_transition(Palette *from, Palette *to, int ch, int cm, int ct,
+	                   int r, int nsteps, int sh, int smin, int stick);
+	Palette_transition(Palette *from, int to, int ch, int cm, int ct,
+	                   int r, int nsteps, int sh, int smin, int stick);
 	int get_step() const {
 		return step;
 	}
-	bool set_step(int hour, int min);
-	Palette *get_current_palette() {
-		return current;
+	bool set_step(int hour, int min, int tick);
+	Palette *get_current_palette() const {
+		return current.get();
 	}
 };
 

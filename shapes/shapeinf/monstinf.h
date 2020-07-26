@@ -39,14 +39,12 @@ class Shapes_vga_file;
  *  An element from 'equip.dat', describing a monster's equipment:
  */
 class Equip_element {
-	unsigned short shapenum;    // What to create, or 0 for nothing.
-	unsigned char probability;  // 0-100:  probabilit of creation.
-	unsigned char quantity;     // # to create.
+	unsigned short shapenum = 0;    // What to create, or 0 for nothing.
+	unsigned char probability = 0;  // 0-100:  probabilit of creation.
+	unsigned char quantity = 0;     // # to create.
 public:
 	friend class Monster_info;
 	friend class Monster_actor;
-	Equip_element() : shapenum(0), probability(0), quantity(0)
-	{  }
 	void set(int shnum, int prob, int quant) {
 		shapenum = shnum;
 		probability = prob;
@@ -71,8 +69,6 @@ class Equip_record {
 public:
 	friend class Monster_info;
 	friend class Monster_actor;
-	Equip_record()
-	{  }
 	// Set i'th element.
 	void set(int i, int shnum, int prob, int quant) {
 		elements[i].set(shnum, prob, quant);
@@ -118,8 +114,8 @@ class Monster_info : public Base_info {
 	bool m_death_safe;      // Return of flag 14. Immune to death spells?
 	bool m_int_b1;          // May give XP; but what does it do???
 
-	char m_attackmode;      // Sets initial attack mode.
-	char m_byte13;          // Unknown; Bits 3 through 7 of byte 13.
+	unsigned char m_attackmode;      // Sets initial attack mode.
+	unsigned char m_byte13;          // Unknown; Bits 3 through 7 of byte 13.
 
 	bool m_can_teleport;
 	bool m_can_summon;
@@ -127,7 +123,6 @@ class Monster_info : public Base_info {
 public:
 	friend class Shape_info;
 	friend class Monster_actor;
-	Monster_info() {  }
 	// Read in from file.
 	bool read(std::istream &in, int version, Exult_Game game);
 	// Write out.
@@ -255,7 +250,7 @@ public:
 			m_int_b1 = tf;
 		}
 	}
-	char get_byte13() const {
+	unsigned char get_byte13() const {
 		return m_byte13;
 	}
 	void set_byte13(char c) {
@@ -264,10 +259,10 @@ public:
 			m_byte13 = c;
 		}
 	}
-	char get_attackmode() const {
+	unsigned char get_attackmode() const {
 		return m_attackmode;
 	}
-	void set_attackmode(char c) {
+	void set_attackmode(unsigned char c) {
 		if (m_attackmode != c) {
 			set_modified(true);
 			m_attackmode = c;

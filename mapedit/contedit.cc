@@ -88,7 +88,7 @@ C_EXPORT void on_cont_show_gump_clicked(
 	cout << "In on_cont_show_gump_clicked()" << endl;
 	unsigned char data[Exult_server::maxlength];
 	// Get container address.
-	uintptr addr = reinterpret_cast<uintptr>(gtk_object_get_user_data(
+	auto addr = reinterpret_cast<uintptr>(gtk_object_get_user_data(
 	                         GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
 	unsigned char *ptr = &data[0];
 	Serial_out io(ptr);
@@ -134,7 +134,7 @@ C_EXPORT gboolean on_cont_draw_expose_event(
 	ExultStudio::get_instance()->show_cont_shape(
 	    event->area.x, event->area.y, event->area.width,
 	    event->area.height);
-	return (TRUE);
+	return TRUE;
 }
 
 /*
@@ -189,7 +189,7 @@ static void cont_shape_dropped(
 		reinterpret_cast<ExultStudio *>(udata)->set_cont_shape(shape, frame);
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 
 static void Drop_dragged_shape(int shape, int frame, int x, int y, void *data) {
 	cout << "Dropped a shape: " << shape << "," << frame << " " << data << endl;
@@ -208,29 +208,29 @@ void ExultStudio::open_cont_window(
     unsigned char *data,        // Serialized object.
     int datalen
 ) {
-#ifdef WIN32
+#ifdef _WIN32
 	bool first_time = false;
 #endif
 	if (!contwin) {         // First time?
-#ifdef WIN32
+#ifdef _WIN32
 		first_time = true;
 #endif
-		contwin = glade_xml_get_widget(app_xml, "cont_window");
+		contwin = get_widget("cont_window");
 		// Note: vgafile can't be null here.
 		if (palbuf) {
-			cont_draw = new Shape_draw(vgafile->get_ifile(), palbuf,
-			                           glade_xml_get_widget(app_xml, "cont_draw"));
+			cont_draw = new Shape_draw(vgafile->get_ifile(), palbuf.get(),
+			                           get_widget("cont_draw"));
 			cont_draw->enable_drop(cont_shape_dropped, this);
 		}
 	}
 	// Init. cont address to null.
-	gtk_object_set_user_data(GTK_OBJECT(contwin), 0);
+	gtk_object_set_user_data(GTK_OBJECT(contwin), nullptr);
 	if (!init_cont_window(data, datalen))
 		return;
 	gtk_widget_show(contwin);
-#ifdef WIN32
+#ifdef _WIN32
 	if (first_time || !contdnd)
-		Windnd::CreateStudioDropDest(contdnd, conthwnd, Drop_dragged_shape, NULL, NULL, (void *) this);
+		Windnd::CreateStudioDropDest(contdnd, conthwnd, Drop_dragged_shape, nullptr, nullptr, this);
 #endif
 }
 
@@ -242,7 +242,7 @@ void ExultStudio::close_cont_window(
 ) {
 	if (contwin) {
 		gtk_widget_hide(contwin);
-#ifdef WIN32
+#ifdef _WIN32
 		Windnd::DestroyStudioDropDest(contdnd, conthwnd);
 #endif
 	}
@@ -259,8 +259,12 @@ int ExultStudio::init_cont_window(
     int datalen
 ) {
 	Container_game_object *addr;
-	int tx, ty, tz;
-	int shape, frame, quality;
+	int tx;
+	int ty;
+	int tz;
+	int shape;
+	int frame;
+	int quality;
 	std::string name;
 	unsigned char res;
 	bool invis;
@@ -286,7 +290,7 @@ int ExultStudio::init_cont_window(
 	set_toggle("cont_invisible", invis);
 	set_toggle("cont_okay_to_take", can_take);
 	// Set limit on frame #.
-	GtkWidget *btn = glade_xml_get_widget(app_xml, "cont_frame");
+	GtkWidget *btn = get_widget("cont_frame");
 	if (btn) {
 		GtkAdjustment *adj = gtk_spin_button_get_adjustment(
 		                         GTK_SPIN_BUTTON(btn));
@@ -307,9 +311,10 @@ int ExultStudio::save_cont_window(
 ) {
 	cout << "In save_cont_window()" << endl;
 	// Get container address.
-	Container_game_object *addr = static_cast<Container_game_object*>(gtk_object_get_user_data(GTK_OBJECT(contwin)));
-	int tx = get_spin("cont_x"), ty = get_spin("cont_y"),
-	    tz = get_spin("cont_z");
+	auto *addr = static_cast<Container_game_object*>(gtk_object_get_user_data(GTK_OBJECT(contwin)));
+	int tx = get_spin("cont_x");
+	int ty = get_spin("cont_y");
+	int tz = get_spin("cont_z");
 	std::string name(get_text_entry("cont_name"));
 	int shape = get_spin("cont_shape");
 	int frame = get_spin("cont_frame");
@@ -337,7 +342,7 @@ void ExultStudio::rotate_cont(
 	int frnum = get_num_entry("cont_frame");
 	if (shnum <= 0)
 		return;
-	Shapes_vga_file *shfile = static_cast<Shapes_vga_file *>(vgafile->get_ifile());
+	auto *shfile = static_cast<Shapes_vga_file *>(vgafile->get_ifile());
 	// Make sure data's been read in.
 	shfile->read_info(game_type, true);
 	const Shape_info &info = shfile->get_info(shnum);

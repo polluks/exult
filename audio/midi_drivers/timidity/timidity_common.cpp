@@ -28,16 +28,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#ifndef _WIN32_WCE
 #include <cerrno>
-#else
-static int errno = 0;
-static char *strerror(int _errno)
-{
-	return "";
-}
-#endif
+
 #include "timidity.h"
 #include "timidity_common.h"
 #include "timidity_output.h"
@@ -56,10 +48,10 @@ char current_filename[1024];
 
 #ifdef DEFAULT_TIMIDITY_PATH
 /* The paths in this list will be tried whenever we're reading a file */
-static PathList defaultpathlist={DEFAULT_TIMIDITY_PATH,0};
+static PathList defaultpathlist={DEFAULT_TIMIDITY_PATH, nullptr};
 static PathList *pathlist=&defaultpathlist; /* This is a linked list */
 #else
-static PathList *pathlist=0;
+static PathList *pathlist = nullptr;
 #endif
 
 /*	Try to open a file for reading. If the filename ends in one of the
@@ -72,7 +64,7 @@ static FILE *try_to_open(char *name, int decompress, int noise_mode)
 	fp=fopen(name, OPEN_MODE); /* First just check that the file exists */
 
 	if (!fp)
-		return 0;
+		return nullptr;
 
 #ifdef DECOMPRESSOR_LIST
 	if (decompress)
@@ -125,14 +117,10 @@ static FILE *try_to_open(char *name, int decompress, int noise_mode)
  them through a decompressor. */
 FILE *open_file(const char *name, int decompress, int noise_mode)
 {
-	FILE *fp;
-	PathList *plp=pathlist;
-	int l;
-
 	if (!name || !(*name))
 	{
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "Attempted to open nameless file.");
-		return 0;
+		return nullptr;
 	}
 
 	/* First try the given name */
@@ -141,27 +129,27 @@ FILE *open_file(const char *name, int decompress, int noise_mode)
 	current_filename[1023]='\0';
 
 	ctl->cmsg(CMSG_INFO, VERB_DEBUG, "Trying to open %s", current_filename);
+	FILE *fp;
 	if ((fp=try_to_open(current_filename, decompress, noise_mode)))
 		return fp;
 
-#ifdef ENOENT
 	if (noise_mode && (errno != ENOENT))
 	{
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "%s: %s",
 		          current_filename, strerror(errno));
-		return 0;
+		return nullptr;
 	}
-#endif
 
 #ifndef __WIN32__
-	if (name[0] != PATH_SEP)
+	if (name[0] != PATH_SEP) {
 #else
-	if (name[0] != '\\' && name[0] != '/' && name[1] != ':')
+	if (name[0] != '\\' && name[0] != '/' && name[1] != ':') {
 #endif
+		PathList *plp=pathlist;
 		while (plp)	/* Try along the path then */
 		{
 			*current_filename=0;
-			l=static_cast<int>(strlen(plp->path));
+			int l=static_cast<int>(strlen(plp->path));
 			if(l)
 			{
 				strcpy(current_filename, plp->path);
@@ -176,16 +164,15 @@ FILE *open_file(const char *name, int decompress, int noise_mode)
 			ctl->cmsg(CMSG_INFO, VERB_DEBUG, "Trying to open %s", current_filename);
 			if ((fp=try_to_open(current_filename, decompress, noise_mode)))
 				return fp;
-#ifdef ENOENT
 			if (noise_mode && (errno != ENOENT))
 			{
 				ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "%s: %s",
 					      current_filename, strerror(errno));
-				return 0;
+				return nullptr;
 			}
-#endif
 			plp=plp->next;
 		}
+	}
 
 	/* Nothing could be opened. */
 
@@ -194,7 +181,7 @@ FILE *open_file(const char *name, int decompress, int noise_mode)
 	if (noise_mode>=2)
 		ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "%s: %s", name, strerror(errno));
 
-	return 0;
+	return nullptr;
 }
 
 /* This closes files opened with open_file */
@@ -209,13 +196,12 @@ void close_file(FILE *fp)
 /* This is meant for skipping a few bytes in a file or fifo. */
 void skip(FILE *fp, size_t len)
 {
-	size_t c;
-	char tmp[1024];
 	while (len>0)
 	{
-		c=len;
+		size_t c=len;
 		if (c>1024) c=1024;
 		len-=c;
+		char tmp[1024];
 		if (c!=fread(tmp, 1, c, fp))
 			ctl->cmsg(CMSG_ERROR, VERB_NORMAL, "%s: skip: %s",
 			          current_filename, strerror(errno));
@@ -240,13 +226,13 @@ void *safe_malloc(size_t count)
 
 	ctl->close();
 	exit(10);
-	return(NULL);
+	return nullptr;
 }
 
 /* This adds a directory to the path list */
 void add_to_pathlist(char *s)
 {
-	PathList *plp=safe_Malloc<PathList>();
+	auto *plp=safe_Malloc<PathList>();
 	char *path=safe_Malloc<char>(strlen(s)+1);
 	strcpy(path,s);
 	plp->path=path;

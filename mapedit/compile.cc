@@ -84,13 +84,13 @@ void Ucc_done(
 void ExultStudio::open_compile_window(
 ) {
 	if (!compilewin) {      // First time?
-		compilewin = glade_xml_get_widget(app_xml, "compile_win");
+		compilewin = get_widget("compile_win");
 		compile_box = new Exec_box(
 		    GTK_TEXT_VIEW(
-		        glade_xml_get_widget(app_xml, "compile_msgs")),
+		        get_widget("compile_msgs")),
 		    GTK_STATUSBAR(
-		        glade_xml_get_widget(app_xml, "compile_status")),
-		    Ucc_done, 0);
+		        get_widget("compile_status")),
+		    Ucc_done, nullptr);
 	}
 	gtk_widget_show(compilewin);
 }
@@ -132,7 +132,7 @@ void ExultStudio::compile(
 	argv[2] = obj.c_str();
 	argv[3] = source.c_str();   // What to compile.
 	argv[4] = incdir.c_str();   // Include dir
-	argv[5] = 0;            // NULL.
+	argv[5] = nullptr;            // nullptr.
 	if (!compile_box->exec("ucc", argv))
 		EStudio::Alert("Error executing usecode compiler ('ucc')");
 }

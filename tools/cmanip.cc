@@ -30,8 +30,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vector>
 #include <cassert>
 
-const std::string c_empty_string;
-
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -41,9 +39,9 @@ using std::pair;
 
 enum DoOps { DoAdd, DoRem, DoGet };
 
-typedef pair<DoOps, vector<string> > DoListPair;
+using DoListPair = pair<DoOps, vector<string>>;
 
-typedef vector<DoListPair> DoList;
+using DoList = vector<DoListPair>;
 
 DoList          dolist;
 Configuration   *config = new Configuration();
@@ -94,8 +92,8 @@ void read_params(const int argc, char *argv[]) {
 
 			DoListPair dlp;
 			dlp.first = DoAdd;
-			dlp.second.push_back(argv[i + 1]);
-			dlp.second.push_back(argv[i + 2]);
+			dlp.second.emplace_back(argv[i + 1]);
+			dlp.second.emplace_back(argv[i + 2]);
 			dolist.push_back(dlp);
 			i += 2;
 		}
@@ -110,7 +108,7 @@ void read_params(const int argc, char *argv[]) {
 
 			DoListPair dlp;
 			dlp.first = DoRem;
-			dlp.second.push_back(argv[i + 1]);
+			dlp.second.emplace_back(argv[i + 1]);
 			dolist.push_back(dlp);
 			i++;
 		}
@@ -123,7 +121,7 @@ void read_params(const int argc, char *argv[]) {
 
 			DoListPair dlp;
 			dlp.first = DoGet;
-			dlp.second.push_back(argv[i + 1]);
+			dlp.second.emplace_back(argv[i + 1]);
 			dolist.push_back(dlp);
 			i++;
 		}
@@ -139,18 +137,18 @@ void read_params(const int argc, char *argv[]) {
 /* Walk over the operations list (dolist) and execute each operation in the order
     it was listed on the command line */
 void process_ops() {
-	for (DoList::iterator i = dolist.begin(); i != dolist.end(); i++) {
+	for (auto i = dolist.begin(); i != dolist.end(); i++) {
 		if (i->first == DoAdd) {
 			assert(i->second.size() == 2);
 			if (verbose) {
 				string s;
-				assert(config != 0);
+				assert(config != nullptr);
 				config->value(i->second[0].c_str(), s, "---nil---");
 				cerr << "Original value of " << i->second[0] << " was " << s << endl;
 
 			}
 
-			assert(config != 0);
+			assert(config != nullptr);
 			config->set(i->second[0].c_str(), i->second[1].c_str(), false);
 
 			if (verbose)
@@ -160,13 +158,13 @@ void process_ops() {
 			assert(i->second.size() == 1);
 			if (verbose) {
 				string s;
-				assert(config != 0);
+				assert(config != nullptr);
 				config->value(i->second[0].c_str(), s, "---nil---");
 				cerr << "Original value was " << i->second[0] << " was " << s << endl;
 
 			}
 
-			assert(config != 0);
+			assert(config != nullptr);
 			config->set(i->second[0].c_str(), "", false);
 
 			if (verbose)
@@ -176,13 +174,13 @@ void process_ops() {
 			assert(i->second.size() == 1);
 			if (verbose) {
 				string s;
-				assert(config != 0);
+				assert(config != nullptr);
 				config->value(i->second[0].c_str(), s, "unknown");
 				cerr << "Return value for " << i->second[0] << " is " << s << endl;
 
 			}
 
-			assert(config != 0);
+			assert(config != nullptr);
 			//config->set(i->second[0].c_str(), "", false);
 			string s;
 			config->value(i->second[0].c_str(), s, "unknown");
@@ -200,20 +198,20 @@ int main(int argc, char *argv[]) {
 
 	if (verbose) {
 		cerr << "Operations:" << endl;
-		for (DoList::iterator i = dolist.begin(); i != dolist.end(); i++) {
+		for (auto i = dolist.begin(); i != dolist.end(); i++) {
 			cerr << '\t' << ((i->first == DoAdd) ? "add" : ((i->first == DoRem) ? "rem" : ((i->first == DoGet) ? "get" : "unknown"))) << '\t';
-			for (vector<string>::iterator j = i->second.begin(); j != i->second.end(); j++)
+			for (auto j = i->second.begin(); j != i->second.end(); j++)
 				cerr << *j << '\t';
 			cerr << endl;
 		}
 	}
 
-	assert(config != 0);
+	assert(config != nullptr);
 	config->read_config_file(config_file_name);
 
 	process_ops();
 
-	assert(config != 0);
+	assert(config != nullptr);
 	config->write_back();
 
 	return 0;

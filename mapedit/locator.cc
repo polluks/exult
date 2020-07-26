@@ -64,7 +64,7 @@ C_EXPORT void on_loc_close_clicked(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
 	loc->show(false);
 }
@@ -78,7 +78,7 @@ C_EXPORT gboolean on_loc_window_delete_event(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(event, user_data);
-	Locator *loc = static_cast<Locator *>(
+	auto *loc = static_cast<Locator *>(
 	               gtk_object_get_user_data(GTK_OBJECT(widget)));
 	loc->show(false);
 	return TRUE;
@@ -93,7 +93,7 @@ C_EXPORT gint on_loc_draw_configure_event(
     gpointer data           // ->Shape_chooser
 ) {
 	ignore_unused_variable_warning(event, data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(widget)))));
 	loc->configure(widget);
 	return TRUE;
@@ -107,7 +107,7 @@ C_EXPORT gint on_loc_draw_expose_event(
     gpointer data           // ->Shape_chooser.
 ) {
 	ignore_unused_variable_warning(data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(widget)))));
 	loc->render(&event->area);
 	return TRUE;
@@ -121,7 +121,7 @@ C_EXPORT gint on_loc_draw_button_press_event(
     gpointer data           // ->Chunk_chooser.
 ) {
 	ignore_unused_variable_warning(data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(widget)))));
 	return loc->mouse_press(event);
 }
@@ -132,7 +132,7 @@ C_EXPORT gint on_loc_draw_button_release_event(
     gpointer data           // ->Chunk_chooser.
 ) {
 	ignore_unused_variable_warning(data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(widget)))));
 	return loc->mouse_release(event);
 }
@@ -143,7 +143,7 @@ C_EXPORT gint on_loc_draw_motion_notify_event(
     gpointer data           // ->Chunk_chooser.
 ) {
 	ignore_unused_variable_warning(data);
-	Locator *loc = static_cast<Locator *>(gtk_object_get_user_data(
+	auto *loc = static_cast<Locator *>(gtk_object_get_user_data(
 	                   GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(widget)))));
 	return loc->mouse_motion(event);
 }
@@ -152,21 +152,19 @@ C_EXPORT gint on_loc_draw_motion_notify_event(
  *  Create locator window.
  */
 
-Locator::Locator(
-) : drawgc(0), tx(0), ty(0), txs(40), tys(25), //scale(1),
-	dragging(false), send_location_timer(-1) {
-	GladeXML *app_xml = ExultStudio::get_instance()->get_xml();
-	win = glade_xml_get_widget(app_xml, "loc_window");
+Locator::Locator() {
+	ExultStudio *studio = ExultStudio::get_instance();
+	win = studio->get_widget("loc_window");
 	gtk_object_set_user_data(GTK_OBJECT(win), this);
-	draw = glade_xml_get_widget(app_xml, "loc_draw");
+	draw = studio->get_widget("loc_draw");
 	// Indicate the events we want.
 	gtk_widget_set_events(draw, GDK_EXPOSURE_MASK |
 	                      GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
 	                      GDK_BUTTON1_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK);
 	// Set up scales.
-	GtkWidget *scale = glade_xml_get_widget(app_xml, "loc_hscale");
+	GtkWidget *scale = studio->get_widget("loc_hscale");
 	hadj = gtk_range_get_adjustment(GTK_RANGE(scale));
-	scale = glade_xml_get_widget(app_xml, "loc_vscale");
+	scale = studio->get_widget("loc_vscale");
 	vadj = gtk_range_get_adjustment(GTK_RANGE(scale));
 	hadj->upper = vadj->upper = c_num_chunks;
 	hadj->page_increment = vadj->page_increment = c_chunks_per_schunk;
@@ -224,11 +222,11 @@ void Locator::configure(
  */
 
 void Locator::render(
-    GdkRectangle *area      // 0 for whole draw area.
+    GdkRectangle *area      // nullptr for whole draw area.
 ) {
 	// Get dims.
-	int draww = draw->allocation.width,
-	    drawh = draw->allocation.height;
+	int draww = draw->allocation.width;
+	int drawh = draw->allocation.height;
 	GdkRectangle all;
 	if (!area) {
 		all.x = all.y = 0;
@@ -242,10 +240,6 @@ void Locator::render(
 	gdk_draw_rectangle(draw->window, drawgc, TRUE, area->x, area->y,
 	                   area->width, area->height);
 	// Show superchunks with dotted lines.
-#if 0
-	gdk_gc_set_line_attributes(drawgc, 1, GDK_LINE_ON_OFF_DASH,
-	                           GDK_CAP_BUTT, GDK_JOIN_BEVEL);
-#endif
 	// Paint in light grey.
 	gdk_rgb_gc_set_foreground(drawgc, 0xc0c0c0);
 	int i;
@@ -276,17 +270,13 @@ void Locator::render(
 			              cur + 1, drawh);
 		}
 	}
-#if 0
-	// Back to solid lines for loc. box.
-	gdk_gc_set_line_attributes(drawgc, 1, GDK_LINE_SOLID,
-	                           GDK_CAP_BUTT, GDK_JOIN_BEVEL);
-#endif
 	// Figure where to draw box.
-	int cx = tx / c_tiles_per_chunk, cy = ty / c_tiles_per_chunk;
-	int x = (cx * draww) / c_num_chunks,
-	    y = (cy * drawh) / c_num_chunks;
-	int w = (txs * draww) / c_num_tiles,
-	    h = (tys * drawh) / c_num_tiles;
+	int cx = tx / c_tiles_per_chunk;
+	int cy = ty / c_tiles_per_chunk;
+	int x = (cx * draww) / c_num_chunks;
+	int y = (cy * drawh) / c_num_chunks;
+	int w = (txs * draww) / c_num_tiles;
+	int h = (tys * drawh) / c_num_tiles;
 	if (w == 0)
 		w = 1;
 	if (h == 0)
@@ -322,7 +312,8 @@ void Locator::view_changed(
 	tys = Read4(data);
 	// ++++Scale?  Later.
 	// Do things by chunk.
-	int cx = tx / c_tiles_per_chunk, cy = ty / c_tiles_per_chunk;
+	int cx = tx / c_tiles_per_chunk;
+	int cy = ty / c_tiles_per_chunk;
 	tx = cx * c_tiles_per_chunk;
 	ty = cy * c_tiles_per_chunk;
 	// Update scrolls.
@@ -339,7 +330,7 @@ void Locator::vscrolled(        // For vertical scrollbar.
     GtkAdjustment *adj,     // The adjustment.
     gpointer data           // ->Shape_chooser.
 ) {
-	Locator *loc = static_cast<Locator *>(data);
+	auto *loc = static_cast<Locator *>(data);
 	int oldty = loc->ty;
 	loc->ty = static_cast<gint>(adj->value) * c_tiles_per_chunk;
 	if (loc->ty != oldty)       // (Already equal if this event came
@@ -353,7 +344,7 @@ void Locator::hscrolled(        // For horizontal scrollbar.
     GtkAdjustment *adj,     // The adjustment.
     gpointer data           // ->Locator.
 ) {
-	Locator *loc = static_cast<Locator *>(data);
+	auto *loc = static_cast<Locator *>(data);
 	int oldtx = loc->tx;
 	loc->tx = static_cast<gint>(adj->value) * c_tiles_per_chunk;
 	if (loc->tx != oldtx)       // (Already equal if this event came
@@ -407,7 +398,7 @@ void Locator::query_location(
 gint Locator::delayed_send_location(
     gpointer data           // ->locator.
 ) {
-	Locator *loc = static_cast<Locator *>(data);
+	auto *loc = static_cast<Locator *>(data);
 	loc->send_location();
 	loc->send_location_timer = -1;
 	return 0;           // Cancels timer.
@@ -422,12 +413,14 @@ void Locator::goto_mouse(
     bool delay_send         // Delay send_location for a bit.
 ) {
 	GdkRectangle oldbox = viewbox;  // Old location of box.
-	int oldtx = tx, oldty = ty;
+	int oldtx = tx;
+	int oldty = ty;
 	// Set tx,ty here so hscrolled() &
 	//   vscrolled() don't send to Exult.
 	tx = (mx * c_num_tiles) / draw->allocation.width;
 	ty = (my * c_num_tiles) / draw->allocation.height;
-	int cx = tx / c_tiles_per_chunk, cy = ty / c_tiles_per_chunk;
+	int cx = tx / c_tiles_per_chunk;
+	int cy = ty / c_tiles_per_chunk;
 	if (cx > c_num_chunks - 2)
 		cx = c_num_chunks - 2;
 	if (cy > c_num_chunks - 2)
@@ -475,7 +468,8 @@ gint Locator::mouse_press(
 	if (event->button != 1)
 		return FALSE;       // Handling left-click.
 	// Get mouse position, draw dims.
-	int mx = static_cast<int>(event->x), my = static_cast<int>(event->y);
+	int mx = static_cast<int>(event->x);
+	int my = static_cast<int>(event->y);
 	// Double-click?
 	if (reinterpret_cast<GdkEvent *>(event)->type == GDK_2BUTTON_PRESS) {
 		goto_mouse(mx, my);
@@ -489,7 +483,7 @@ gint Locator::mouse_press(
 	dragging = true;
 	drag_relx = mx - viewbox.x; // Save rel. pos.
 	drag_rely = my - viewbox.y;
-	return (TRUE);
+	return TRUE;
 }
 
 /*
@@ -511,7 +505,8 @@ gint Locator::mouse_release(
 gint Locator::mouse_motion(
     GdkEventMotion *event
 ) {
-	int mx, my;
+	int mx;
+	int my;
 	GdkModifierType state;
 	if (event->is_hint)
 		gdk_window_get_pointer(event->window, &mx, &my, &state);

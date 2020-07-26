@@ -29,6 +29,7 @@
 #include "vgafile.h"
 #include "shapeid.h"
 
+#include <memory>
 #include <string>   // STL string
 #include <vector>
 
@@ -38,10 +39,6 @@
 #define CYCLE_RED_PLASMA()  cycle_load_palette()
 #else
 #define CYCLE_RED_PLASMA()
-#endif
-
-#ifdef __IPHONEOS__
-#include "objs/objs.h"
 #endif
 
 #ifndef ATTR_PRINTF
@@ -85,8 +82,13 @@ class ShapeID;
 class Shape_info;
 class Game_render;
 class Effects_manager;
+using Actor_shared = std::shared_ptr<Actor>;
 
-using std::vector;
+struct Position2d {
+	int x;
+	int y;
+};
+using Game_object_map_xy = std::map<Game_object*, Position2d>;
 
 /*
  *  The main game window:
@@ -97,7 +99,7 @@ class Game_window {
 	Dragging_info *dragging;    // Dragging info:
 	Effects_manager *effects;   // Manages special effects.
 	Game_clock *clock;      // Keeps track of time.
-	vector<Game_map *> maps; // Hold all terrain.
+	std::vector<Game_map *> maps; // Hold all terrain.
 	Game_map *map;          // The current map.
 	Game_render *render;        // Helps with rendering.
 	Gump_manager *gump_man;     // Open containers on screen.
@@ -110,11 +112,12 @@ class Game_window {
 	Time_sensitive *background_noise;
 	Usecode_machine *usecode;   // Drives game plot.
 	// Game state flags:
-	bool combat;            // true if in combat.
-	bool focus;         // Do we have focus?
-	bool ice_dungeon;       // true if inside ice dungeon
-	bool painted;           // true if we updated image buffer.
-	bool ambient_light;     // Permanent version of special_light.
+	bool combat;             // true if in combat.
+	bool focus;              // Do we have focus?
+	bool ice_dungeon;        // true if inside ice dungeon
+	bool painted;            // true if we updated image buffer.
+	bool ambient_light;      // Permanent version of special_light.
+	bool infravision_active; // Infravision flag.
 	// Game state values:
 	int skip_above_actor;       // Level above actor to skip rendering.
 	unsigned int in_dungeon;    // true if inside a dungeon.
@@ -128,9 +131,8 @@ class Game_window {
 	Barge_object *moving_barge; // ->cart/ship that's moving, or 0.
 	Main_actor *main_actor;     // Main sprite to move around.
 	Actor *camera_actor;        // What to center view around.
-	vector<Actor *> npcs;       // Array of NPC's + the Avatar.
-	vector<Dead_body *> bodies; // Corresponding Dead_body's.
-	Deleted_objects *removed;   // List of 'removed' objects.
+	std::vector<Actor_shared> npcs;  // Array of NPC's + the Avatar.
+	std::vector<Dead_body *> bodies; // Corresponding Dead_body's.
 	// Rendering info:
 	int scrolltx, scrollty;     // Top-left tile of screen.
 	Rectangle scroll_bounds;    // Walking outside this scrolls.
@@ -151,6 +153,12 @@ class Game_window {
 	uint8 use_shortcutbar; // 0 = no, 1 = trans, 2 = yes
 	Pixel_colors outline_color;
 	bool sb_hide_missing;
+
+	// Touch Options
+	bool item_menu;
+	int dpad_location;
+	bool touch_pathfind;
+
 	// Private methods:
 	void set_scrolls(Tile_coord cent);
 	void clear_world(bool restoremapedit);      // Clear out world's contents.
@@ -222,19 +230,19 @@ public:
 	inline Rectangle get_full_rect() const { // Get window's rectangle.
 		return Rectangle(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());
 	}
-	Rectangle get_win_tile_rect() { // Get it in tiles, rounding up.
+	Rectangle get_win_tile_rect() const { // Get it in tiles, rounding up.
 		return Rectangle(get_scrolltx(), get_scrollty(),
 		                 (win->get_game_width() + c_tilesize - 1) / c_tilesize,
 		                 (win->get_game_height() + c_tilesize - 1) / c_tilesize);
 	}
 	// Clip rectangle to window's.
-	Rectangle clip_to_game(Rectangle const &r) {
+	Rectangle clip_to_game(Rectangle const &r) const {
 		Rectangle wr = get_game_rect();
-		return (r.intersect(wr));
+		return r.intersect(wr);
 	}
-	Rectangle clip_to_win(Rectangle const &r) {
+	Rectangle clip_to_win(Rectangle const &r) const {
 		Rectangle wr = get_full_rect();
-		return (r.intersect(wr));
+		return r.intersect(wr);
 	}
 	// Resize event occurred.
 	void resized(unsigned int neww, unsigned int newh, bool newfs,
@@ -318,13 +326,36 @@ public:
 	void set_sb_hide_missing_items(bool s) {
 		sb_hide_missing = s;
 	}
+
+	/*
+	 * Touch options:
+ 	*/
+	bool get_item_menu() const {
+		return item_menu;
+	}
+	void set_item_menu(bool s) {
+		item_menu = s;
+	}
+	inline void set_dpad_location(int a) {
+		dpad_location = a;
+	}
+	inline int get_dpad_location() const {
+		return dpad_location;
+	}
+	bool get_touch_pathfind() const {
+		return touch_pathfind;
+	}
+	void set_touch_pathfind(bool s) {
+		touch_pathfind = s;
+	}
+
 	/*
 	 *  Game components:
 	 */
 	inline Game_map *get_map() const {
 		return map;
 	}
-	inline const vector<Game_map *> &get_maps() const {
+	inline const std::vector<Game_map *> &get_maps() const {
 		return maps;
 	}
 	inline Usecode_machine *get_usecode() const {
@@ -336,25 +367,25 @@ public:
 	inline Time_queue *get_tqueue() const {
 		return tqueue;
 	}
-	Palette *get_pal() {
+	inline Palette *get_pal() const {
 		return pal;
 	}
-	Effects_manager *get_effects() {
+	inline Effects_manager *get_effects() const {
 		return effects;
 	}
-	inline Gump_manager *get_gump_man() {
+	inline Gump_manager *get_gump_man() const {
 		return gump_man;
 	}
-	inline Party_manager *get_party_man() {
+	inline Party_manager *get_party_man() const {
 		return party_man;
 	}
-	inline Npc_proximity_handler *get_npc_prox()  {
+	inline Npc_proximity_handler *get_npc_prox() const {
 		return npc_prox;
 	}
-	Game_clock *get_clock() {
+	Game_clock *get_clock() const {
 		return clock;
 	}
-	bool is_bg_track(int num); // ripped out of Background_noise
+	bool is_bg_track(int num) const; // ripped out of Background_noise
 	Game_map *get_map(int num); // Read in additional map.
 	void set_map(int num);      // Make map #num the current map.
 	/*
@@ -371,11 +402,11 @@ public:
 		return moving_barge;
 	}
 	void set_moving_barge(Barge_object *b);
-	bool is_moving();       // Is Avatar (or barge) moving?
+	bool is_moving() const;       // Is Avatar (or barge) moving?
 	inline Main_actor *get_main_actor() const {
 		return main_actor;
 	}
-	bool is_main_actor_inside() {
+	bool is_main_actor_inside() const {
 		return skip_above_actor < 31 ;
 	}
 	// Returns if skip_above_actor changed!
@@ -388,9 +419,9 @@ public:
 		return skip_above_actor < skip_lift ?
 		       skip_above_actor : skip_lift;
 	}
-	bool main_actor_dont_move();
-	bool main_actor_can_act();
-	bool main_actor_can_act_charmed();
+	bool main_actor_dont_move() const;
+	bool main_actor_can_act() const;
+	bool main_actor_can_act_charmed() const;
 	inline bool set_in_dungeon(unsigned int lift) {
 		if (in_dungeon == lift)
 			return false;
@@ -400,19 +431,23 @@ public:
 	inline void set_ice_dungeon(bool ice) {
 		ice_dungeon = ice;
 	}
-	inline unsigned int is_in_dungeon() {
+	inline unsigned int is_in_dungeon() const {
 		return in_dungeon;
 	}
-	inline bool is_special_light() { // Light spell in effect?
+	bool in_infravision() const;
+	void toggle_infravision(bool state) {
+		infravision_active = state;
+	}
+	inline bool is_special_light() const { // Light spell in effect?
 		return ambient_light || special_light != 0;
 	}
 	// Light spell.
-	void add_special_light(int minutes);
+	void add_special_light(int units);
 	void toggle_ambient_light(bool state) {
 		ambient_light = state;
 	}
 	// Handle 'stop time' spell.
-	void set_time_stopped(long ticks);
+	void set_time_stopped(long delay);
 	long is_time_stopped() {
 		return !time_stopped ? 0 : check_time_stopped();
 	}
@@ -422,29 +457,26 @@ public:
 	void set_std_delay(int msecs) {
 		std_delay = msecs;
 	}
-	inline Actor *get_npc(long npc_num) const {
-		return (npc_num >= 0 && npc_num < static_cast<int>(npcs.size())) ?
-		       npcs[npc_num] : 0;
-	}
+	Actor *get_npc(long npc_num) const;
 	void locate_npc(int npc_num);
 	void set_body(int npc_num, Dead_body *body) {
 		if (npc_num >= static_cast<int>(bodies.size()))
 			bodies.resize(npc_num + 1);
 		bodies[npc_num] = body;
 	}
-	Dead_body *get_body(int npc_num) {
+	Dead_body *get_body(int npc_num) const {
 		return bodies[npc_num];
 	}
-	int get_num_npcs() {
+	int get_num_npcs() const {
 		return npcs.size();
 	}
 	int get_unused_npc();       // Find first unused NPC #.
 	void add_npc(Actor *npc, int num);  // Add new one.
-	inline int in_combat() {    // In combat mode?
+	inline bool in_combat() const {    // In combat mode?
 		return combat;
 	}
 	void toggle_combat();
-	inline bool get_frame_skipping() {  // This needs doing
+	inline bool get_frame_skipping() const {  // This needs doing
 		return true;
 	}
 	// Get ->party members.
@@ -453,7 +485,7 @@ public:
 	void add_nearby_npc(Npc_actor *npc);
 	void remove_nearby_npc(Npc_actor *npc);
 	// Get all nearby NPC's.
-	void get_nearby_npcs(std::vector<Actor *> &list);
+	void get_nearby_npcs(std::vector<Actor *> &list) const;
 	// Update NPCs' schedules.
 	void schedule_npcs(int hour, bool repaint = true);
 	void mend_npcs();       // Restore HP's each hour.
@@ -461,19 +493,19 @@ public:
 	Actor *find_witness(Actor  *&closest_npc, int align);
 	void theft();           // Handle thievery.
 	static int get_guard_shape();
-	void call_guards(Actor *witness = 0, bool theft = false);
+	void call_guards(Actor *witness = nullptr, bool theft = false);
 	void stop_arresting();
-	void attack_avatar(int num_guards = 0, int align = 0);
-	bool is_hostile_nearby(); // detects if hostiles are nearby for movement speed
+	void attack_avatar(int create_guards = 0, int align = 0);
+	bool is_hostile_nearby() const; // detects if hostiles are nearby for movement speed
 	bool failed_copy_protection();
 	void got_bad_feeling(int odds);
 	/*
 	 *  Rendering:
 	 */
 	inline void set_painted() { // Force blit.
-		painted = 1;
+		painted = true;
 	}
-	inline bool was_painted() {
+	inline bool was_painted() const {
 		return painted;
 	}
 	bool show(bool force = false) { // Returns true if blit occurred.
@@ -488,7 +520,7 @@ public:
 	void clear_dirty() {    // Clear dirty rectangle.
 		dirty.w = 0;
 	}
-	bool is_dirty() {
+	bool is_dirty() const {
 		return dirty.w > 0;
 	}
 	// Paint scene at given tile.
@@ -533,13 +565,11 @@ public:
 		if (a == camera_actor) return scroll_if_needed(t);
 		else return false;
 	}
-#if 1
 	// Show abs. location of mouse.
 	void show_game_location(int x, int y);
-#endif
 	// Get screen area of shape at pt.
 	Rectangle get_shape_rect(const Shape_frame *s, int x, int y) const {
-		return Rectangle(x - s->xleft, y - s->yabove,
+		return Rectangle(x - s->get_xleft(), y - s->get_yabove(),
 		                 s->get_width(), s->get_height());
 	}
 	// Get screen area used by object.
@@ -563,26 +593,26 @@ public:
 	void init_files(bool cycle = true); // Load all files
 
 	// From Gamedat
-	void get_saveinfo(Shape_file *&map,
+	void get_saveinfo(std::unique_ptr<Shape_file> &map,
 	                  SaveGame_Details *&details,
 	                  SaveGame_Party  *&party);
 	// From Savegame
 	bool get_saveinfo(int num, char *&name,
-	                  Shape_file *&map,
+	                  std::unique_ptr<Shape_file> &map,
 	                  SaveGame_Details *&details,
 	                  SaveGame_Party  *&party);
 	void read_saveinfo(IDataSource *in,
 	                   SaveGame_Details *&details,
 	                   SaveGame_Party  *&party);
-#ifdef HAVE_ZIP_SUPPORT
 private:
+#ifdef HAVE_ZIP_SUPPORT
 	bool get_saveinfo_zip(const char *fname, char *&name,
-	                      Shape_file *&map,
+	                      std::unique_ptr<Shape_file> &map,
 	                      SaveGame_Details *&details,
 	                      SaveGame_Party  *&party);
-	void restore_flex_files(IDataSource &ds, const char *basepath);
-public:
 #endif
+	void restore_flex_files(IDataSource &in, const char *basepath);
+public:
 	void write_saveinfo();      // Write the save info to gamedat
 	inline char *get_save_name(int i) const { // Get ->saved-game name.
 		return save_names[i];
@@ -603,7 +633,7 @@ public:
 #ifdef HAVE_ZIP_SUPPORT
 private:
 	bool save_gamedat_zip(const char *fname, const char *savename);
-	bool Restore_level2(void *unzipfile, const char *dirname, int dirlen);
+	bool Restore_level2(void *uzf, const char *dirname, int dirlen);
 	bool restore_gamedat_zip(const char *fname);
 public:
 #endif
@@ -622,25 +652,22 @@ public:
 	inline void set_step_tile_delta(int size) {
 		step_tile_delta = size;
 	}
-	inline int get_step_tile_delta() {
+	inline int get_step_tile_delta() const {
 		return step_tile_delta;
 	}
 	inline void set_allow_right_pathfind(int a) {
 		allow_right_pathfind = a;
 	}
-	inline int get_allow_right_pathfind() {
+	inline int get_allow_right_pathfind() const {
 		return allow_right_pathfind;
 	}
 	void teleport_party(Tile_coord const &t, bool skip_eggs = false,
-	                    int new_map = -1, bool no_status_check = true);
+	                    int newmap = -1, bool no_status_check = true);
 	bool activate_item(int shnum, int frnum = c_any_framenum,
 	                   int qual = c_any_qual); // Activate item in party.
 	// Find object (x, y) is in.
 	Game_object *find_object(int x, int y);
-#ifdef __IPHONEOS__
-	typedef std::map<Game_object *, int *> Game_object_map_xy;
-	void find_nearby_objects(Game_object_map_xy *mobjxy, int x, int y, Gump *gump = NULL);
-#endif
+	void find_nearby_objects(Game_object_map_xy& mobjxy, int x, int y, Gump *gump = nullptr);
 
 	// Show names of items clicked on.
 	void show_items(int x, int y, bool ctrl = false);
@@ -648,7 +675,6 @@ public:
 	void paused_combat_select(int x, int y);
 	ShapeID get_flat(int x, int y); // Return terrain (x, y) is in.
 	// Schedule object for deletion.
-	void delete_object(Game_object *obj);
 	// Handle a double-click in window.
 	void double_clicked(int x, int y);
 	bool start_dragging(int x, int y);
@@ -656,12 +682,12 @@ public:
 	bool drop_dragged(int x, int y, bool moved);// Done dragging.
 	void stop_dragging();
 	bool is_dragging() const {
-		return dragging != 0;
+		return dragging != nullptr;
 	}
 	int drop_at_lift(Game_object *to_drop, int x, int y, int at_lift);
 	Gump *get_dragging_gump();
 	// Create a mini-screenshot (96x60)
-	Shape_file *create_mini_screenshot();
+	std::unique_ptr<Shape_file> create_mini_screenshot();
 	/*
 	 *  Chunk-caching:
 	 */
@@ -714,8 +740,5 @@ public:
 		lerping_enabled = e;
 	}
 };
-
-void Set_renderer(Image_window8 *win, Palette *pal = 0, bool resize = false);
-bool Set_glpalette(Palette *pal = 0, bool rotation = false);
 
 #endif

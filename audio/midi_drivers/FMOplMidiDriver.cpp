@@ -26,13 +26,7 @@
 
 #include "XMidiEvent.h"
 
-#ifdef PENTAGRAM_IN_EXULT
 #include "databuf.h"
-#else
-#include "IDataSource.h"
-#include "GameData.h"
-#include "MusicFlex.h"
-#endif
 
 #include <cmath>
 
@@ -204,18 +198,12 @@ const unsigned char FMOplMidiDriver::adlib_opadd[9] = {
 };
 
 //
-// Constructor
-//
-FMOplMidiDriver::FMOplMidiDriver()
-{
-}
-
-//
 // Open the device
 //
 int FMOplMidiDriver::open()
 {
-	int i, j;
+	int i;
+	int j;
 
 	for (i = 0; i < 128; i++) {
 		for (j = 0; j < 11; j++)
@@ -227,7 +215,7 @@ int FMOplMidiDriver::open()
 		lucas_fm_vol_table[i] = static_cast<int>(std::sqrt(static_cast<double>(my_midi_fm_vol_table[i])) * 11);	/* TO CHANGE !!! */
 
 		// Clear the xmidibanks
-		xmidibanks[i] = 0;
+		xmidibanks[i] = nullptr;
 	}
 	for (i = 0; i < 16; i++) {
 		ch[i].inum = 0;
@@ -248,20 +236,6 @@ int FMOplMidiDriver::open()
 		chp[i][CHP_VEL] = 0;
 	}
 
-#ifndef PENTAGRAM_IN_EXULT
-	IDataSource *timbres = GameData::get_instance()->getMusic()->getAdlibTimbres();
-	if (timbres)
-	{
-		loadXMIDITimbres(timbres);
-	}
-	else
-	{
-		perr << "FMOplMidiDriver: Error, unable to load Adlib Timbres in open()" << std::endl;
-		return 1;
-	}
-	delete timbres;
-#endif
-
 	opl = FMOpl_Pentagram::makeAdLibOPL(sample_rate);
 
 	return 0;
@@ -276,12 +250,12 @@ void FMOplMidiDriver::close()
 	if (opl) FMOpl_Pentagram::OPLDestroy(opl);
 
 	// Reset the relevant members
-	opl = 0;
+	opl = nullptr;
 
 	// Clear the xmidibanks
 	for (int i = 0; i < 128; i++) {
 		delete xmidibanks[i];
-		xmidibanks[i] = 0;
+		xmidibanks[i] = nullptr;
 	}
 
 }
@@ -331,14 +305,11 @@ void FMOplMidiDriver::send(uint32 b)
 			b &= 0xFFFF;
 			// FALL THROUGH
 	case 0x90:{									/*note on */
-			unsigned char note = static_cast<unsigned char>((b >> 8) & 0x7F);
-			unsigned char vel = static_cast<unsigned char>((b >> 16) & 0x7F);
-			int i, j;
-			int onl, on, nv;
-			on = -1;
+			auto note = static_cast<unsigned char>((b >> 8) & 0x7F);
+			auto vel = static_cast<unsigned char>((b >> 16) & 0x7F);
 
 			// First send a note off, if it's found
-			for (i = 0; i < 9; i++)
+			for (int i = 0; i < 9; i++)
 				if ((chp[i][CHP_CHAN] == channel) && (chp[i][CHP_NOTE] == note)) {
 					midi_fm_endnote(i);
 					chp[i][CHP_CHAN] = -1;
@@ -347,11 +318,13 @@ void FMOplMidiDriver::send(uint32 b)
 			if (vel != 0 && ch[channel].on != 0) {
 
 				// Increment each counter
-				for (i = 0; i < 9; i++) chp[i][CHP_COUNTER]++;
+				for (int i = 0; i < 9; i++) chp[i][CHP_COUNTER]++;
 
 				// Try to find the last channel that was used, that is currently unused
-				j = 0; onl = 0;
-				for (i = 0; i < 9; i++)
+				int j = 0;
+				int onl = 0;
+				int on = -1;
+				for (int i = 0; i < 9; i++)
 					if ((chp[i][CHP_CHAN] == -1) && (chp[i][CHP_COUNTER] > onl)) {
 						onl = chp[i][CHP_COUNTER];
 						on = i;
@@ -361,7 +334,7 @@ void FMOplMidiDriver::send(uint32 b)
 				// If we didn't find a free chan, use the oldest chan
 				if (on == -1) {
 					onl = 0;
-					for (i = 0; i < 9; i++)
+					for (int i = 0; i < 9; i++)
 						if (chp[i][CHP_COUNTER] > onl) {
 							onl = chp[i][CHP_COUNTER];
 							on = i;
@@ -380,7 +353,7 @@ void FMOplMidiDriver::send(uint32 b)
 				}
 
 				// Calculate the adlib volume
-				nv = midi_calc_volume(channel, vel);
+				int nv = midi_calc_volume(channel, vel);
 
 				// Send note on
 				midi_fm_playnote(on, note + ch[channel].nshift, nv * 2, ch[channel].pitchbend);
@@ -397,12 +370,12 @@ void FMOplMidiDriver::send(uint32 b)
 		break;
 
 	case 0xa0:{									/*key after touch */
-			unsigned char note = static_cast<unsigned char>((b >> 8) & 0x7F);
-			unsigned char vel = static_cast<unsigned char>((b >> 16) & 0x7F);
+			auto note = static_cast<unsigned char>((b >> 8) & 0x7F);
+			auto vel = static_cast<unsigned char>((b >> 16) & 0x7F);
 			int nv = midi_calc_volume(channel, vel);
 
 			for (int i = 0; i < 9; i++)
-				if ((chp[CHP_CHAN][0] == channel) & (chp[i][CHP_NOTE] == note)) {
+				if ((chp[CHP_CHAN][0] == channel) && (chp[i][CHP_NOTE] == note)) {
 					chp[i][CHP_VEL] = vel;
 					midi_fm_volume(i, nv * 2);
 				}
@@ -411,8 +384,8 @@ void FMOplMidiDriver::send(uint32 b)
 
 	case 0xb0:{									/* control change */
 			int i;
-			unsigned char ctrl = static_cast<unsigned char>((b >> 8) & 0x7F);
-			unsigned char vel = static_cast<unsigned char>((b >> 16) & 0x7F);
+			auto ctrl = static_cast<unsigned char>((b >> 8) & 0x7F);
+			auto vel = static_cast<unsigned char>((b >> 16) & 0x7F);
 
 			/* FIXME: Except for Volume, the Modulation and Sustain
 			   code is just a random guess. */
@@ -504,20 +477,21 @@ void FMOplMidiDriver::send(uint32 b)
 		break;
 
 	case 0xc0:{									/* patch change */
-			unsigned char instrument = static_cast<unsigned char>((b >> 8) & 0x7F);
+			auto instrument = static_cast<unsigned char>((b >> 8) & 0x7F);
 			ch[channel].inum = instrument;
 			//std::POUT << "Setting instrument: " << static_cast<unsigned int>(instrument) << " for chan " << static_cast<unsigned int>(channel) << std::endl;
 
-			unsigned char *ins = 0;
-			int b = -1;
+			unsigned char *ins = nullptr;
 
 			// Search for xmidi ins.
-			if (ch[channel].xmidi) for (b = ch[channel].xmidi_bank; b>=0; b--) {
-				xmidibank *bank = xmidibanks[b];
-				if (!bank) continue;
-				if (bank->insbank[instrument][INDEX_PERC] &= 0x80) {
-					ins = bank->insbank[instrument];
-					break;
+			if (ch[channel].xmidi) {
+				for (int b = ch[channel].xmidi_bank; b>=0; b--) {
+					xmidibank *bank = xmidibanks[b];
+					if (!bank) continue;
+					if (bank->insbank[instrument][INDEX_PERC] &= 0x80) {
+						ins = bank->insbank[instrument];
+						break;
+					}
 				}
 			}
 
@@ -562,7 +536,7 @@ void FMOplMidiDriver::midi_write_adlib(unsigned int reg, unsigned char val)
 
 /*
 
-typedef struct
+struct AD_instrument
 {
    unsigned char mod_avekm;		// 0	(20)
    unsigned char mod_ksl_tl;	// 1	(40)
@@ -577,8 +551,7 @@ typedef struct
    unsigned char car_ad;		// 8	Attack Delay		AR	(63)
    unsigned char car_sr;		// 9	SustainLev Release	DR	(83)
    unsigned char car_ws;		// 10	Waveform				(E0)
-}
-AD_instrument;
+};
 
 case 0x20:	 am,vib,ksr,eg type,mul
 
@@ -586,26 +559,6 @@ case 0x20:	 am,vib,ksr,eg type,mul
 
 void FMOplMidiDriver::midi_fm_instrument(int voice, unsigned char *inst)
 {
-#if 0
-	/* Just gotta make sure this happens because who knows when it'll be reset otherwise.... */
-#endif
-
-
-#if 0 && defined(LUCAS_MODE)
-	midi_write_adlib(OPL_REG_KSLTL_C + adlib_opadd[voice], 0x3f);
-	if ((inst[INDEX_FB_C] & 1) == 0)
-		midi_write_adlib(OPL_REG_KSLTL_M + adlib_opadd[voice], inst[INDEX_KSLTL_M]);
-	else
-		midi_write_adlib(OPL_REG_KSLTL_M + adlib_opadd[voice], 0x3f);
-#elif 0
-	midi_write_adlib(OPL_REG_KSLTL_M + adlib_opadd[voice], inst[INDEX_KSLTL_M]);
-	if ((inst[INDEX_FB_C] & 1) == 0)
-		midi_write_adlib(OPL_REG_KSLTL_C + adlib_opadd[voice], inst[INDEX_KSLTL_C]);
-	else
-		midi_write_adlib(OPL_REG_KSLTL_C + adlib_opadd[voice], 0);
-#else
-#endif
-
 	midi_write_adlib(OPL_REG_AVEKM_M + adlib_opadd[voice], inst[INDEX_AVEKM_M]);
 	midi_write_adlib(OPL_REG_KSLTL_M + adlib_opadd[voice], inst[INDEX_KSLTL_M]);
 	midi_write_adlib(OPL_REG_AD_M + adlib_opadd[voice], inst[INDEX_AD_M]);
@@ -764,12 +717,11 @@ void FMOplMidiDriver::midi_fm_playnote(int voice, int note, int volume, int pitc
 {
 	int freq = fnums[note % 12];
 	int oct = note / 12;
-	int c;
-	float pf;
 
 	pitchbend -= 0x2000;
 	if (pitchbend != 0) {
 		pitchbend *= 2;
+		float pf;
 		if (pitchbend >= 0)
 			pf = static_cast<float>(bend_fine[(pitchbend >> 5) & 0xFF] * bend_coarse[(pitchbend >> 13) & 0x7F]);
 		else {
@@ -791,7 +743,7 @@ void FMOplMidiDriver::midi_fm_playnote(int voice, int note, int volume, int pitc
 	midi_fm_volume(voice, volume);
 	midi_write_adlib(0xa0 + voice, static_cast<unsigned char>(freq & 0xff));
 
-	c = ((freq & 0x300) >> 8) + (oct << 2) + (1 << 5);
+	int c = ((freq & 0x300) >> 8) + (oct << 2) + (1 << 5);
 	midi_write_adlib(0xb0 + voice, static_cast<unsigned char>(c));
 }
 
@@ -807,7 +759,7 @@ void FMOplMidiDriver::loadTimbreLibrary(IDataSource *ds, TimbreLibraryType type)
 	// Clear the xmidibanks
 	for (i = 0; i < 128; i++) {
 		delete xmidibanks[i];
-		xmidibanks[i] = 0;
+		xmidibanks[i] = nullptr;
 	}
 
 	for (i = 0; i < 16; i++) ch[i].xmidi = false;

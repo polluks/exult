@@ -20,42 +20,41 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "pent_include.h"
 #include "RawAudioSample.h"
 #include "databuf.h"
+#include <cstring>
+#include <new>
 
 namespace Pentagram {
 
-RawAudioSample::RawAudioSample(uint8* buffer_, uint32 size_, uint32 rate_,
+RawAudioSample::RawAudioSample(std::unique_ptr<uint8[]> buffer_, uint32 size_, uint32 rate_,
 							   bool signeddata_, bool stereo_)
-	: AudioSample(buffer_, size_), signeddata(signeddata_)
+	: AudioSample(std::move(buffer_), size_), signeddata(signeddata_)
 {
 	sample_rate = rate_;
 	bits = 8;
 	stereo = stereo_;
 	frame_size = 512;
 	decompressor_size = sizeof(RawDecompData);
+	decompressor_align = alignof(RawDecompData);
 	length = size_;
 	start_pos = 0;
 	byte_swap = false;
 }
 
-RawAudioSample::~RawAudioSample()
-{
-
-}
-
 void RawAudioSample::initDecompressor(void *DecompData) const
 {
-	RawDecompData *decomp = static_cast<RawDecompData *>(DecompData);
+	auto *decomp = new (DecompData) RawDecompData;
 	decomp->pos = start_pos;
 }
 
-void RawAudioSample::rewind(void *DecompData) const
+void RawAudioSample::freeDecompressor(void *DecompData) const
 {
-	initDecompressor(DecompData);
+	auto *decomp = static_cast<RawDecompData *>(DecompData);
+	decomp->~RawDecompData();
 }
 
 uint32 RawAudioSample::decompressFrame(void *DecompData, void *samples) const
 {
-	RawDecompData *decomp = static_cast<RawDecompData *>(DecompData);
+	auto *decomp = static_cast<RawDecompData *>(DecompData);
 
 	if (decomp->pos == buffer_size) return 0;
 
@@ -69,21 +68,21 @@ uint32 RawAudioSample::decompressFrame(void *DecompData, void *samples) const
 
 	// 8 bit unsigned, or 16 Bit signed
 	if ((!signeddata && bits==8) || (signeddata && bits==16 && !byte_swap)) {	
-		std::memcpy(samples, buffer+decomp->pos, count);
+		std::memcpy(samples, buffer.get()+decomp->pos, count);
 	// 8 bit signed
 	} else if (bits == 8) {
-		uint8 *dest = static_cast<uint8*>(samples);
+		auto *dest = static_cast<uint8*>(samples);
 		uint8 *end =  static_cast<uint8*>(samples)+count;
-		const uint8 *src = buffer + decomp->pos;
+		const uint8 *src = buffer.get() + decomp->pos;
 		while (dest != end) {
 			*dest++ = *src++ + 128;
 		}
 	}
 	// 16 bit signed with byte swap
 	else if (signeddata && bits==16 && byte_swap) {
-		sint16 *dest = static_cast<sint16*>(samples);
+		auto *dest = static_cast<sint16*>(samples);
 		sint16 *end =  static_cast<sint16*>(samples)+count/2;
-		const uint8 *src = buffer + decomp->pos;
+		const uint8 *src = buffer.get() + decomp->pos;
 		while (dest != end) {
 			sint16 s;
 			reinterpret_cast<uint8*>(&s)[1] = *src++;
@@ -93,18 +92,24 @@ uint32 RawAudioSample::decompressFrame(void *DecompData, void *samples) const
 	}
 	// 16 bit unsigned
 	else if (!signeddata && bits==16 && !byte_swap) {
-		sint16 *dest = static_cast<sint16*>(samples);
+		auto *dest = static_cast<sint16*>(samples);
 		sint16 *end =  static_cast<sint16*>(samples)+count/2;
-		const uint16 *src = reinterpret_cast<const uint16 *>(buffer + decomp->pos);
+		const uint8 *src = buffer.get() + decomp->pos;
+		auto Read2 = [&src]() {
+			uint16 val;
+			std::memcpy(&val, src, sizeof(uint16));
+			src += sizeof(uint16);
+			return val;
+		};
 		while (dest != end) {
-			*dest++ = *src++ - 32768;
+			*dest++ = Read2() - 32768;
 		}
 	}
 	// 16 bit unsigned with byte swap
 	else if (!signeddata && bits==16 && byte_swap) {
-		sint16 *dest = static_cast<sint16*>(samples);
+		auto *dest = static_cast<sint16*>(samples);
 		sint16 *end =  static_cast<sint16*>(samples)+count/2;
-		const uint8 *src = buffer + decomp->pos;
+		const uint8 *src = buffer.get() + decomp->pos;
 		while (dest != end) {
 			uint16 s;
 			reinterpret_cast<uint8*>(&s)[1] = *src++;

@@ -42,7 +42,7 @@ namespace sha1
         inline unsigned int rol(const unsigned int value,
                 const unsigned int steps)
         {
-            return ((value << steps) | (value >> (32 - steps)));
+            return (value << steps) | (value >> (32 - steps));
         }
 
         // Sets the first 16 integers in the buffert to zero.
@@ -65,47 +65,44 @@ namespace sha1
 
             int round = 0;
 
-            #define sha1macro(func,val) \
-			{ \
-                const unsigned int t = rol(a, 5) + (func) + e + (val) + w[round]; \
-				e = d; \
-				d = c; \
-				c = rol(b, 30); \
-				b = a; \
-				a = t; \
-			}
+            auto sha1macro = [&](unsigned int func, unsigned int val) {
+                const unsigned int t = rol(a, 5) + func + e + val + w[round];
+				e = d;
+				d = c;
+				c = rol(b, 30);
+				b = a;
+				a = t;
+            };
 
             while (round < 16)
             {
-                sha1macro((b & c) | (~b & d), 0x5a827999)
+                sha1macro((b & c) | (~b & d), 0x5a827999);
                 ++round;
             }
             while (round < 20)
             {
                 w[round] = rol((w[round - 3] ^ w[round - 8] ^ w[round - 14] ^ w[round - 16]), 1);
-                sha1macro((b & c) | (~b & d), 0x5a827999)
+                sha1macro((b & c) | (~b & d), 0x5a827999);
                 ++round;
             }
             while (round < 40)
             {
                 w[round] = rol((w[round - 3] ^ w[round - 8] ^ w[round - 14] ^ w[round - 16]), 1);
-                sha1macro(b ^ c ^ d, 0x6ed9eba1)
+                sha1macro(b ^ c ^ d, 0x6ed9eba1);
                 ++round;
             }
             while (round < 60)
             {
                 w[round] = rol((w[round - 3] ^ w[round - 8] ^ w[round - 14] ^ w[round - 16]), 1);
-                sha1macro((b & c) | (b & d) | (c & d), 0x8f1bbcdc)
+                sha1macro((b & c) | (b & d) | (c & d), 0x8f1bbcdc);
                 ++round;
             }
             while (round < 80)
             {
                 w[round] = rol((w[round - 3] ^ w[round - 8] ^ w[round - 14] ^ w[round - 16]), 1);
-                sha1macro(b ^ c ^ d, 0xca62c1d6)
+                sha1macro(b ^ c ^ d, 0xca62c1d6);
                 ++round;
             }
-
-            #undef sha1macro
 
             result[0] += a;
             result[1] += b;
@@ -121,7 +118,7 @@ namespace sha1
         unsigned int result[5] = { 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0 };
 
         // Cast the void src pointer to be the byte array we can work with.
-        const unsigned char* sarray = static_cast<const unsigned char*>(src);
+        const auto* sarray = static_cast<const unsigned char*>(src);
 
         // The reusable round buffer
         unsigned int w[80];

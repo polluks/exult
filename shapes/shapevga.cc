@@ -36,6 +36,7 @@
 #include "frnameinf.h"
 #include "frflags.h"
 #include "frusefun.h"
+#include "lightinf.h"
 #include "monstinf.h"
 #include "npcdollinf.h"
 #include "objdollinf.h"
@@ -60,7 +61,7 @@ using namespace std;
 
 // For convienience
 #define patch_exists(p) (have_patch_path && U7exists(p))
-#define patch_name(p) (patch_exists(p) ? (p) : 0)
+#define patch_name(p) (patch_exists(p) ? (p) : nullptr)
 
 /*
  *  Open, but don't quit if editing.  We first try the patch name if it's
@@ -81,13 +82,7 @@ static bool U7open2(
 	try {
 		U7open(in, fname);
 	} catch (const file_exception & /*f*/) {
-#if 0
-		if (editing)
-			return false;
-		throw f;
-#else   /* This is preferable. */
 		return false;
-#endif
 	}
 	return true;
 }
@@ -145,10 +140,10 @@ class Ready_type_functor {
 public:
 	void operator()(std::istream &in, int version, bool patch,
 	                Exult_Game game, Shape_info &info) {
-		unsigned char ready = static_cast<unsigned char>(info.ready_type);
+		unsigned char ready = info.ready_type;
 		info.spell_flag = ready & 1;
 		ready >>= 3;
-		char spot = game == BLACK_GATE ? Ready_spot_from_BG(ready)
+		unsigned char spot = game == BLACK_GATE ? Ready_spot_from_BG(ready)
 		            : Ready_spot_from_SI(ready);
 		info.ready_type = spot;
 		// Init alternate spots.
@@ -207,7 +202,7 @@ void Shapes_vga_file::Read_Shapeinf_text_data_file(
 ) {
 	const char *sections[] = {"explosions", "shape_sfx", "animation",
 	                          "usecode_events", "mountain_tops", "monster_food", "actor_flags",
-	                          "effective_hps", "lightweight_object", "warmth_data",
+	                          "effective_hps", "lightweight_object", "light_data", "warmth_data",
 	                          "quantity_frames", "locked_containers", "content_rules",
 	                          "volatile_explosive", "framenames", "altready", "barge_type",
 	                          "frame_powers", "is_jawbone", "is_mirror", "on_fire",
@@ -256,6 +251,10 @@ void Shapes_vga_file::Read_Shapeinf_text_data_file(
 		Bit_text_reader_functor < unsigned short, Shape_info,
 		&Shape_info::shape_flags, Shape_info::lightweight > ,
 		Patch_flags_functor<lightweight_flag, Shape_info> > (info),
+		// For light data.
+		new Functor_multidata_reader < Shape_info,
+		Vector_reader_functor < Light_info, Shape_info,
+		&Shape_info::lightinf > > (info),
 		// For warmth data.
 		new Functor_multidata_reader < Shape_info,
 		Vector_reader_functor < Warmth_info, Shape_info,
@@ -285,7 +284,7 @@ void Shapes_vga_file::Read_Shapeinf_text_data_file(
 		&Shape_info::nameinf > > (info),
 		// For alternate ready spots.
 		new Functor_multidata_reader < Shape_info,
-		Text_pair_reader_functor < char, Shape_info,
+		Text_pair_reader_functor < unsigned char, Shape_info,
 		&Shape_info::alt_ready1, &Shape_info::alt_ready2 > ,
 		Patch_flags_functor<altready_type_flag, Shape_info> > (info),
 		// For barge parts.
@@ -319,7 +318,7 @@ void Shapes_vga_file::Read_Shapeinf_text_data_file(
 		Patch_flags_functor<extradimensional_storage_flag, Shape_info> > (info),
 		// For field types.
 		new Functor_multidata_reader < Shape_info,
-		Text_reader_functor < char, Shape_info,
+		Text_reader_functor < signed char, Shape_info,
 		&Shape_info::field_type > ,
 		Patch_flags_functor<field_type_flag, Shape_info> > (info),
 		// For frame usecode.
@@ -435,7 +434,6 @@ void Shapes_vga_file::read_info(
 	if (info_read)
 		return;
 	info_read = true;
-	int cnt;
 	bool have_patch_path = is_system_path_defined("<PATCH>");
 
 	// ShapeDims
@@ -443,8 +441,8 @@ void Shapes_vga_file::read_info(
 	// Starts at 0x96'th shape.
 	ifstream shpdims;
 	if (U7open2(shpdims, patch_name(PATCH_SHPDIMS), SHPDIMS, editing))
-		for (int i = c_first_obj_shape;
-		        i < num_shapes && !shpdims.eof(); i++) {
+		for (size_t i = c_first_obj_shape;
+		        i < shapes.size() && !shpdims.eof(); i++) {
 			info[i].shpdims[0] = shpdims.get();
 			info[i].shpdims[1] = shpdims.get();
 		}
@@ -452,7 +450,7 @@ void Shapes_vga_file::read_info(
 	// WGTVOL
 	ifstream wgtvol;
 	if (U7open2(wgtvol, patch_name(PATCH_WGTVOL), WGTVOL, editing))
-		for (int i = 0; i < num_shapes && !wgtvol.eof(); i++) {
+		for (size_t i = 0; i < shapes.size() && !wgtvol.eof(); i++) {
 			info[i].weight = wgtvol.get();
 			info[i].volume = wgtvol.get();
 		}
@@ -460,7 +458,7 @@ void Shapes_vga_file::read_info(
 	// TFA
 	ifstream tfa;
 	if (U7open2(tfa, patch_name(PATCH_TFA), TFA, editing))
-		for (int i = 0; i < num_shapes && !tfa.eof(); i++) {
+		for (size_t i = 0; i < shapes.size() && !tfa.eof(); i++) {
 			tfa.read(reinterpret_cast<char *>(&info[i].tfa[0]), 3);
 			info[i].set_tfa_data();
 		}
@@ -492,15 +490,15 @@ void Shapes_vga_file::read_info(
 
 	// Load data about drawing the weapon in an actor's hand
 	ifstream wihh;
-	unsigned short offsets[c_max_shapes];
 	if (U7open2(wihh, patch_name(PATCH_WIHH), WIHH, editing)) {
-		cnt = num_shapes;
-		for (int i = 0; i < cnt; i++)
+		size_t cnt = shapes.size();
+		unsigned short offsets[c_max_shapes];
+		for (size_t i = 0; i < cnt; i++)
 			offsets[i] = Read2(wihh);
-		for (int i = 0; i < cnt; i++)
+		for (size_t i = 0; i < cnt; i++)
 			// A zero offset means there is no record
 			if (offsets[i] == 0)
-				info[i].weapon_offsets = 0;
+				info[i].weapon_offsets = nullptr;
 			else {
 				wihh.seekg(offsets[i]);
 				// There are two bytes per frame: 64 total
@@ -590,7 +588,7 @@ void Shapes_vga_file::read_info(
 	gump.read(PATCH_CONTAINER, true, game);
 
 	Functor_multidata_reader < Shape_info,
-	                         Binary_reader_functor < char, Shape_info,
+	                         Binary_reader_functor < unsigned char, Shape_info,
 	                         &Shape_info::ready_type, 6 > ,
 	                         Ready_type_functor > ready(info);
 	ready.read(READY, false, game);
@@ -601,12 +599,12 @@ void Shapes_vga_file::read_info(
 	Read_Paperdoll_text_data_file(editing, game);
 
 	// Ensure valid ready spots for all shapes.
-	char defready = game == BLACK_GATE ? backpack : rhand;
+	unsigned char defready = game == BLACK_GATE ? backpack : rhand;
 	zinfo.ready_type = defready;
-	for (std::map<int, Shape_info>::iterator it = info.begin();
+	for (auto it = info.begin();
 	        it != info.end(); ++it) {
 		Shape_info &inf = it->second;
-		if (inf.ready_type < 0)
+		if (inf.ready_type == invalid_spot)
 			inf.ready_type = defready;
 	}
 }
@@ -619,12 +617,8 @@ Shapes_vga_file::Shapes_vga_file(
     const char *nm,         // Path to file.
     int u7drag,         // # from u7drag.h, or -1.
     const char *nm2         // Path to patch version, or 0.
-) : Vga_file(nm, u7drag, nm2), info_read(false) {
+) : Vga_file(nm, u7drag, nm2) {
 }
-
-Shapes_vga_file::~Shapes_vga_file() {
-}
-
 
 void Shapes_vga_file::init() {
 	if (is_system_path_defined("<PATCH>") && U7exists(PATCH_SHAPES))

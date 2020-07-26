@@ -40,7 +40,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;HAVE_PNG_H;HAVE_FREETYPE2;HAVE_ZIP_SUPPORT;USE_EXULT_STUDIO"
+				PreprocessorDefinitions="_DEBUG;_CONSOLE;HAVE_PNG_H;HAVE_FREETYPE2;HAVE_ZIP_SUPPORT;USE_EXULT_STUDIO"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -116,7 +116,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				PreprocessorDefinitions="NDEBUG;_CONSOLE"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -300,6 +300,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\shapes\lightinf.cc"
+				>
+			</File>
+			<File
 				RelativePath="..\shapes\warminf.cc"
 				>
 			</File>
@@ -400,6 +404,10 @@
 				</File>
 				<File
 					RelativePath="..\shapes\vgafile.h"
+					>
+				</File>
+				<File
+					RelativePath="..\shapes\lightinf.h"
 					>
 				</File>
 				<File

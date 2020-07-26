@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #include <cstring>
-#include <stdio.h>
+#include <cstdio>
 #include "ucsym.h"
 #include "opcodes.h"
 #include "utils.h"
@@ -80,7 +80,7 @@ int Uc_symbol::gen_call(
     Basic_block *out,
     Uc_function *fun,
     bool orig,          // Call original (not one from patch).
-    Uc_expression *itemref,     // Non-NULL for CALLE.
+    Uc_expression *itemref,     // Non-nullptr for CALLE.
     Uc_array_expression *parms, // Parameter list.
     bool retvalue,          // True if a function.
     Uc_class *scope_vtbl    // For method calls using a different scope.
@@ -95,7 +95,7 @@ int Uc_symbol::gen_call(
 
 Uc_expression *Uc_symbol::create_expression(
 ) {
-	return 0;
+	return nullptr;
 }
 
 /*
@@ -227,13 +227,13 @@ bool Uc_struct_symbol::is_dup(
 }
 
 Uc_struct_symbol::~Uc_struct_symbol() {
-	for (Var_map::iterator it = vars.begin(); it != vars.end(); ++it)
+	for (auto it = vars.begin(); it != vars.end(); ++it)
 		delete it->first;
 	vars.clear();
 }
 
 void Uc_struct_symbol::merge_struct(Uc_struct_symbol *other) {
-	for (Var_map::iterator it = other->vars.begin();
+	for (auto it = other->vars.begin();
 	        it != other->vars.end(); ++it)
 		add(it->first);
 }
@@ -252,7 +252,7 @@ Uc_class_symbol *Uc_class_symbol::create(
 		sprintf(buf, "Class name '%s' already exists.", nm);
 		Uc_location::yyerror(buf);
 	}
-	Uc_class_symbol *csym = new Uc_class_symbol(nm, c);
+	auto *csym = new Uc_class_symbol(nm, c);
 	Uc_function::add_global_class_symbol(csym);
 	return csym;
 }
@@ -351,7 +351,7 @@ int Uc_intrinsic_symbol::gen_call(
     Basic_block *out,
     Uc_function *fun,
     bool orig,          // Call original (not one from patch).
-    Uc_expression *itemref,     // Non-NULL for CALLE.
+    Uc_expression *itemref,     // Non-nullptr for CALLE.
     Uc_array_expression *parms, // Parameter list.
     bool retvalue,          // True if a function.
     Uc_class *scope_vtbl    // For method calls using a different scope.
@@ -433,7 +433,7 @@ Uc_function_symbol *Uc_function_symbol::create(
 		num = shp;
 
 	// Override function number if the function has been declared before this.
-	Uc_function_symbol *sym = dynamic_cast<Uc_function_symbol *>(scope ?
+	auto *sym = dynamic_cast<Uc_function_symbol *>(scope ?
 	                          scope->search(nm) : Uc_function::search_globals(nm));
 	if (sym) {
 		if (sym->get_function_type() != kind) {
@@ -500,7 +500,7 @@ Uc_function_symbol *Uc_function_symbol::create(
 	        (num >= 0 && !new_auto_num))
 		last_num = ucnum;
 	// Keep track of #'s used.
-	Sym_nums::const_iterator it = nums_used.find(ucnum);
+	auto it = nums_used.find(ucnum);
 	if (it == nums_used.end()) { // Unused?  That's good.
 		sym = new Uc_function_symbol(nm, ucnum, p, shp, kind);
 		if (is_extern)
@@ -538,7 +538,7 @@ int Uc_function_symbol::gen_call(
     Basic_block *out,
     Uc_function *fun,
     bool orig,          // Call original (not one from patch).
-    Uc_expression *itemref,     // Non-NULL for CALLE or method.
+    Uc_expression *itemref,     // Non-nullptr for CALLE or method.
     Uc_array_expression *aparms,    // Actual parameter list.
     bool retvalue,      // True if a function.
     Uc_class *scope_vtbl    // For method calls using a different scope.
@@ -635,10 +635,10 @@ bool String_compare::operator()(const char *const &x, const char *const &y) cons
 
 Uc_scope::~Uc_scope(
 ) {
-	for (std::map<const char *, Uc_symbol *, String_compare>::iterator it = symbols.begin();
+	for (auto it = symbols.begin();
 	        it != symbols.end(); ++it)
 		delete(*it).second;
-	for (std::vector<Uc_scope *>::iterator it = scopes.begin();
+	for (auto it = scopes.begin();
 	        it != scopes.end(); ++it)
 		delete *it;
 }
@@ -658,7 +658,7 @@ Uc_symbol *Uc_scope::search_up(
 	if (parent)         // Look upwards.
 		return parent->search_up(nm);
 	else
-		return 0;
+		return nullptr;
 }
 
 /*
@@ -685,7 +685,7 @@ int Uc_scope::add_function_symbol(
 			add(fun);
 		return 1;
 	}
-	Uc_function_symbol *fun2 = dynamic_cast<Uc_function_symbol *>(found);
+	auto *fun2 = dynamic_cast<Uc_function_symbol *>(found);
 	if (fun2 == fun)        // The case for an EXTERN.
 		return 1;
 	else if (!fun2) {       // Non-function name.

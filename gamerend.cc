@@ -25,14 +25,6 @@
 
 #include <cstdio>
 
-#ifndef HAVE_SNPRINTF
-extern int snprintf(char *, size_t, const char *, /*args*/ ...);
-namespace std {
-using ::snprintf;
-}
-#else
-#endif
-
 #include "gamewin.h"
 #include "gamerend.h"
 #include "gameclk.h"
@@ -56,7 +48,8 @@ void Game_window::paint_map_at_tile(
     int toptx, int topty,
     int skip_above          // Don't display above this lift.
 ) {
-	int savescrolltx = scrolltx, savescrollty = scrollty;
+	int savescrolltx = scrolltx;
+	int savescrollty = scrollty;
 	int saveskip = skip_lift;
 	scrolltx = toptx;
 	scrollty = topty;
@@ -114,8 +107,8 @@ static void Paint_grid(
 ) {
 	Image_window8 *win = gwin->get_win();
 	// Paint grid at edit height.
-	int xtiles = gwin->get_width() / c_tilesize,
-	    ytiles = gwin->get_height() / c_tilesize;
+	int xtiles = gwin->get_width() / c_tilesize;
+	int ytiles = gwin->get_height() / c_tilesize;
 	int lift = cheat.get_edit_lift();
 	int liftpixels = lift * (c_tilesize / 2) + 1;
 	for (int y = 0; y < ytiles; y++)
@@ -138,7 +131,8 @@ static void Paint_selected_chunks(
 ) {
 	Game_map *map = gwin->get_map();
 	Image_window8 *win = gwin->get_win();
-	int cx, cy;         // Chunk #'s.
+	int cx;
+	int cy;         // Chunk #'s.
 	// Paint all the flat scenery.
 	for (cy = start_chunky; cy != stop_chunky; cy = INCR_CHUNK(cy)) {
 		int yoff = Figure_screen_offset(cy, gwin->get_scrollty()) - gwin->get_scrollty_lo();
@@ -165,7 +159,8 @@ void Game_render::paint_terrain_only(
 	Game_window *gwin = Game_window::get_instance();
 	Game_map *map = gwin->map;
 	Shape_manager *sman = Shape_manager::get_instance();
-	int cx, cy;         // Chunk #'s.
+	int cx;
+	int cy;         // Chunk #'s.
 	// Paint all the flat scenery.
 	for (cy = start_chunky; cy != stop_chunky; cy = INCR_CHUNK(cy)) {
 		int yoff = Figure_screen_offset(cy, gwin->scrollty) - gwin->get_scrollty_lo();
@@ -198,9 +193,10 @@ int Game_render::paint_map(
 	Game_map *map = gwin->map;
 	Shape_manager *sman = gwin->shape_man;
 	render_seq++;           // Increment sequence #.
-	gwin->painted = 1;
+	gwin->painted = true;
 
-	int scrolltx = gwin->scrolltx, scrollty = gwin->scrollty;
+	int scrolltx = gwin->scrolltx;
+	int scrollty = gwin->scrollty;
 	int light_sources = 0;      // Count light sources found.
 	// Get chunks to start with, starting
 	//   1 tile left/above.
@@ -222,7 +218,8 @@ int Game_render::paint_map(
 		                   stop_chunkx, stop_chunky);
 		return 10;      // Pretend there's lots of light!
 	}
-	int cx, cy;         // Chunk #'s.
+	int cx;
+	int cy;         // Chunk #'s.
 	// Paint all the flat scenery.
 	for (cy = start_chunky; cy != stop_chunky; cy = INCR_CHUNK(cy)) {
 		int yoff = Figure_screen_offset(cy, scrollty) - gwin->get_scrollty_lo();
@@ -272,11 +269,11 @@ int Game_render::paint_map(
 		                stop_chunky, gwin->ice_dungeon ? 73 : 0);
 
 	// Outline selected objects.
-	const Game_object_vector &sel = cheat.get_selected();
+	const Game_object_shared_vector &sel = cheat.get_selected();
 	int render_skip = gwin->get_render_skip_lift();
-	for (Game_object_vector::const_iterator it = sel.begin();
+	for (auto it = sel.begin();
 	        it != sel.end(); ++it) {
-		Game_object *obj = *it;
+		Game_object *obj = (*it).get();
 		if (!obj->get_owner() && obj->get_lift() < render_skip)
 			obj->paint_outline(HIT_PIXEL);
 	}
@@ -293,6 +290,26 @@ int Game_render::paint_map(
 	return light_sources;
 }
 
+static int Get_light_strength(const Game_object *obj, const Game_object *av, int brightness) {
+	// Note: originals do not seem to use center tile.
+	Tile_coord t1 = obj->get_center_tile();
+	Tile_coord t2 = av->get_center_tile();
+	int dx = Tile_coord::delta(t1.tx, t2.tx);
+	int dy = Tile_coord::delta(t1.ty, t2.ty);
+	// Note: originals do not care about distance in Z. Maybe we should?
+	dx = std::abs(Tile_coord::delta(t1.tx, t2.tx));
+	dy = std::abs(Tile_coord::delta(t1.ty, t2.ty));
+	// This seems to match the originals as far as distance effects go.
+	int dist_decay_factor = std::max(0, 75 - 2 * dx - 3 * dy);
+	// Finally, return how bright this light is.
+	return dist_decay_factor * brightness;
+}
+
+int Game_render::get_light_strength(const Game_object *obj, const Game_object *av) const {
+	const Shape_info& info = obj->get_info();
+	return Get_light_strength(obj, av, info.get_object_light(obj->get_framenum()));
+}
+
 /*
  *  Paint a rectangle in the window by pulling in vga chunks.
  */
@@ -302,7 +319,10 @@ void Game_window::paint(
 ) {
 
 	if (!win->ready()) return;
-	int gx = x, gy = y, gw = w, gh = h;
+	int gx = x;
+	int gy = y;
+	int gw = w;
+	int gh = h;
 	if (gx < 0) {
 		gw += x;
 		gx = 0;
@@ -340,8 +360,8 @@ void Game_window::paint(
 		Actor *party[9];    // Get party, including Avatar.
 		int cnt = get_party(party, 1);
 		int carried_light = 0;
-		for (int i = 0; !carried_light && i < cnt; i++)
-			carried_light = party[i]->has_light_source();
+		for (int i = 0; i < cnt; i++)
+			carried_light += Get_light_strength(party[i], main_actor, party[i]->get_light_source());
 		// Also check light spell.
 		if (special_light && clock->get_total_minutes() > special_light) {
 			// Just expired.
@@ -349,8 +369,7 @@ void Game_window::paint(
 			clock->set_palette();
 		}
 		// Set palette for lights.
-		clock->set_light_source(carried_light + (light_sources > 0),
-		                        in_dungeon);
+		clock->set_light_source(carried_light + light_sources, in_dungeon);
 	}
 	win->clear_clip();
 }
@@ -359,7 +378,7 @@ void Game_window::paint(
  *  Paint whole window.
  */
 void Game_window::paint() {
-	if (main_actor != 0) map->read_map_data();      // Gather in all objs., etc.
+	if (main_actor != nullptr) map->read_map_data();      // Gather in all objs., etc.
 	set_all_dirty();
 	paint_dirty();
 }
@@ -443,19 +462,10 @@ void Game_render::paint_chunk_flats(
 	Game_window *gwin = Game_window::get_instance();
 	Map_chunk *olist = gwin->map->get_chunk(cx, cy);
 	// Paint flat tiles.
-#ifdef HAVE_OPENGL
-	if (GL_manager::get_instance()) { // OpenGL rendering?
-		Chunk_terrain *terrain = olist->get_terrain();
-		if (terrain)
-			terrain->get_glflats()->paint(xoff, yoff);
-	} else
-#endif
-	{
-		Image_buffer8 *cflats = olist->get_rendered_flats();
-		if (cflats)
-			gwin->win->copy8(cflats->get_bits(),
-			                 c_chunksize, c_chunksize, xoff, yoff);
-	}
+	Image_buffer8 *cflats = olist->get_rendered_flats();
+	if (cflats)
+		gwin->win->copy8(cflats->get_bits(),
+							c_chunksize, c_chunksize, xoff, yoff);
 }
 
 /*
@@ -471,7 +481,7 @@ void Game_render::paint_chunk_flat_rles(
 	Map_chunk *olist = gwin->map->get_chunk(cx, cy);
 	Flat_object_iterator next(olist);// Do flat RLE objects.
 	Game_object *obj;
-	while ((obj = next.get_next()) != 0)
+	while ((obj = next.get_next()) != nullptr)
 		obj->paint();
 }
 
@@ -487,13 +497,23 @@ int Game_render::paint_chunk_objects(
 	Game_object *obj;
 	Game_window *gwin = Game_window::get_instance();
 	Map_chunk *olist = gwin->map->get_chunk(cx, cy);
-	int light_sources =     // Also check for light sources.
-	    gwin->is_in_dungeon() ? olist->get_dungeon_lights()
-	    : olist->get_non_dungeon_lights();
+	int light_sources = 0;		// Also check for light sources.
+	Main_actor* const main_actor = gwin->get_main_actor();
+	if (main_actor != nullptr) {
+		const auto& lights = gwin->is_in_dungeon()
+		                   ? olist->get_dungeon_lights()
+		                   : olist->get_non_dungeon_lights();
+		for (const auto& obj : lights) {
+			const Shape_info& info = obj->get_info();
+			if (info.is_light_source()) { // Count light sources.
+				light_sources += get_light_strength(obj, main_actor);
+			}
+		}
+	}
 	skip = gwin->get_render_skip_lift();
 	Nonflat_object_iterator next(olist);
 
-	while ((obj = next.get_next()) != 0)
+	while ((obj = next.get_next()) != nullptr)
 		if (obj->render_seq != render_seq)
 			paint_object(obj);
 
@@ -513,7 +533,7 @@ void Game_render::paint_object(
 		return;
 	obj->render_seq = render_seq;
 	Game_object::Game_object_set &deps = obj->get_dependencies();
-	for (Game_object::Game_object_set::iterator it = deps.begin();
+	for (auto it = deps.begin();
 	        it != deps.end(); ++it) {
 		Game_object *dep = *it;
 		if (dep && dep->render_seq != render_seq)
@@ -537,9 +557,6 @@ void Game_window::paint_dirty() {
 	if (box.w > 0 && box.h > 0)
 		paint(box); // (Could create new dirty rects.)
 	clear_dirty();
-#ifdef __IPHONEOS_
-	gkeybb->paint();
-#endif
 }
 
 /*

@@ -72,12 +72,12 @@ extern sint32 *common_buffer;
 static MidiEvent *event_list, *current_event;
 static sint32 sample_count, current_sample;
 
-static void adjust_amplification(void)
+static void adjust_amplification()
 { 
 	master_volume = static_cast<float>(amplification) / static_cast<float>(100.0);
 }
 
-static void reset_voices(void)
+static void reset_voices()
 {
 	int i;
 	for (i=0; i<MAX_VOICES; i++)
@@ -102,7 +102,7 @@ static void redraw_controllers(int c)
 	ctl->pitch_bend(c, channel[c].pitchbend);
 }
 
-static void reset_midi(void)
+static void reset_midi()
 {
 	int i;
 	for (i=0; i<16; i++)
@@ -119,12 +119,8 @@ static void reset_midi(void)
 
 static void select_sample(int v, Instrument *ip)
 {
-	sint32 f, cdiff, diff;
-	int s,i;
-	Sample *sp, *closest;
-
-	s=ip->samples;
-	sp=ip->sample;
+	int s=ip->samples;
+	Sample *sp=ip->sample;
 
 	if (s==1)
 	{
@@ -132,8 +128,8 @@ static void select_sample(int v, Instrument *ip)
 		return;
 	}
 
-	f=voice[v].orig_frequency;
-	for (i=0; i<s; i++)
+	sint32 f=voice[v].orig_frequency;
+	for (int i=0; i<s; i++)
 	{
 		if (sp->low_freq <= f && sp->high_freq >= f)
 		{
@@ -149,11 +145,11 @@ static void select_sample(int v, Instrument *ip)
 	                                           probably convert the low, high, and root frequencies to MIDI note
 	                                           values and compare those.) */
 
-	cdiff=0x7FFFFFFF;
-	closest=sp=ip->sample;
-	for(i=0; i<s; i++)
+	sint32 cdiff=0x7FFFFFFF;
+	Sample *closest=sp=ip->sample;
+	for(int i=0; i<s; i++)
 	{
-		diff=sp->root_freq - f;
+		sint32 diff=sp->root_freq - f;
 		if (diff<0) diff=-diff;
 		if (diff<cdiff)
 		{
@@ -167,9 +163,9 @@ static void select_sample(int v, Instrument *ip)
 
 static void recompute_freq(int v)
 {
-	int 
-		sign=(voice[v].sample_increment < 0), /* for bidirectional loops */
-	pb=channel[voice[v].channel].pitchbend;
+	int sign=(voice[v].sample_increment < 0);
+	 /* for bidirectional loops */
+	int pb=channel[voice[v].channel].pitchbend;
 	double a;
 
 	if (!voice[v].sample->sample_rate)
@@ -374,8 +370,10 @@ static void kill_note(int i)
 /* Only one instance of a note can be playing on a single channel. */
 static void note_on(MidiEvent *e)
 {
-	int i=voices, lowest=-1; 
-	sint32 lv=0x7FFFFFFF, v;
+	int i=voices;
+	int lowest=-1; 
+	sint32 lv=0x7FFFFFFF;
+	sint32 v;
 
 	while (i--)
 	{
@@ -636,9 +634,11 @@ static void skip_to(sint32 until_time)
 	ctl->reset();
 }
 
-static int apply_controls(void)
+static int apply_controls()
 {
-	int rc, i, did_skip=0;
+	int rc;
+	int i;
+	int did_skip=0;
 	sint32 val;
 	/* ASCII renditions of CD player pictograms indicate approximate effect */
 	do
@@ -692,9 +692,9 @@ static int apply_controls(void)
 
 				case TM_RC_BACK: /* << */
 					if (current_sample > val)
-					skip_to(current_sample-val);
-				else
-					skip_to(0); /* We can't seek to end of previous song. */
+						skip_to(current_sample-val);
+					else
+						skip_to(0); /* We can't seek to end of previous song. */
 				did_skip=1;
 				break;
 		}
@@ -724,7 +724,7 @@ static void do_compute_data(sint32 count)
  flush the device itself */
 static int compute_data(void *stream, sint32 count)
 {
-	int rc, channels;
+	int channels;
 
 	if ( play_mode->encoding & PE_MONO )
 		channels = 1;
@@ -749,6 +749,7 @@ static int compute_data(void *stream, sint32 count)
 		buffered_count=0;
 
 		ctl->current_time(current_sample);
+		int rc;
 		if ((rc=apply_controls())!=TM_RC_NONE)
 			return rc;
 	}
@@ -894,11 +895,12 @@ void Timidity_SetVolume(int volume)
 	int i;
 	if (volume > MAX_AMPLIFICATION)
 		amplification=MAX_AMPLIFICATION;
-	else
+	else {
 		if (volume < 0)
-		amplification=0;
-	else
-		amplification=volume;
+			amplification=0;
+		else
+			amplification=volume;
+	}
 	adjust_amplification();
 	for (i=0; i<voices; i++)
 		if (voice[i].status != VOICE_FREE)
@@ -921,7 +923,7 @@ MidiSong *Timidity_LoadSong(char *midifile)
 
 	/* Open the file */
 	fp = open_file(midifile, 1, OF_VERBOSE);
-	if ( fp != NULL ) {
+	if ( fp != nullptr ) {
 		song->events=read_midi_file(fp, &events, &song->samples);
 		close_file(fp);
 	}
@@ -929,9 +931,9 @@ MidiSong *Timidity_LoadSong(char *midifile)
 	/* Make sure everything is okay */
 	if (!song->events) {
 		free(song);
-		song = NULL;
+		song = nullptr;
 	}
-	return(song);
+	return song;
 }
 
 void Timidity_Start(MidiSong *song)
@@ -946,12 +948,12 @@ void Timidity_Start(MidiSong *song)
 	midi_playing = 1;
 }
 
-int Timidity_Active(void)
+int Timidity_Active()
 {
-	return(midi_playing);
+	return midi_playing;
 }
 
-void Timidity_Stop(void)
+void Timidity_Stop()
 {
 	midi_playing = 0;
 }
@@ -1101,7 +1103,7 @@ void Timidity_GenerateSamples(void *stream, int samples)
 	}
 }
 
-void Timidity_FinalInit(bool patches[128], bool drums[128])
+void Timidity_FinalInit(const bool patches[128], const bool drums[128])
 {
 	for (int i = 0; i < 128; i++)
 	{
@@ -1122,7 +1124,7 @@ void Timidity_FinalInit(bool patches[128], bool drums[128])
 	load_missing_instruments();
 	adjust_amplification();
 	sample_count = 0x7FFFFFF;
-	event_list = 0;
+	event_list = nullptr;
 	lost_notes=cut_notes=0;
 	skip_to(0);
 	midi_playing = 1;

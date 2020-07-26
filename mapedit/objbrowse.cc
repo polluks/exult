@@ -2,7 +2,7 @@
 #  include <config.h>
 #endif
 
-#include <ctype.h>
+#include <cctype>
 #include <gdk/gdkkeysyms.h>
 #include "objbrowse.h"
 #include "shapegroup.h"
@@ -16,10 +16,8 @@ using EStudio::Add_menu_item;
 using EStudio::Create_arrow_button;
 
 Object_browser::Object_browser(Shape_group *grp, Shape_file_info *fi)
-	: selected(-1), index0(0), vscroll(0), hscroll(0), group(grp), popup(0),
-	  file_info(fi), find_text(0), loc_down(0), loc_up(0), loc_q(0), loc_f(0),
-	  move_down(0), move_up(0), config_width(0), config_height(0) {
-	widget = 0;
+	: group(grp), file_info(fi) {
+	widget = nullptr;
 }
 
 Object_browser::~Object_browser() {
@@ -39,11 +37,15 @@ bool Object_browser::search_name(
     const char *nm,
     const char *srch
 ) {
-	char first = tolower(*srch);
+	auto safe_tolower = [](const char ch) {
+		return static_cast<char>(tolower(static_cast<unsigned char>(ch)));
+	};
+	char first = safe_tolower(*srch);
 	while (*nm) {
-		if (tolower(*nm) == first) {
-			const char *np = nm + 1, *sp = srch + 1;
-			while (*sp && tolower(*np) == tolower(*sp)) {
+		if (safe_tolower(*nm) == first) {
+			const char *np = nm + 1;
+			const char *sp = srch + 1;
+			while (*sp && safe_tolower(*np) == safe_tolower(*sp)) {
 				sp++;
 				np++;
 			}
@@ -76,8 +78,8 @@ void Object_browser::on_browser_group_add(
     GtkMenuItem *item,
     gpointer udata
 ) {
-	Object_browser *chooser = static_cast<Object_browser *>(udata);
-	Shape_group *grp = static_cast<Shape_group *>(gtk_object_get_user_data(
+	auto *chooser = static_cast<Object_browser *>(udata);
+	auto *grp = static_cast<Shape_group *>(gtk_object_get_user_data(
 	                       GTK_OBJECT(item)));
 	int id = chooser->get_selected_id();
 	if (id >= 0) {          // Selected shape?
@@ -130,8 +132,9 @@ void File_selector_ok(
 	GtkFileSelection *fsel = GTK_FILE_SELECTION(gtk_widget_get_toplevel(
 	                             GTK_WIDGET(btn)));
 	const char *fname = gtk_file_selection_get_filename(fsel);
-	File_sel_okay_fun fun = reinterpret_cast<File_sel_okay_fun>(
-	                        gtk_object_get_user_data(GTK_OBJECT(fsel)));
+	auto fun = reinterpret_cast<File_sel_okay_fun>(
+	                        	reinterpret_cast<uintptr_t>(
+									gtk_object_get_user_data(GTK_OBJECT(fsel))));
 	if (fname && *fname && fun)
 		(*fun)(fname, user_data);
 }
@@ -140,25 +143,46 @@ void File_selector_ok(
  *  Create a modal file selector.
  */
 
-GtkFileSelection *Create_file_selection(
+void Create_file_selection(
     const char *title,
+	const char *path,
+	const char *filtername,
+	const std::vector<std::string>& filters,
+	GtkFileChooserAction action,
     File_sel_okay_fun ok_handler,
     gpointer user_data
 ) {
-	GtkFileSelection *fsel = GTK_FILE_SELECTION(gtk_file_selection_new(
-	                             title));
+	const char *stock_accept = (action == GTK_FILE_CHOOSER_ACTION_OPEN) ? GTK_STOCK_OPEN : GTK_STOCK_SAVE;
+	GtkFileChooser *fsel = GTK_FILE_CHOOSER(gtk_file_chooser_dialog_new(
+	                             title, nullptr, action,
+	                             GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+	                             stock_accept, GTK_RESPONSE_ACCEPT,
+	                             nullptr));
 	gtk_window_set_modal(GTK_WINDOW(fsel), true);
-	gtk_object_set_user_data(GTK_OBJECT(fsel), reinterpret_cast<void *>(ok_handler));
-	gtk_signal_connect(GTK_OBJECT(fsel->ok_button), "clicked",
-	                   GTK_SIGNAL_FUNC(File_selector_ok), user_data);
-	// Destroy when done.
-	gtk_signal_connect_object(GTK_OBJECT(fsel->ok_button), "clicked",
-	                          GTK_SIGNAL_FUNC(gtk_widget_destroy),
-	                          GTK_OBJECT(fsel));
-	gtk_signal_connect_object(GTK_OBJECT(fsel->cancel_button), "clicked",
-	                          GTK_SIGNAL_FUNC(gtk_widget_destroy),
-	                          GTK_OBJECT(fsel));
-	return fsel;
+	if (action == GTK_FILE_CHOOSER_ACTION_SAVE) {
+		gtk_file_chooser_set_do_overwrite_confirmation(fsel, TRUE);
+	}
+	if (path != nullptr && is_system_path_defined(path)) {
+		// Default to a writable location.
+		std::string startdir = get_system_path(path);
+		gtk_file_chooser_set_current_folder(fsel, startdir.c_str());
+	}
+	if (!filters.empty()) {
+		GtkFileFilter *gfilt = gtk_file_filter_new();
+		for (const auto& filter : filters) {
+			gtk_file_filter_add_pattern(gfilt, filter.c_str());
+		}
+		if (filtername != nullptr) {
+			gtk_file_filter_set_name(gfilt, filtername);
+		}
+		gtk_file_chooser_add_filter(fsel, gfilt);
+	}
+	if (gtk_dialog_run(GTK_DIALOG(fsel)) == GTK_RESPONSE_ACCEPT) {
+		char *filename = gtk_file_chooser_get_filename(fsel);
+		ok_handler(filename, user_data);
+		g_free (filename);
+	}
+	gtk_widget_destroy(GTK_WIDGET(fsel));
 }
 
 /*
@@ -170,7 +194,7 @@ void Object_browser::on_browser_file_save(
     gpointer udata
 ) {
 	ignore_unused_variable_warning(item);
-	Object_browser *chooser = static_cast<Object_browser *>(udata);
+	auto *chooser = static_cast<Object_browser *>(udata);
 	if (!chooser->file_info)
 		return;         // Nothing to write to.
 	try {
@@ -189,7 +213,7 @@ void Object_browser::on_browser_file_revert(
     gpointer udata
 ) {
 	ignore_unused_variable_warning(item);
-	Object_browser *chooser = static_cast<Object_browser *>(udata);
+	auto *chooser = static_cast<Object_browser *>(udata);
 	if (!chooser->file_info)
 		return;         // No file?
 	char *msg = g_strdup_printf("Okay to throw away any changes to '%s'?",
@@ -237,7 +261,7 @@ static void
 on_find_down(GtkButton       *button,
              gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->search(gtk_entry_get_text(
 	                    GTK_ENTRY(chooser->get_find_text())), 1);
 }
@@ -245,7 +269,7 @@ static void
 on_find_up(GtkButton       *button,
            gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->search(gtk_entry_get_text(
 	                    GTK_ENTRY(chooser->get_find_text())), -1);
 }
@@ -255,7 +279,7 @@ on_find_key(GtkEntry   *entry,
             gpointer    user_data) {
 	ignore_unused_variable_warning(entry);
 	if (event->keyval == GDK_Return) {
-		Object_browser *chooser = static_cast<Object_browser *>(user_data);
+		auto *chooser = static_cast<Object_browser *>(user_data);
 		chooser->search(gtk_entry_get_text(
 		                    GTK_ENTRY(chooser->get_find_text())), 1);
 		return TRUE;
@@ -267,14 +291,14 @@ static void
 on_loc_down(GtkButton       *button,
             gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->locate(false);
 }
 static void
 on_loc_up(GtkButton       *button,
           gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->locate(true);
 }
 
@@ -282,14 +306,14 @@ static void
 on_move_down(GtkButton       *button,
              gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->move(false);
 }
 static void
 on_move_up(GtkButton       *button,
            gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	Object_browser *chooser = static_cast<Object_browser *>(user_data);
+	auto *chooser = static_cast<Object_browser *>(user_data);
 	chooser->move(true);
 }
 
@@ -304,7 +328,7 @@ on_move_up(GtkButton       *button,
 GtkWidget *Object_browser::create_controls(
     int controls            // Browser_control flags.
 ) {
-	GtkWidget *topframe = gtk_frame_new(NULL);
+	GtkWidget *topframe = gtk_frame_new(nullptr);
 	gtk_widget_show(topframe);
 
 	// Everything goes in here.

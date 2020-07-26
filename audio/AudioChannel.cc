@@ -22,7 +22,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "AudioChannel.h"
 #include "AudioSample.h"
 
+#include <cstring>
 namespace Pentagram {
+
+sint16 ReadSample(uint8 *src) {
+	sint16 val;
+	std::memcpy(&val, src, sizeof(sint16));
+	return val;
+}
 
 // We divide the data by 2, to prevent overshots. Imagine this sample pattern:
 // 0, 65535, 65535, 0. Now you want to compute a value between the two 65535.
@@ -36,20 +43,16 @@ namespace Pentagram {
 #define RANGE_REDUX(x)	(((x) * 27) >> 5)
 
 AudioChannel::AudioChannel(uint32 sample_rate_, bool stereo_) :
-	playdata(0), playdata_size(0), decompressor_size(0), frame_size(0),
-	sample_rate(sample_rate_), stereo(stereo_),
-	loop(0), sample(0), 
-	frame_evenodd(0), frame0_size(0), frame1_size(0), position(0), paused(false),
-	instance_id(-1), fp_pos(0), fp_speed(0)
+	sample_rate(sample_rate_), stereo(stereo_)
 {
 }
 
-AudioChannel::~AudioChannel(void)
+AudioChannel::~AudioChannel()
 {
-	if (sample && playdata) sample->freeDecompressor(playdata);
+	if (sample && playdata) sample->freeDecompressor(decomp);
 	if (sample) sample->Release();
-	delete [] playdata;
-	sample = 0;
+	playdata.reset();
+	sample = nullptr;
 }
 
 void AudioChannel::playSample(AudioSample *sample_, int loop_, int priority_, bool paused_, uint32 pitch_shift_, int lvol_, int rvol_, sint32 instance_id_)
@@ -70,19 +73,38 @@ void AudioChannel::playSample(AudioSample *sample_, int loop_, int priority_, bo
 	if (!sample) return;
 	sample->IncRef();
 
-	// Setup buffers
-	decompressor_size = sample->getDecompressorDataSize();
-	frame_size = sample->getFrameSize();
+	// Lambda to round size up to next multiple of maximum alignment size, if needed.
+	auto round_up = [](size_t val) {
+		constexpr const size_t maxalign = alignof(std::max_align_t);
+		return ((val + maxalign - 1) / maxalign) * maxalign;
+	};
+	// Persistent data for the decompressor
+	const size_t decompressor_size = round_up(sample->getDecompressorDataSize());
+	const size_t frame_size = round_up(sample->getFrameSize());
+	const size_t decompressor_align = sample->getDecompressorAlignment();
 
-	if ((decompressor_size + frame_size*2) > playdata_size)
+	// Setup buffers
+	if ((decompressor_size + frame_size * 2) > playdata_size)
 	{
-		delete [] playdata;
-		playdata_size = decompressor_size + frame_size*2;
-		playdata = new uint8[playdata_size];
+		playdata_size = decompressor_size + frame_size * 2 + decompressor_align;
+		playdata = std::make_unique<uint8[]>(playdata_size);
 	}
 
+	size_t avail_space = playdata_size;
+	decomp = playdata.get();
+	// Align decomp to required alignment.
+	std::align(decompressor_align, decompressor_size, decomp, avail_space);
+	// Align first frame.
+	size_t delta = playdata_size - avail_space;
+	avail_space -= decompressor_size;
+	void *frameptr = playdata.get() + delta + decompressor_size;
+	std::align(alignof(std::max_align_t), frame_size, frameptr, avail_space);
+	frames[0] = static_cast<uint8*>(frameptr);
+	// Second frame should be aligned for free.
+	frames[1] = frames[0] + frame_size;
+
 	// Init the sample decompressor
-	sample->initDecompressor(playdata);
+	sample->initDecompressor(decomp);
 
 	// Reset counter and stuff
 	frame_evenodd = 0;
@@ -91,7 +113,7 @@ void AudioChannel::playSample(AudioSample *sample_, int loop_, int priority_, bo
 	fp_speed = (pitch_shift*sample->getRate())/sample_rate;
 
 	// Decompress frame 0
-	frame0_size = sample->decompressFrame(playdata, playdata+decompressor_size);
+	frame0_size = sample->decompressFrame(decomp, frames[0]);
 
 	// Decompress frame 1
 	DecompressNextFrame();
@@ -99,7 +121,7 @@ void AudioChannel::playSample(AudioSample *sample_, int loop_, int priority_, bo
 	// Setup resampler
 	if (sample->getBits()==8 && !sample->isStereo())
 	{
-		uint8 *src = playdata+decompressor_size;
+		uint8 *src = frames[0];
 		int a = *(src+0); a = (a|(a << 8))-32768;
 		int b = *(src+1); b = (a|(b << 8))-32768;
 		int c = *(src+2); c = (a|(c << 8))-32768;
@@ -148,7 +170,7 @@ void AudioChannel::resampleAndMix(sint16 *stream, uint32 bytes)
 			// No more data
 			if (!frame1_size) {
 				if (sample) sample->Release();
-				sample = 0;
+				sample = nullptr;
 				return;
 			}
 
@@ -169,18 +191,18 @@ void AudioChannel::resampleAndMix(sint16 *stream, uint32 bytes)
 void AudioChannel::DecompressNextFrame()
 {
 	// Get next frame of data
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
-	frame1_size = sample->decompressFrame(playdata, src2);
+	uint8 *src2 = frames[1-frame_evenodd];
+	frame1_size = sample->decompressFrame(decomp, src2);
 
 	// No stream, go back to beginning and get first frame 
 	if (!frame1_size && loop) {
 		if (loop != -1) loop--;
-		sample->rewind(playdata);
-		frame1_size = sample->decompressFrame(playdata, src2);
+		sample->rewind(decomp);
+		frame1_size = sample->decompressFrame(decomp, src2);
 	}
 	else if (!frame1_size)
 	{
-		sample->freeDecompressor(playdata);
+		sample->freeDecompressor(decomp);
 	}
 }
 
@@ -191,8 +213,8 @@ void AudioChannel::DecompressNextFrame()
 // Resample a frame of mono 8bit unsigned to Stereo 16bit
 void AudioChannel::resampleFrameM8toS(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -254,8 +276,8 @@ void AudioChannel::resampleFrameM8toS(sint16 *&stream, uint32 &bytes)
 // Resample a frame of mono 8bit unsigned to Mono 16bit
 void AudioChannel::resampleFrameM8toM(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -314,8 +336,8 @@ void AudioChannel::resampleFrameM8toM(sint16 *&stream, uint32 &bytes)
 // Resample a frame of stereo 8bit unsigned to Mono 16bit
 void AudioChannel::resampleFrameS8toM(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -375,8 +397,8 @@ void AudioChannel::resampleFrameS8toM(sint16 *&stream, uint32 &bytes)
 // Resample a frame of stereo 8bit unsigned to Stereo 16bit
 void AudioChannel::resampleFrameS8toS(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -444,8 +466,8 @@ void AudioChannel::resampleFrameS8toS(sint16 *&stream, uint32 &bytes)
 // Resample a frame of mono 16bit unsigned to Stereo 16bit
 void AudioChannel::resampleFrameM16toS(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -462,10 +484,10 @@ void AudioChannel::resampleFrameM16toS(sint16 *&stream, uint32 &bytes)
 		if (fp_pos >= 0x10000)
 		{
 			if (src+4 < src_end) {
-				int c = *reinterpret_cast<sint16 *>(src+4);
+				int c = ReadSample(src+4);
 				interp_l.feedData(c);
 			} else if (src2 < src2_end) {
-				int c = *reinterpret_cast<sint16 *>(src2);
+				int c = ReadSample(src2);
 				interp_l.feedData(c);
 				src2+=2;
 			} else {
@@ -505,8 +527,8 @@ void AudioChannel::resampleFrameM16toS(sint16 *&stream, uint32 &bytes)
 // Resample a frame of mono 16bit unsigned to Mono 16bit
 void AudioChannel::resampleFrameM16toM(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -525,10 +547,10 @@ void AudioChannel::resampleFrameM16toM(sint16 *&stream, uint32 &bytes)
 		if (fp_pos >= 0x10000)
 		{
 			if (src+4 < src_end) {
-				int c = *reinterpret_cast<sint16 *>(src+4);
+				int c = ReadSample(src+4);
 				interp_l.feedData(c);
 			} else if (src2 < src2_end) {
-				int c = *reinterpret_cast<sint16 *>(src2);
+				int c = ReadSample(src2);
 				interp_l.feedData(c);
 				src2+=2;
 			} else {
@@ -563,8 +585,8 @@ void AudioChannel::resampleFrameM16toM(sint16 *&stream, uint32 &bytes)
 // Resample a frame of stereo 16bit unsigned to Mono 16bit
 void AudioChannel::resampleFrameS16toM(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -581,13 +603,13 @@ void AudioChannel::resampleFrameS16toM(sint16 *&stream, uint32 &bytes)
 		if (fp_pos >= 0x10000)
 		{
 			if (src+8 < src_end) {
-				int c  = *reinterpret_cast<sint16 *>(src+8);
-				int c2 = *reinterpret_cast<sint16 *>(src+10);
+				int c  = ReadSample(src+8);
+				int c2 = ReadSample(src+10);
 				interp_l.feedData(c);
 				interp_r.feedData(c2);
 			} else if (src2 < src2_end) {
-				int c  = *reinterpret_cast<sint16 *>(src2);
-				int c2 = *reinterpret_cast<sint16 *>(src2+2);
+				int c  = ReadSample(src2);
+				int c2 = ReadSample(src2+2);
 				interp_l.feedData(c);
 				interp_r.feedData(c2);
 				src2+=4;
@@ -624,8 +646,8 @@ void AudioChannel::resampleFrameS16toM(sint16 *&stream, uint32 &bytes)
 // Resample a frame of stereo 16bit unsigned to Stereo 16bit
 void AudioChannel::resampleFrameS16toS(sint16 *&stream, uint32 &bytes)
 {
-	uint8 *src = playdata + decompressor_size + (frame_size*frame_evenodd);
-	uint8 *src2 = playdata + decompressor_size + (frame_size*(1-frame_evenodd));
+	uint8 *src = frames[frame_evenodd];
+	uint8 *src2 = frames[1-frame_evenodd];
 
 	uint8 *src_end = src + frame0_size;
 	uint8 *src2_end = src2 + frame1_size;
@@ -642,13 +664,13 @@ void AudioChannel::resampleFrameS16toS(sint16 *&stream, uint32 &bytes)
 		if (fp_pos >= 0x10000)
 		{
 			if (src+8 < src_end) {
-				int c  = *reinterpret_cast<sint16 *>(src+8);
-				int c2 = *reinterpret_cast<sint16 *>(src+10);
+				int c  = ReadSample(src+8);
+				int c2 = ReadSample(src+10);
 				interp_l.feedData(c);
 				interp_r.feedData(c2);
 			} else if (src2 < src2_end) {
-				int c  = *reinterpret_cast<sint16 *>(src2);
-				int c2 = *reinterpret_cast<sint16 *>(src2+2);
+				int c  = ReadSample(src2);
+				int c2 = ReadSample(src2+2);
 				interp_l.feedData(c);
 				interp_r.feedData(c2);
 				src2+=4;

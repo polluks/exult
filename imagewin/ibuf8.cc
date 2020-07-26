@@ -46,7 +46,9 @@ void Image_buffer8::copy(
     int srcw, int srch,     // Dimensions to copy.
     int destx, int desty        // Where to copy to.
 ) {
-	int ynext, yfrom, yto;      // Figure y stuff.
+	int ynext;
+	int yfrom;
+	int yto;      // Figure y stuff.
 	if (srcy >= desty) {    // Moving up?
 		ynext = line_width;
 		yfrom = srcy;
@@ -74,8 +76,10 @@ void Image_buffer8::get(
     Image_buffer *dest,     // Copy to here.
     int srcx, int srcy      // Upper-left corner of source rect.
 ) {
-	int srcw = dest->width, srch = dest->height;
-	int destx = 0, desty = 0;
+	int srcw = dest->width;
+	int srch = dest->height;
+	int destx = 0;
+	int desty = 0;
 	// Constrain to window's space. (Note
 	//   convoluted use of clip().)
 	if (!clip(destx, desty, srcw, srch, srcx, srcy))
@@ -150,7 +154,8 @@ void Image_buffer8::fill8(
     int srcw, int srch,
     int destx, int desty
 ) {
-	int srcx = 0, srcy = 0;
+	int srcx = 0;
+	int srcy = 0;
 	// Constrain to window's space.
 	if (!clip(srcx, srcy, srcw, srch, destx, desty))
 		return;
@@ -195,48 +200,20 @@ void Image_buffer8::copy8(
 		return;
 	}
 
-	int srcx = 0, srcy = 0;
+	int srcx = 0;
+	int srcy = 0;
 	int src_width = srcw;       // Save full source width.
 	// Constrain to window's space.
 	if (!clip(srcx, srcy, srcw, srch, destx, desty))
 		return;
 
-#if !defined(__sparc__)
-	uint32 *to = reinterpret_cast<uint32 *>(bits + desty * line_width + destx);
-	const uint32 *from = reinterpret_cast<const uint32 *>(src_pixels + srcy * src_width + srcx);
-	int to_next = line_width - srcw;// # pixels to next line.
-	int from_next = src_width - srcw;
-
-	// Need to know if we end dword alligned
-	int end_align = srcw % 4;
-	// The actual aligned width in dwords
-	int aligned = srcw / 4;
-
-	uint8 *to8;
-	const uint8 *from8;
-
-	while (srch--) {        // Do each line.
-		int counter = aligned;
-		while (counter--) *to++ = *from++;
-
-		to8 = reinterpret_cast<uint8 *>(to);
-		from8 = reinterpret_cast<const uint8 *>(from);
-
-		counter = end_align;
-		while (counter--) *to8++ = *from8++;
-
-		to = reinterpret_cast<uint32 *>(to8 + to_next);
-		from = reinterpret_cast<const uint32 *>(from8 + from_next);
-	}
-#else
 	uint8 *to = bits + desty * line_width + destx;
-	uint8 *from = src_pixels + srcy * src_width + srcx;
+	const uint8 *from = src_pixels + srcy * src_width + srcx;
 	while (srch--) {
 		std::memcpy(to, from, srcw);
 		from += src_width;
 		to += line_width;
 	}
-#endif
 }
 
 /*
@@ -319,7 +296,8 @@ void Image_buffer8::fill_translucent8(
     int destx, int desty,
     const Xform_palette &xform        // Transform table.
 ) {
-	int srcx = 0, srcy = 0;
+	int srcx = 0;
+	int srcy = 0;
 	// Constrain to window's space.
 	if (!clip(srcx, srcy, srcw, srch, destx, desty))
 		return;
@@ -342,7 +320,8 @@ void Image_buffer8::copy_transparent8(
     int srcw, int srch,     // Dimensions of source.
     int destx, int desty
 ) {
-	int srcx = 0, srcy = 0;
+	int srcx = 0;
+	int srcy = 0;
 	int src_width = srcw;       // Save full source width.
 	// Constrain to window's space.
 	if (!clip(srcx, srcy, srcw, srch, destx, desty))
@@ -644,56 +623,4 @@ void Image_buffer8::paint_rle_remapped(
 			}
 		}
 	}
-}
-
-/*
- *  Convert this image to 32-bit RGBA and return the allocated buffer.
- */
-
-unsigned char *Image_buffer8::rgba(
-    const unsigned char *pal,     // 3*256 bytes (rgbrgbrgb...).
-    unsigned char transp,       // Transparent value.
-    bool &rotate,               // Flag set to true if any of the colors rotate.
-    int first_rotate,           // First color that rotates.
-    int last_rotate,            // Last color that rotates.
-    int first_translucent,      // Palette index of 1st trans. color.
-    int last_translucent,       // Index of last trans. color.
-    const Xform_palette *xforms,      // Transformers.  Need same # as
-    //   (last_translucent -
-    //    first_translucent + 1).
-    int alpha       // What to use as alpha
-) {
-	int cnt = line_width * height;  // Allocate destination buffer.
-	uint32 *buf32 = new uint32[cnt];
-	uint32 *ptr32 = buf32;
-	unsigned char *pixels = bits - offset_y * line_width - offset_x;
-	rotate = false;
-	for (int i = 0; i < cnt; i++) {
-		unsigned char pix = *pixels++;
-		if (pix == transp) { // Transparent?  Store Alpha=0.
-			*ptr32++ = 0;
-			continue;
-		}
-		unsigned char r, g, b, a; // Pieces of the color.
-		if (pix >= first_translucent && pix <= last_translucent) {
-			// Get actual color & alpha from tbl.
-			const Xform_palette &xf = xforms[pix - first_translucent];
-			r = xf.r;
-			g = xf.g;
-			b = xf.b;
-			a = xf.a;
-		} else {
-			if (pix >= first_rotate && pix <= last_rotate)
-				rotate = true;
-			r = pal[3 * pix];
-			g = pal[3 * pix + 1];
-			b = pal[3 * pix + 2];
-			a = alpha;
-		}
-		*ptr32++ = (static_cast<uint32>(r) << 0) +
-		           (static_cast<uint32>(g) << 8) +
-		           (static_cast<uint32>(b) << 16) +
-		           (static_cast<uint32>(a) << 24);
-	}
-	return reinterpret_cast<unsigned char *>(buf32);
 }

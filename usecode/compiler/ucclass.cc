@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <config.h>
 #endif
 
-#include <stdio.h>
+#include <cstdio>
 #include <cassert>
 #include <vector>
 #include <cstring>
@@ -46,7 +46,7 @@ int Uc_class::last_num = -1;
 
 Uc_class::Uc_class(
     char *nm
-) : name(nm), scope(0), num_vars(0), base_class(0) {
+) : name(nm), scope(nullptr), num_vars(0), base_class(nullptr) {
 	num = ++last_num;
 }
 
@@ -56,29 +56,22 @@ Uc_class::Uc_class(
 ) : name(nm), scope(&base->scope), num_vars(base->num_vars),
 	methods(base->methods), base_class(base) {
 	num = ++last_num;
-	for (vector<Uc_function *>::iterator it = methods.begin();
+	for (auto it = methods.begin();
 	        it != methods.end(); ++it)
 		(*it)->set_inherited();
 }
 
 /*
- *  Cleanup.
- */
-Uc_class::~Uc_class(
-) {
-}
-
-/*
  *  Add a new class variable.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_class::add_symbol(
     char *nm
 ) {
 	if (scope.is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	Uc_var_symbol *var = new Uc_class_var_symbol(nm, num_vars++);
 	scope.add(var);
@@ -88,7 +81,7 @@ Uc_var_symbol *Uc_class::add_symbol(
 /*
  *  Add a new variable to the current scope.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_class::add_symbol(
@@ -96,7 +89,7 @@ Uc_var_symbol *Uc_class::add_symbol(
     Uc_struct_symbol *s
 ) {
 	if (scope.is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
 	Uc_var_symbol *var = new Uc_class_struct_var_symbol(nm, s, num_vars++);
 	scope.add(var);
@@ -106,7 +99,7 @@ Uc_var_symbol *Uc_class::add_symbol(
 /*
  *  Add alias to class variable.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_class::add_alias(
@@ -114,9 +107,9 @@ Uc_var_symbol *Uc_class::add_alias(
     Uc_var_symbol *var
 ) {
 	if (scope.is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_alias_symbol *alias = new Uc_alias_symbol(nm, var);
+	auto *alias = new Uc_alias_symbol(nm, var);
 	scope.add(alias);
 	return alias;
 }
@@ -124,7 +117,7 @@ Uc_var_symbol *Uc_class::add_alias(
 /*
  *  Add alias to class variable.
  *
- *  Output: New sym, or 0 if already declared.
+ *  Output: New sym, or nullptr if already declared.
  */
 
 Uc_var_symbol *Uc_class::add_alias(
@@ -133,35 +126,13 @@ Uc_var_symbol *Uc_class::add_alias(
     Uc_struct_symbol *struc
 ) {
 	if (scope.is_dup(nm))
-		return 0;
+		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = static_cast<Uc_var_symbol *>(v->get_sym());
+	auto *var = static_cast<Uc_var_symbol *>(v->get_sym());
 	Uc_alias_symbol *alias = new Uc_struct_alias_symbol(nm, var, struc);
 	scope.add(alias);
 	return alias;
 }
-
-#if 0   // ++++ Not yet.
-/*
- *  Add alias to class variable.
- *
- *  Output: New sym, or 0 if already declared.
- */
-
-Uc_var_symbol *Uc_class::add_alias(
-    char *nm,
-    Uc_var_symbol *v,
-    Uc_class *c
-) {
-	if (scope.is_dup(nm))
-		return 0;
-	// Create & assign slot.
-	Uc_var_symbol *var = dynamic_cast<Uc_var_symbol *>(v->get_sym());
-	Uc_alias_symbol *alias = new Uc_class_alias_symbol(nm, var, c);
-	scope.add(alias);
-	return alias;
-}
-#endif
 
 /*
  *  Add method.
@@ -172,7 +143,7 @@ void Uc_class::add_method(
 ) {
 	// If this is a duplicate inherited function,
 	// or an externed class method, override it.
-	for (vector<Uc_function *>::iterator it = methods.begin();
+	for (auto it = methods.begin();
 	        it != methods.end(); ++it) {
 		Uc_function *method = *it;
 		if (!strcmp(m->get_name(), method->get_name())) {
@@ -213,7 +184,7 @@ void Uc_class::gen(
 
 Usecode_symbol *Uc_class::create_sym(
 ) {
-	Usecode_class_symbol *cs = new Usecode_class_symbol(name.c_str(),
+	auto *cs = new Usecode_class_symbol(name.c_str(),
 	        Usecode_symbol::class_scope, num, num_vars);
 	vector<Uc_function *>::iterator it;
 	for (it = methods.begin(); it != methods.end(); ++it) {

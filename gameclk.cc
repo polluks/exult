@@ -29,24 +29,12 @@
 #include "cheat.h"
 #include "game.h"
 
-#if 0
-static inline bool is_light_palette(int pal) {
-	return (pal == PALETTE_SINGLE_LIGHT || pal == PALETTE_MANY_LIGHTS);
-}
-#endif
-
 static inline bool is_dark_palette(int pal) {
-	return (pal == PALETTE_DUSK || pal == PALETTE_NIGHT);
+	return pal == PALETTE_DUSK || pal == PALETTE_NIGHT;
 }
-
-#if 0
-static inline bool is_weather_palette(int pal) {
-	return (pal == PALETTE_OVERCAST || pal == PALETTE_FOG);
-}
-#endif
 
 static inline bool is_day_palette(int pal) {
-	return (pal == PALETTE_DAWN || pal == PALETTE_DAY);
+	return pal == PALETTE_DAWN || pal == PALETTE_DAY;
 }
 
 static inline int get_time_palette(int hour, bool dungeon) {
@@ -67,15 +55,26 @@ static inline int get_final_palette(
     bool cloudy,
     bool foggy,
     int light,
-    bool special
+    bool special,
+	bool infravision,
+	bool invisible
 ) {
+	if (invisible) {
+		return PALETTE_INVISIBLE;
+	}
+	if (infravision) {
+		return PALETTE_DAY;
+	}
 	if ((light || special) && is_dark_palette(pal)) {
-		int light_palette = PALETTE_SINGLE_LIGHT;
 		// Gump mode, or light spell?
-		if (special || (light > 1))
-			light_palette = PALETTE_MANY_LIGHTS;
-
-		return light_palette;
+		if (special)
+			return PALETTE_SPELL;
+		else if (light < 224)	// Seems to match original
+			return PALETTE_CANDLE;
+		else if (light < 640)	// Seems to match original
+			return PALETTE_SINGLE_LIGHT;
+		else
+			return PALETTE_MANY_LIGHTS;
 	} else if (is_day_palette(pal)) {
 		if (foggy)
 			return PALETTE_FOG;
@@ -90,124 +89,104 @@ static inline int get_final_palette(
  */
 
 void Game_clock::set_time_palette(
+	bool force
 ) {
-	Game_window *gwin = Game_window::get_instance();
-	Actor *main_actor = gwin->get_main_actor();
-	bool invis = main_actor && main_actor->get_flag(Obj_flags::invisible);
-	if (invis && !old_invisible) {
-		if (transition) {
-			delete transition;
-			transition = 0;
-		}
-		gwin->get_pal()->set(PALETTE_INVISIBLE);
-#ifdef HAVE_OPENGL
-		if (GL_manager::get_instance() && !gwin->get_pal()->is_faded_out())
-			gwin->get_pal()->apply(true);
-		else
-#endif
-			if (!gwin->get_pal()->is_faded_out())
-				gwin->get_pal()->apply(false);
-		return;
-	}
-	old_invisible = invis;
+	const Game_window *gwin = Game_window::get_instance();
+	const Actor *main_actor = gwin->get_main_actor();
 
-	if (!main_actor || (cheat.in_infravision() && !old_infravision)) {
-		if (transition) {
-			delete transition;
-			transition = 0;
-		}
-		gwin->get_pal()->set(PALETTE_DAY);
-// As far as I can tell from testing in Direct X and Windib with OpenGL and other scalers, this palette apply isn't even needed.
-#ifdef HAVE_OPENGL
-		if (GL_manager::get_instance() && !gwin->get_pal()->is_faded_out())
-			gwin->get_pal()->apply(true);
-		else
-#endif
-			if (!gwin->get_pal()->is_faded_out())
-				gwin->get_pal()->apply(false);
-		return;
-	}
-	old_infravision = cheat.in_infravision();
+	// This is the information we will need to determine what palette/transition
+	// we want.
+	const bool invis = main_actor && main_actor->get_flag(Obj_flags::invisible);
+	const bool infra = gwin->in_infravision();
+	const bool invis_change = invis && (force || !old_invisible);
+	const bool infra_change = !main_actor || (infra && (force || !old_infravision));
+	const int new_dungeon = gwin->is_in_dungeon();
+	int new_palette = get_time_palette(hour + 1, new_dungeon != 0);
+	int old_palette = get_time_palette(hour, (dungeon != 255 ? dungeon : new_dungeon) != 0);
+	const bool cloudy = overcast > 0;
+	const bool foggy = fog > 0;
+	const bool weather_change = force || (cloudy != was_overcast) || (foggy != was_foggy);
+	const bool light_sensitive = force ||
+	                             is_dark_palette(new_palette) ||
+	                             is_dark_palette(old_palette);
+	const bool light_change = light_sensitive &&
+	                          (force ||
+	                           (light_source_level != old_light_level) ||
+	                           (gwin->is_special_light() != old_special_light) ||
+	                           (new_dungeon != dungeon));
 
-	int new_dungeon = gwin->is_in_dungeon();
-	int new_palette = get_time_palette(hour + 1, new_dungeon != 0),
-	    old_palette = get_time_palette(hour, (dungeon != 255 ? dungeon : new_dungeon) != 0);
-	bool cloudy = overcast > 0;
-	bool foggy = fog > 0;
-	bool weather_change = (cloudy != was_overcast) || (foggy != was_foggy);
-	bool light_sensitive = is_dark_palette(new_palette) ||
-	                       is_dark_palette(old_palette);
-	bool light_change = light_sensitive &&
-	                    ((light_source_level != old_light_level) ||
-	                     (gwin->is_special_light() != old_special_light) ||
-	                     (new_dungeon != dungeon));
-
+	// These are the final palettes we will use for checking.
 	new_palette = get_final_palette(new_palette, cloudy, foggy,
-	                                light_source_level, gwin->is_special_light());
+	                                light_source_level, gwin->is_special_light(),
+	                                infra, invis);
 	old_palette = get_final_palette(old_palette, was_overcast, was_foggy,
-	                                old_light_level, old_special_light);
+	                                old_light_level, old_special_light,
+	                                old_infravision, old_invisible);
 
-	if (gwin->get_pal()->is_faded_out()) {
-		if (transition) {
-			delete transition;
-			transition = 0;
-		}
-		gwin->get_pal()->set(old_palette);
-		if (!gwin->get_pal()->is_faded_out())
-			gwin->get_pal()->apply(true);
-		return;
-	}
-
+	// Always update these variables.
 	was_overcast = cloudy;
 	was_foggy = foggy;
 	old_light_level = light_source_level;
 	old_special_light = gwin->is_special_light();
 	dungeon = new_dungeon;
+	old_invisible = invis;
+	old_infravision = infra;
 
+	auto apply_palette = [gwin](int palette) {
+		auto *pal = gwin->get_pal();
+		pal->set(palette);
+		if (!pal->is_faded_out()) {
+			pal->apply(false);
+		}
+	};
+	if (invis_change || infra_change || gwin->get_pal()->is_faded_out()) {
+		transition.reset();
+		apply_palette(new_palette);
+		return;
+	}
 	if (weather_change) {
 		// TODO: Maybe implement smoother transition from
 		// weather to/from dawn/sunrise/sundown/dusk.
 		// Right now, it works like the original.
-		delete transition;
-		transition = new Palette_transition(old_palette, new_palette,
-		                                    hour, minute, 1, 4, hour, minute);
+		transition = std::make_unique<Palette_transition>(old_palette, new_palette,
+		                                    hour, minute, ticks, 1, 20, hour, minute, ticks);
 		return;
-	} else if (light_change) {
-		if (transition) {
-			delete transition;
-			transition = 0;
-		}
-		gwin->get_pal()->set(new_palette);
-		if (!gwin->get_pal()->is_faded_out())
-			gwin->get_pal()->apply(true);
+	}
+	if (light_change) {
+		transition.reset();
+		apply_palette(new_palette);
 		return;
 	}
 	if (transition) {
-		if (transition->set_step(hour, minute))
+		if (transition->set_step(hour, minute, ticks))
 			return;
-		delete transition;
-		transition = 0;
+		transition.reset();
 	}
-
-	if (old_palette != new_palette) { // Do we have a transition?
-		transition = new Palette_transition(old_palette, new_palette,
-		                                    hour, minute, 4, 15, hour, 0);
-		return;
+	if (force || old_palette != new_palette) { // Do we have a transition?
+		transition = std::make_unique<Palette_transition>(old_palette, new_palette,
+		                                    hour, minute, ticks, ticks_per_minute, 60, hour, 0, 0);
+	} else {
+		apply_palette(new_palette);
 	}
-
-	gwin->get_pal()->set(new_palette);
-	if (!gwin->get_pal()->is_faded_out())
-		gwin->get_pal()->apply(true);
 }
 
 /*
- *  Set palette.  Used for restoring a game.
+ *  Set palette. Used for restoring a game.
  */
 
 void Game_clock::set_palette(
 ) {
 	// Update palette to new time.
-	set_time_palette();
+	set_time_palette(false);
+}
+
+/*
+ *  Resets palette.
+ */
+
+void Game_clock::reset_palette() {
+	// Forcibly update palette to new time.
+	set_time_palette(true);
 }
 
 /*
@@ -218,7 +197,7 @@ void Game_clock::set_light_source_level(
     int lev
 ) {
 	light_source_level = lev;
-	set_time_palette();
+	set_time_palette(false);
 }
 
 /*
@@ -229,7 +208,7 @@ void Game_clock::set_overcast(
     bool onoff
 ) {
 	overcast += (onoff ? 1 : -1);
-	set_time_palette();     // Update palette.
+	set_time_palette(false);     // Update palette.
 }
 
 /*
@@ -242,7 +221,7 @@ void Game_clock::set_fog(
 	fog += (onoff ? 1 : -1);
 	if (hour < 6 || hour > 20)
 		fog = 0;    // Disable fog at night???
-	set_time_palette();     // Update palette.
+	set_time_palette(false);     // Update palette.
 }
 
 /*
@@ -262,7 +241,7 @@ static void Check_freezing(
 ) {
 	Game_window *gwin = Game_window::get_instance();
 	// Avatar's flag applies to party.
-	bool freeze = gwin->get_main_actor()->get_flag(Obj_flags::freeze) != false;
+	bool freeze = gwin->get_main_actor()->get_flag(Obj_flags::freeze);
 	Actor *party[9];        // Get party + Avatar.
 	int cnt = gwin->get_party(party, 1);
 	for (int i = 0; i < cnt; i++)
@@ -279,20 +258,18 @@ void Game_clock::increment(
     int num_minutes         // # of minutes to increment.
 ) {
 	Game_window *gwin = Game_window::get_instance();
-	int old_hour;
-	long new_min;
-
-	old_hour = hour;        // Remember current 3-hour period.
+	int old_hour = hour;    // Remember current 3-hour period.
 	num_minutes += 7;       // Round to nearest 15 minutes.
 	num_minutes -= num_minutes % 15;
-	new_min = minute + num_minutes;
+	long new_min = minute + num_minutes;
 	hour += static_cast<short>(new_min / 60);   // Update hour.
 	minute = static_cast<short>(new_min % 60);
+	ticks = 0;
 	day += hour / 24;       // Update day.
 	hour %= 24;
 
 	// Update palette to new time.
-	set_time_palette();
+	set_time_palette(false);
 	// Check to see if we need to update the NPC schedules.
 	if (hour != old_hour)       // Update NPC schedules.
 		gwin->schedule_npcs(hour);
@@ -306,16 +283,21 @@ void Game_clock::handle_event(
     unsigned long curtime,      // Current time of day.
     uintptr udata          // ->game window.
 ) {
-	Game_window *gwin = reinterpret_cast<Game_window *>(udata);
+	auto *gwin = reinterpret_cast<Game_window *>(udata);
 
 	int min_old = minute;
 	int hour_old = hour;
 	// Time stopped?  Don't advance.
 	if (!gwin->is_time_stopped() && !cheat.in_map_editor()) {
-		minute += time_rate;
+		ticks += time_rate;
+		minute += (ticks / ticks_per_minute);
+		ticks %= ticks_per_minute;
 		// ++++ TESTING
 		// if (Game::get_game_type() == SERPENT_ISLE)
-		Check_freezing();
+		// Only do every minute?
+		if (min_old != minute) {
+			Check_freezing();
+		}
 	}
 
 	while (minute >= 60) {  // advance to the correct hour (and day)
@@ -325,22 +307,21 @@ void Game_clock::handle_event(
 			day++;
 		}
 		// Testing.
-		//set_time_palette();
+		//set_time_palette(false);
 		gwin->mend_npcs();  // Restore HP's each hour.
 		check_hunger();     // Use food, and print complaints.
 		gwin->schedule_npcs(hour);
 	}
 
-	if (transition && !transition->set_step(hour, minute)) {
-		delete transition;
-		transition = 0;
-		set_time_palette();
+	if (transition && !transition->set_step(hour, minute, ticks)) {
+		transition.reset();
+		set_time_palette(false);
 	} else if (hour != hour_old)
-		set_time_palette();
+		set_time_palette(false);
 
 	if ((hour != hour_old) || (minute / 15 != min_old / 15))
 		COUT("Clock updated to " << hour << ':' << minute);
-	curtime += gwin->get_std_delay() * ticks_per_minute;
+	curtime += gwin->get_std_delay();
 	tqueue->add(curtime, this, udata);
 }
 
@@ -350,12 +331,13 @@ void Game_clock::handle_event(
 
 void Game_clock::fake_next_period(
 ) {
+	ticks = 0;
 	minute = 0;
 	hour = ((hour / 3 + 1) * 3);
 	day += hour / 24;       // Update day.
 	hour %= 24;
 	Game_window *gwin = Game_window::get_instance();
-	set_time_palette();
+	set_time_palette(false);
 	check_hunger();
 	gwin->schedule_npcs(hour);
 	gwin->mend_npcs();      // Just do it once, cheater.

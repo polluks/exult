@@ -32,11 +32,6 @@ const MidiDriver::MidiDriverDesc FluidSynthMidiDriver::desc =
 
 // MidiDriver method implementations
 
-FluidSynthMidiDriver::FluidSynthMidiDriver()
-	: _settings(0), _synth(0) 
-{
-}
-
 void FluidSynthMidiDriver::setInt(const char *name, int val) {
 	//char *name2 = strdup(name);
 	char *name2 = const_cast<char*>(name);
@@ -107,8 +102,7 @@ int FluidSynthMidiDriver::open() {
 	// fluid_synth_set_chorus_on(_synth, 0);
 
 	int numloaded = 0;
-	for (std::vector<std::string>::const_iterator it = soundfonts.begin();
-	     it != soundfonts.end(); ++it)
+	for (auto it = soundfonts.begin(); it != soundfonts.end(); ++it)
 	{
 		int soundFont = fluid_synth_sfload(_synth, it->c_str(), 1);
 		if (soundFont == -1) {
@@ -136,17 +130,17 @@ void FluidSynthMidiDriver::close() {
 	}
 
 	delete_fluid_synth(_synth);
-	_synth = 0;
+	_synth = nullptr;
 	delete_fluid_settings(_settings);
-	_settings = 0;
+	_settings = nullptr;
 }
 
 void FluidSynthMidiDriver::send(uint32 b) {
 	//uint8 param3 = static_cast<uint8>((b >> 24) & 0xFF);
 	uint32 param2 = static_cast<uint8>((b >> 16) & 0xFF);
 	uint32 param1 = static_cast<uint8>((b >>  8) & 0xFF);
-	uint8 cmd     = static_cast<uint8>(b & 0xF0);
-	uint8 chan    = static_cast<uint8>(b & 0x0F);
+	auto cmd     = static_cast<uint8>(b & 0xF0);
+	auto chan    = static_cast<uint8>(b & 0x0F);
 
 	switch (cmd) {
 	case 0x80:	// Note Off

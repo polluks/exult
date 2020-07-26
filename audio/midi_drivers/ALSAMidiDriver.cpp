@@ -48,7 +48,7 @@ const MidiDriver::MidiDriverDesc ALSAMidiDriver::desc =
 
 
 ALSAMidiDriver::ALSAMidiDriver()
- : isOpen(false), seq_handle(0), seq_client(0), seq_port(0),
+ : isOpen(false), seq_handle(nullptr), seq_client(0), seq_port(0),
    my_client(0), my_port(0)
 {
 
@@ -186,10 +186,10 @@ void ALSAMidiDriver::send_sysex(uint8 status,const uint8 *msg,uint16 length) {
 // static
 int ALSAMidiDriver::parse_addr(const std::string& _arg, int *client, int *port) {
 	const char* arg = _arg.c_str();
-	const char *p;
 
-	if (isdigit(*arg)) {
-		if ((p = strpbrk(arg, ADDR_DELIM)) == NULL)
+	if (isdigit(static_cast<unsigned char>(*arg))) {
+		const char *p;
+		if ((p = strpbrk(arg, ADDR_DELIM)) == nullptr)
 			return -1;
 		*client = atoi(arg);
 		*port = atoi(p + 1);
