@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Move to autogen.sh's directory
+srcdir=$(dirname $0)
+test -n "$srcdir" && cd "$srcdir"
+
 DIE=0
 
 # Check for availability
@@ -34,7 +38,7 @@ for l in glibtoolize libtoolize15 libtoolize14 libtoolize ; do
   }
 done
 
-if test "x$libtoolize" = "x" ; then
+if test -z "$libtoolize" ; then
   echo "**Error**: You must have 'libtool' installed to compile Exult."
   echo "Download the appropriate package for your distribution,"
   echo "or get the source tarball at ftp://ftp.gnu.org/pub/gnu/"
@@ -48,7 +52,7 @@ fi
 
 aclocalincludes=""
 if test -d "/usr/local/share/aclocal"; then
-  if test "/usr/local/share/aclocal" != $(aclocal --print-ac-dir); then
+  if test "/usr/local/share/aclocal" != "$(aclocal --print-ac-dir)"; then
     aclocalincludes="$aclocalincludes -I /usr/local/share/aclocal"
   fi
 fi
@@ -64,7 +68,7 @@ rm -f configure config.log config.guess config.sub config.cache
 rm -f libtool ltmain.sh missing mkinstalldirs install-sh
 rm -f autoconfig.h.in
 rm -f config.status aclocal.m4
-rm -f $(find . -name 'Makefile.in')
+find . -name 'Makefile.in' -exec rm -f {} +
 rm -f audio/midi_drivers/Makefile audio/Makefile conf/Makefile data/Makefile \
       debian/Makefile desktop/Makefile docs/Makefile files/zip/Makefile \
       files/Makefile flic/Makefile gumps/Makefile imagewin/Makefile \
@@ -82,4 +86,3 @@ autoheader
 automake --add-missing --copy --gnu
 
 echo "You are now ready to run ./configure"
-

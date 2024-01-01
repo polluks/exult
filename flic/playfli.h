@@ -1,7 +1,7 @@
 /*
  *  playfli.cc - Play Autodesk Animator FLIs
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -50,15 +50,18 @@ private:
 	int streamstart;
 	int streampos;
 	int frame;
-	char fli_name[9];
+	char fli_name[9]{};
 public:
 	template <typename... T>
 	explicit playfli(T&&... args)
 		: fli_data(std::forward<T>(args)...),
-		  palette(std::make_unique<Palette>()),
-		  fli_name{0} {
+		  palette(std::make_unique<Palette>()) {
 		initfli();
 	}
+	playfli(const playfli&) = delete;
+	playfli(playfli&&) noexcept = default;
+	playfli& operator=(const playfli&) = delete;
+	playfli& operator=(playfli&&) noexcept = default;
 	~playfli() noexcept = default;
 	void info(fliinfo *fi = nullptr);
 	int play(Image_window *win, int first_frame = 0, int last_frame = -1, unsigned long ticks = 0, int brightness = 100);

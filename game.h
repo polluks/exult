@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -51,6 +51,7 @@ class Game : public Game_singletons {
 private:
 	static bool new_game_flag;
 	static Exult_Game game_type;
+	static Game_Language language;
 	static bool expansion, sibeta;
 	using shapes_map = std::unordered_map<const char *, int, hashstr, eqstr>;
 	using rsc_map = std::unordered_map<const char *, str_int_pair, hashstr, eqstr>;
@@ -91,6 +92,9 @@ public:
 	static Exult_Game get_game_type() {
 		return game_type;
 	}
+	static Game_Language get_game_language() {
+		return language;
+	}
 	static bool has_expansion() {
 		return expansion;
 	}
@@ -116,7 +120,7 @@ public:
 	}
 
 	virtual void play_intro() = 0;
-	virtual void end_game(bool success) = 0;
+	virtual void end_game(bool success, bool within_game) = 0;
 	virtual void top_menu() = 0;
 	virtual void show_quotes() = 0;
 	virtual void show_credits() = 0;
@@ -125,6 +129,8 @@ public:
 	virtual int  get_start_tile_y() = 0;
 	virtual void show_journey_failed() = 0;
 	virtual Shape_frame *get_menu_shape() = 0;
+	void show_congratulations(Palette *pal0);
+	virtual std::vector<unsigned int> get_congratulations_messages() = 0;
 
 	void add_shape(const char *name, int shapenum);
 	int get_shape(const char *name);
@@ -148,6 +154,7 @@ public:
 	inline static void set_ticks(unsigned int t) {
 		ticks = t;
 	}
+	int waitforspeech();
 };
 
 extern Game *game;

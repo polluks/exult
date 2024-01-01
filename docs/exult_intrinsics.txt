@@ -3,8 +3,8 @@ GENERAL DEFINITIONS
 ================================================================================
 
 For Usecode C purposes, the avatar is an NPC just like any other. Constants
-referred to below (usually in ALL CAPS) are defined in 'src/headers/contants.uc'
-unless otherwise stated.
+referred to below (usually in ALL CAPS) are defined in
+'src/headers/constants.uc' unless otherwise stated.
 
 Unlike Usecode C-defined functions, intrinsics do not have a 'prototype'; you
 can pass as many (or as few) parameters to an intrinsic as you like. The only
@@ -303,6 +303,7 @@ npc->si_path_run_usecode(int pos[], int event, object obj, function fun, bool
              its intended destination; if true, the specified usecode function
              will be called even if the destination cannot be reached. The
              set_path_failure intrinsic will override this flag in either case.
+             This failure usecode will use event 'SI_PATH_FAILURE'.
 
 UI_set_path_failure(function fun, object obj, int event)
 
@@ -319,11 +320,17 @@ UI_set_path_failure(function fun, object obj, int event)
              all.
     event    The event that should be used if the usecode function is called.
 
+    ****** SI SPECIFIC ******
+    In the original SI, this could never affect the failure event for
+    si_path_run_usecode, which would always be 14. Exult does not suffer from
+    this limitation.
+    **** END SI SPECIFIC ****
+
 bool UI_in_usecode_path(actor npc)
 bool npc->in_usecode_path()
 
-    Checks whether or not the actor is transversing a path due to
-    path_run_usecode or si_path_run_usecode inteinsics.
+    Checks whether or not the actor is traversing a path due to path_run_usecode
+    or si_path_run_usecode intrinsics.
 
   Parameters:
     npc    The NPC to be checked.
@@ -576,17 +583,32 @@ int UI_get_music_track()
     If music is enabled and a song is playing, returns the track number of the
     current song. Otherwise, return is -1.
 
-     NOTES ABOUT ORIGINAL BG 
+    **** NOTES ABOUT ORIGINAL BG ****
     The return value in the original Black Gate was more complicated; the
     current song was the return value divided by 256, while the next song (the
     one that would be resumed after the current one ends) was the remainder of
     that same division. None of this behavior is true for Exult, which works as
     described above.
-     END NOTES ABOUT ORIGINAL BG 
+    ** END NOTES ABOUT ORIGINAL BG **
 
 bool UI_start_speech(int track)
 
     Plays the specified speech track.
+
+    ****** SI SPECIFIC ******
+    In SI, speech also displays a full-screen face from 'FACES.VGA'.
+    **** END SI SPECIFIC ****
+
+  Parameters:
+    track    Number indicating what speech track is to be played.
+
+  Return:
+    Returns false if failed to play the requested speech track (for example, if
+    speech is disabled), true otherwise.
+
+bool UI_start_blocking_speech(int track)                             [BG, Exult]
+
+    Plays the specified speech track. Blocks until the speech finishes.
 
     ****** SI SPECIFIC ******
     In SI, speech also displays a full-screen face from 'FACES.VGA'.
@@ -685,15 +707,16 @@ object[] UI_find_nearby(mixed loc[4], int shape, int dist, int mask)
 
         MASK_NONE = 0x00               Cannot find eggs, barges, invisible or
                                        transparent objects.
-        MASK_NPC = 0x04                Restricts the search to NPCs. Ignored if
-                                       a non-wildcard shape is given.
-        MASK_NPC2 = 0x08               Restricts the search to NPCs.
+        MASK_NPC = 0x04                Restricts the search to NPCs, alive or
+                                       dead. Ignored if a non-wildcard shape is
+                                       given.
+        MASK_NPC2 = 0x08               Restricts the search to living NPCs.
         MASK_EGG = 0x10                Allows eggs and barges to be found.
         MASK_INVISIBLE = 0x20          Allows invisible objects that are not in
                                        the avatar's party to be found.
         MASK_PARTY_INVISIBLE = 0x40    Allows invisible party members to be
                                        found
-        MASK_TRANLUCENT = 0x80         Allows translucent objects to be found
+        MASK_TRANSLUCENT = 0x80        Allows translucent objects to be found
 
   Return:
     Array containing all objects of matching the given criteria that are located
@@ -721,7 +744,7 @@ bool obj->npc_nearby()
     Finds out if the desired object is on screen and can act. An NPC is
     considered able to act if it is not asleep, paralyzed or dead; other objects
     are always considered able to act. Note that, despite the name, this
-    intrincis can also be used for objects.
+    intrinsic can also be used for objects.
 
   Parameters:
     obj    The object or NPC to be checked.
@@ -974,13 +997,7 @@ object obj->set_last_created()
     Returns zero if the object was already in the 'last created' stack, an
     object reference to the object otherwise.
 
-    ****** BG SPECIFIC ******
-    int UI_update_last_created(int pos[])
-    **** END BG SPECIFIC ****
-
-    ****** SI SPECIFIC ******
-    object UI_update_last_created(int pos[])
-    **** END SI SPECIFIC ****
+bool UI_update_last_created(int pos[])
 
     Pops the last object pushed in the 'last created' stack and places it in the
     game map at the supplied position.
@@ -992,29 +1009,34 @@ object obj->set_last_created()
     meaning of these components is as follows:
 
     * 1 element: the object will be deleted (equivalent to 'remove_item'
-      intrinsic);
-    * 2 elements: mean a (x, y) location. The object is placed at z = 0 in the
-      current game map;
+      intrinsic). The original usecode generally passed '-358' for this
+      parameter, but this is likely just by convention as any value works.
+    * 2 elements: mean a (x, y) location. In Exult, the object is placed at z
+      = 0 in the current game map; in the original games, nothing is done and
+      the update fails.
     * 3 elements: mean a (x, y, z) location. The object is placed in the
-      current game map;
-    * 4 elements: mean a (x, y, z, map) location. The object is placed in the
-      specified map unless it is -1, in which case it will be placed in the
-      current game map.
+      current game map. In Exult, this always succeeds; it could fail in the
+      original games.
+    * 4 elements: mean a (x, y, z, map) location. Exult-only. The object is
+      placed in the specified map unless it is -1, in which case it will be
+      placed in the current game map.
 
   Return:
-    Zero if the 'last created' stack is empty and '1' if the object was deleted.
-    Otherwise:
+    For the 1-element version, false if the 'last created' stack is empty or
+    true if the object was deleted. Otherwise, returns true if object was
+    successfully placed on the map, false otherwise.
 
-    ****** BG SPECIFIC ******
-    If successful, returns 1.
-    **** END BG SPECIFIC ****
+    **** NOTES ABOUT ORIGINAL GAMES ****
+    In the original games, the function could fail to place the item in the map.
+    In this case, it would try to delete an unrelated on-screen object flagged
+    with the TEMPORARY flag to make room for the updated object and retry. The
+    retry could fail again, in which case the update fails; otherwise, it would
+    succeed. This means that, on occasion, using this function could cause
+    objects to be deleted in the original.
+    ** END NOTES ABOUT ORIGINAL GAMES **
 
-    ****** SI SPECIFIC ******
-    If successful, returns a reference to the object.
-    **** END SI SPECIFIC ****
-
-UI_give_last_created(object obj)
-obj->give_last_created()
+bool UI_give_last_created(object obj)
+bool obj->give_last_created()
 
     Gives the last item in the 'last created' stack to the specified container
     or NPC. This intrinsic ignores volume, and is quite likely to succeed; the
@@ -1370,7 +1392,7 @@ int obj->get_item_flag(int flag)
         CANT_DIE           = 14    Object can't die. Used for testing purposes,
                                    and certain critical NPCs (such as L.B.). Can
                                    be inspected only.
-        DANCING            = 15    Object is executing the usecode called by the
+        IN_ACTION          = 15    Object is executing the usecode called by the
                                    Dance spell.
         DONT_MOVE          = 16    SI: The NPC cannot move.
         DONT_RENDER        = 16    BG: The NPC cannot move, and is not rendered
@@ -1379,8 +1401,9 @@ int obj->get_item_flag(int flag)
                                    barges. (Turtle for example.)
         TEMPORARY          = 18    Object is temporary and will decay once the
                                    chunk it is in is un-cached.
-        SAILOR             = 20    Object is the 'captain' of a barge. *Only set
-                                   on NPCs!*
+        ACTIVE_SAILOR      = 20    Object is the 'captain' of a barge.  When
+                                   getting the flag, you will actually get the
+                                   current captain.
         OKAY_TO_LAND       = 21    Set in usecode for flying carpet, TRUE if you
                                    can land currently.
         BG_DONT_MOVE       = 22    BG: BG's version of DONT_MOVE.
@@ -1388,10 +1411,12 @@ int obj->get_item_flag(int flag)
         IN_DUNGEON         = 23    If set on PC or an NPC, they won't trigger
                                    the stealing usecode if they take food
                                    objects.
+        IS_SOLID           = 24    Used by gangplank usecode to determine if an
+                                   object is solid.
         CONFUSED           = 25    This will be set if the avatar failed
                                    copyright protection questions in SI. Only
                                    really meaningful used on the avatar.
-        IN_MOTION          = 26    Object is a barge object moving, or on a
+        ACTIVE_BARGE       = 26    Object is a barge object moving, or on a
                                    barge object that is moving. Set in usecode,
                                    and mostly used for the SI 'NPC' ships such
                                    as the turtle.
@@ -1419,7 +1444,7 @@ int obj->get_item_flag(int flag)
                                    num.
         READ               = 34    Object can read serpent- or rune-script text.
                                    Only really meaningful used on the avatar.
-        PETRA              = 35    Object has switched bodies with petra. This
+        PETRA              = 35    Object has switched bodies with Petra. This
                                    changes the portraits of NPCs according to a
                                    list in the 'avatar_data.txt' file. Only
                                    really meaningful for NPCs in that list.
@@ -1433,10 +1458,11 @@ int obj->get_item_flag(int flag)
 
   Return:
     For most flags, true if the flag is set (that is, in effect), false
-    otherwise. There is one exception, however: The 'SAILOR' flag has a peculiar
-    behavior in that it actually returns an object reference to the last object
-    to have that flag set, or zero if no object has been set or if the flag has
-    been cleared with 'clear_item_flag' intrinsic.
+    otherwise. There is one exception, however: The 'ACTIVE_SAILOR' and
+    'ACTIVE_BARGE' flags have a peculiar behavior in that they actually returns
+    an object reference to the last object to have that flag set, or zero if no
+    object has been set, or if the flag has been cleared with 'clear_item_flag'
+    intrinsic for the given flag.
 
     With the exception of the OKAY_TO_TAKE, TEMPORARY and INVISIBLE flags, these
     flags are valid for NPCs only. You can get, set or clear any of those values
@@ -1458,9 +1484,10 @@ obj->set_item_flag(int flag)
             can be any of the values for the 'flag' parameter of the
             set_item_flag intrinsic.
 
-    In the special case of the 'SAILOR' flag, the supplied object, instead of a
-    flag value. This stored object will be returned by future calls of the
-    'get_item_flag' intrinsic.
+    In the special case of the 'ACTIVE_SAILOR' and 'ACTIVE_BARGE' flags, stores
+    the supplied object, instead of a flag value. This stored object will be
+    returned by future calls of the 'get_item_flag' intrinsic for the given
+    flag.
 
     With the exception of the OKAY_TO_TAKE, TEMPORARY and INVISIBLE flags, these
     flags are valid for NPCs only. You can get, set or clear any of those values
@@ -1482,9 +1509,9 @@ obj->clear_item_flag(int flag)
             it can be any of the values for the 'flag' parameter of the
             set_item_flag intrinsic.
 
-    In the special case of the 'SAILOR' flag, the object that it stores is set
-    to zero. This will be the return of any future calls to the 'get_item_flag'
-    intrinsic.
+    In the special case of the 'ACTIVE_SAILOR' and 'ACTIVE_BARGE' flags, the
+    object that they stores is set to zero. This will be the return of any
+    future calls to the 'get_item_flag' intrinsic for the given flag.
 
     With the exception of the OKAY_TO_TAKE, TEMPORARY and INVISIBLE flags, these
     flags are valid for NPCs only. You can get, set or clear any of those values
@@ -1650,18 +1677,34 @@ int UI_apply_damage(int base, int hits, int type, object obj)
     The type of the damage is a numerical value that describes what kind of
     damage should be caused. It can be one of the following values:
 
-        NORMAL_DAMAGE = 0       Normal damage.
-        FIRE_DAMAGE = 1         Damage from heat sources.
-        MAGIC_DAMAGE = 2        Damage from a magical source.
-        LIGHTNING_DAMAGE = 3    Damage from electrical sources such as
-                                lightning. Extremely painful, even a single
-                                point of damage causes the screen to flash a red
-                                color. This damage ignores all armor and does
-                                not depend on the attacker's strength.
-        ETHEREAL_DAMAGE = 4     Special magical damage, basically magic damage
-                                not blocked by normal magic resistance or armor.
-        SONIC_DAMAGE = 5        Sound-based damage. This damage type ignores
-                                armor.
+        NORMAL_DAMAGE = 0        Normal damage.
+        FIRE_DAMAGE = 1          Damage from heat sources.
+        MAGIC_DAMAGE = 2         Damage from a magical source.
+        LIGHTNING_DAMAGE = 3     Damage from electrical sources such as
+                                 lightning. Extremely painful, even a single
+                                 point of damage causes the screen to flash a
+                                 red color. This damage ignores all armor and
+                                 does not depend on the attacker's strength.
+        POISON_DAMAGE = 3        Damage from poison. Extremely painful, even a
+                                 single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        STARVATION_DAMAGE = 3    Damage from starvation. Extremely painful, even
+                                 a single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        FREEZING_DAMAGE = 3      Damage from frostbite. Extremely painful, even
+                                 a single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        ETHEREAL_DAMAGE = 4      Special magical damage, basically magic damage
+                                 not blocked by normal magic resistance or
+                                 armor.
+        SONIC_DAMAGE = 5         Sound-based damage. This damage type ignores
+                                 armor.
 
     The damage is calculated from a series of generated random numbers. It
     proceeds along the following steps:
@@ -1704,18 +1747,34 @@ obj->reduce_health(int hits, int type)
     The type of the damage is a numerical value that describes what kind of
     damage should be caused. It can be one of the following values:
 
-        NORMAL_DAMAGE = 0       Normal damage.
-        FIRE_DAMAGE = 1         Damage from heat sources.
-        MAGIC_DAMAGE = 2        Damage from a magical source.
-        LIGHTNING_DAMAGE = 3    Damage from electrical sources such as
-                                lightning. Extremely painful, even a single
-                                point of damage causes the screen to flash a red
-                                color. This damage ignores all armor and does
-                                not depend on the attacker's strength.
-        ETHEREAL_DAMAGE = 4     Special magical damage, basically magic damage
-                                not blocked by normal magic resistance or armor.
-        SONIC_DAMAGE = 5        Sound-based damage. This damage type ignores
-                                armor.
+        NORMAL_DAMAGE = 0        Normal damage.
+        FIRE_DAMAGE = 1          Damage from heat sources.
+        MAGIC_DAMAGE = 2         Damage from a magical source.
+        LIGHTNING_DAMAGE = 3     Damage from electrical sources such as
+                                 lightning. Extremely painful, even a single
+                                 point of damage causes the screen to flash a
+                                 red color. This damage ignores all armor and
+                                 does not depend on the attacker's strength.
+        POISON_DAMAGE = 3        Damage from poison. Extremely painful, even a
+                                 single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        STARVATION_DAMAGE = 3    Damage from starvation. Extremely painful, even
+                                 a single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        FREEZING_DAMAGE = 3      Damage from frostbite. Extremely painful, even
+                                 a single point of damage causes the screen to
+                                 flash a red color. This damage ignores all
+                                 armor and does not depend on the attacker's
+                                 strength.
+        ETHEREAL_DAMAGE = 4      Special magical damage, basically magic damage
+                                 not blocked by normal magic resistance or
+                                 armor.
+        SONIC_DAMAGE = 5         Sound-based damage. This damage type ignores
+                                 armor.
 
 int UI_attack_object(object attacker, object target, int weapon)
 int attacker->attack_object(object target, int weapon)
@@ -1817,7 +1876,7 @@ int npc->get_schedule_type()
         WAITER       = 23    SPECIAL            = 24    KID_GAMES        = 25
         TAG          = 25    EAT_AT_INN         = 26    DUEL             = 27
         SPAR         = 27    PREACH             = 28    PATROL           = 29
-        DESK_WORK    = 30    FOLLOW_AVATAR      = 31    
+        DESK_WORK    = 30    FOLLOW_AVATAR      = 31
 
     ****** SI SPECIFIC ******
     If the NPC is traversing a path created by a call to either,
@@ -2056,7 +2115,7 @@ int npc->get_alignment()
     one of the following values:
 
         NEUTRAL    = 0    GOOD    = 1    EVIL    = 2
-        CHAOTIC    = 3    
+        CHAOTIC    = 3
 
 UI_set_alignment(actor npc, int align)
 npc->set_alignment(int align)
@@ -2100,7 +2159,7 @@ int npc->get_attack_mode()
 
         NEAREST    = 0    WEAKEST    = 1    STRONGEST    = 2    BERSERK    = 3
         PROTECT    = 4    DEFEND     = 5    FLANK        = 6    FLEE       = 7
-        RANDOM     = 8    MANUAL     = 9    
+        RANDOM     = 8    MANUAL     = 9
 
 UI_set_attack_mode(actor npc, int mode)
 npc->set_attack_mode(int mode)
@@ -2200,63 +2259,71 @@ npc->is_readied(int spot, int shape, int frame)
     ****** BG SPECIFIC ******
     In BG, the 'spot' parameter is limited to the 0-12 range. It can take any of
     the following values:
-    
-      BG_BACKPACK    =  0    Containers worn on the back, such as backpacks
-      BG_WEAPON_HAND =  1    Item wielded in weapon hand
-      BG_BOTH_HANDS  =  1    Item wielded with both hands
-      BG_SHIELD_HAND =  2    Off-hand is also called the shield hand
-      BG_OFF_HAND    =  2    Item wielded in off-hand
-      BG_BELT        =  3    Items worn around the waist such as belts, girdles
-      BG_TORSO       =  5    Worn on the torso, such as armor
-      BG_LEFT_RING   =  6    Item worn on left finger (ring)
-      BG_RIGHT_RING  =  7    Item worn on right finger (ring)
-      BG_QUIVER      =  8    Arrows held in quiver
-      BG_HEAD        =  9    Items worn on the head such as headbands, helms,
-                             etc
-      BG_LEGS        = 10    Worn on legs, such as greaves
-      BG_FEET        = 11    Worn on feet, such as boots
-      BG_USECODE     = 12    Exult-only. Usecode container, used for containing
-                             eggs 'carried' by player.
-      BG_CLOAK       = 13    Exult-only. Items worn around the neck and back
-                             such as cloaks and capes.
-      BG_GLOVES      = 14    Exult-only. Items worn on both hands, such as
-                             gloves.
-      BG_EARS        = 16    Exult-only. Earrings, such as the serpent earrings
-      BG_BACK_SHIELD = 17    Exult-only. Shield slung across the back
-      BG_BACK_2H     = 19    Exult-only. Weapon slung across the back
-      BG_AMULET      = 22    Exult-only. Items worn on the neck such as a
-                             collar.
-    
+
+      BG_BACKPACK     =  0    Containers worn on the back, such as backpacks
+      BG_WEAPON_HAND  =  1    Item wielded in weapon hand
+      BG_SHIELD_HAND  =  2    Off-hand is also called the shield hand
+      BG_OFF_HAND     =  2    Item wielded in off-hand
+      BG_BELT         =  3    Items worn around the waist such as belts, and
+                              girdles
+      BG_NECK         =  4    Items worn around the neck such as amulets, and
+                              necklaces
+      BG_TORSO        =  5    Worn on the torso, such as armor
+      BG_LEFT_RING    =  6    Item worn on left finger (ring)
+      BG_RIGHT_RING   =  7    Item worn on right finger (ring)
+      BG_QUIVER       =  8    Arrows held in quiver
+      BG_HEAD         =  9    Items worn on the head such as headbands, helms,
+                              etc
+      BG_LEGS         = 10    Worn on legs, such as greaves
+      BG_FEET         = 11    Worn on feet, such as boots
+      BG_USECODE      = 12    Exult-only. Usecode container, used for containing
+                              eggs 'carried' by player
+      BG_CLOAK        = 13    Exult-only. Items worn around the neck and back
+                              such as cloaks and capes
+      BG_GLOVES       = 14    Exult-only. Items worn on both hands, such as
+                              gloves
+      BG_TRIPLE_BOLTS = 15    Special slot used by triple crossbow bolts
+      BG_EARS         = 16    Exult-only. Earrings, such as the serpent earrings
+      BG_BACK_SHIELD  = 17    Exult-only. Shield slung across the back
+      BG_BACK_2H      = 19    Exult-only. Weapon slung across the back
+      BG_BOTH_HANDS   = 20    Special slot for item wielded with both hands
+      BG_LRGLOVES     = 21    Special slot for item wielded with both ring slots
+      BG_AMULET       = 22    Exult-only. Items worn on the neck such as a
+                              collar
+
     **** END BG SPECIFIC ****
 
     ****** SI SPECIFIC ******
     In SI, the 'spot' parameter is limited to the 0-17 range. It can take any of
     the following values:
-    
-      SI_OFF_HAND    =  0    Items wielded in the off-hand.
-      SI_SHIELD_HAND =  0    Off-hand is also called shield hand.
-      SI_WEAPON_HAND =  1    Items wielded in the weapon hand.
-      SI_BOTH_HANDS  =  1    Items worn in both hands technically count as
-                             wielded in the weapon hand.
-      SI_CLOAK       =  2    Items worn around the neck and back such as cloaks
-                             and capes.
-      SI_AMULET      =  3    Items worn on the neck such as a collar.
-      SI_HEAD        =  4    Items worn on the head such as a helm.
-      SI_GLOVES      =  5    Items worn on both hands, such as gloves.
-      SI_USECODE     =  6    Usecode container, used for containing eggs
-                             'carried' by player.
-      SI_RIGHT_RING  =  7    Ring or item worn on right hand.
-      SI_LEFT_RING   =  8    Ring or item worn on left hand.
-      SI_EARS        =  9    Earrings, such as the serpent earrings
-      SI_QUIVER      = 10    Arrows held in quiver
-      SI_BELT        = 11    Worn across the waist, such as belts and girdles
-      SI_TORSO       = 12    Worn on the torso, such as armor
-      SI_FEET        = 13    Worn on feet, such as boots
-      SI_LEGS        = 14    Worn on legs, such as greaves
-      SI_BACKPACK    = 15    Containers worn on the back, such as backpacks
-      SI_BACK_SHIELD = 16    Shield slung across the back
-      SI_BACK_2H     = 17    Weapon slung across the back
-    
+
+      SI_OFF_HAND     =  0    Items wielded in the off-hand
+      SI_SHIELD_HAND  =  0    Off-hand is also called shield hand
+      SI_WEAPON_HAND  =  1    Items wielded in the weapon hand
+      SI_CLOAK        =  2    Items worn around the neck and back such as cloaks
+                              and capes
+      SI_AMULET       =  3    Items worn on the neck such as a collar
+      SI_HEAD         =  4    Items worn on the head such as a helm
+      SI_GLOVES       =  5    Items worn on both hands, such as gloves
+      SI_USECODE      =  6    Usecode container, used for containing eggs
+                              'carried' by player
+      SI_RIGHT_RING   =  7    Ring or item worn on right hand
+      SI_LEFT_RING    =  8    Ring or item worn on left hand
+      SI_EARS         =  9    Earrings, such as the serpent earrings
+      SI_QUIVER       = 10    Arrows held in quiver
+      SI_BELT         = 11    Worn across the waist, such as belts and girdles
+      SI_TORSO        = 12    Worn on the torso, such as armor
+      SI_FEET         = 13    Worn on feet, such as boots
+      SI_LEGS         = 14    Worn on legs, such as greaves
+      SI_BACKPACK     = 15    Containers worn on the back, such as backpacks
+      SI_BACK_SHIELD  = 16    Shield slung across the back
+      SI_BACK_2H      = 17    Weapon slung across the back
+      SI_TRIPLE_BOLTS = 18    Exult-only. Special slot used by triple crossbow
+                              bolts
+      SI_BOTH_HANDS   = 20    Special slot for item wielded with both hands
+      SI_LRGLOVES     = 21    Exult-only. Special slot for item wielded with
+                              both ring slots
+
     **** END SI SPECIFIC ****
 
   Return:
@@ -2595,6 +2662,13 @@ UI_set_timer(int timer)
   Parameters:
     timer    Numeric value indicating the timer to be initialized.
 
+int UI_game_day()
+
+    Gets the game day.
+
+  Return:
+    The current game day, starting with day 0.
+
 int UI_game_hour()
 
     Gets the game hour.
@@ -2745,7 +2819,7 @@ UI_flash_mouse(int cursor)
 
         CURSOR_X              = 1    CURSOR_OUT_OF_RANGE    = 2
         CURSOR_OUT_OF_AMMO    = 3    CURSOR_TOO_HEAVY       = 4
-        CURSOR_WONT_FIT       = 5    
+        CURSOR_WONT_FIT       = 5
 
 UI_ambient_light(bool onoff)                                         [SI, Exult]
 
@@ -2908,14 +2982,14 @@ UI_wizard_eye(int length)
 
 UI_fade_palette(int length, int unk, bool type)
 
-    Causes the screen to fade to/from black.
+    Causes the screen to fade to/from black and plays music.
 
   Parameters:
     length    The length, in ticks, of the fade; that is, how long it will take
               for the fade to happen.
-    unk       Reserved; unknown. This is an unknown parameter from the
-              original games; it is unimplemented in Exult. It cannot be left
-              out, however.
+    unk       Reserved; unknown. This is an unknown parameter from the original
+              games; it is unimplemented in Exult. It cannot be left out,
+              however.
     type      The type of fade. If true, fades from black; if false, fades to
               black.
 
@@ -2928,9 +3002,9 @@ UI_fade_palette_sleep(int length, int unk, bool type)                [SI, Exult]
   Parameters:
     length    The length, in ticks, of the fade; that is, how long it will take
               for the fade to happen.
-    unk       Reserved; unknown. This is an unknown parameter from the
-              original games; it is unimplemented in Exult. It cannot be left
-              out, however.
+    unk       Reserved; unknown. This is an unknown parameter from the original
+              games; it is unimplemented in Exult. It cannot be left out,
+              however.
     type      The type of fade. If true, fades from black; if false, fades to
               black.
 
@@ -2974,10 +3048,19 @@ UI_display_runes(int gump, string runes)
     *    NG
     +    EA
     ,    ST
-    (    TH
 
     Additionally, all lowercase letters will be turned into uppercase letters,
     and pipes ('|') will be converted to spaces.
+
+    When compiling code, UCC accepts some escape sequences to make these strings
+    easier to read:
+
+    (    \{th}
+    )    \{ee}
+    *    \{ng}
+    +    \{ea}
+    ,    \{st}
+    |    \{dot}
 
 UI_book_mode(object obj)
 obj->book_mode()
@@ -3029,8 +3112,30 @@ UI_close_gumps()
 
     Closes all gumps.
 
+    **** IMPORTANT NOTES ****
+    This intrinsic does nothing if called when event == READIED or event ==
+    UNREADIED. See 'UI_close_gumps2' if you need it to work in these cases.
+    ** END IMPORTANT NOTES **
+
+UI_close_gumps2()                                                        [Exult]
+
+    Closes all gumps.
+
 UI_close_gump(object obj)
 obj->close_gump()
+
+    Closes an object's gump.
+
+  Parameters:
+    obj    The object whose gump is to be closed.
+
+    **** IMPORTANT NOTES ****
+    This intrinsic does nothing if called when event == READIED or event ==
+    UNREADIED. See 'UI_close_gump2' if you need it to work in these cases.
+    ** END IMPORTANT NOTES **
+
+UI_close_gump2(object obj)                                               [Exult]
+obj->close_gump2()
 
     Closes an object's gump.
 
@@ -3091,7 +3196,7 @@ UI_sprite_effect(int sprite, int x, int y, int vel_x, int vel_y, int frame, int
     reps      Number of repetitions to execute. If zero, the sprite will be
               displayed for a tick and then go away. If positive, how many times
               the sprite frame will go through all of its frames. If negative,
-              the sprite will go thgouth all of its frames *once*.
+              the sprite will go through all of its frames *once*.
 
 UI_obj_sprite_effect(object obj, int sprite, int rel_x, int rel_y, int vel_x,
         int vel_y, int frnum, int reps)
@@ -3233,16 +3338,38 @@ UI_set_orrery(int pos[3], int state)                                        [BG]
     state    Numeric value in the 0 to 9 range determining the relative
              positions of the planets.
 
-    The intrinsic tries to find 'Planet Britania' near the specified location;
+    The intrinsic tries to find 'Planet Britannia' near the specified location;
     it will delete the nearby planets, if any, and create new ones in the
     required positions.
 
-bool UI_is_water(int pos[3])
+int UI_is_water(object param)
+int param->is_water()
+int UI_is_water(int param[2])
+int UI_is_water(int param[3])
+int UI_is_water(mixed param[4])
 
     Determines if a given tile or object is a water tile.
 
   Parameters:
-    pos    Location of tile or object to be tested.
+    param    The object or location to be tested.
+
+    The parameter can be an object, an array with 2 components, an array with 3
+    components, or an array with 4 components. The interpretation of the
+    parameter is as follows:
+
+        Type         Interpretation/Format
+        object       Exult specific: The parameter is an object or NPC, whose
+                     shape is tested for the water flag.
+        int [2]      The parameter is a (x, y) position specifying a tile to be
+                     tested.
+        int [3]      The parameter is a (x, y, z) position, such as the return
+                     of a UI_get_object_position intrinsic call. Of this
+                     position, (x, y) specifies a tile to be tested.
+        mixed [4]    Exult specific: The parameter is of the form (object, x, y,
+                     z), such as the return of a call to UI_click_on_item
+                     intrinsic. If object is not null, it's shape is tested for
+                     the water flag. Otherwise, (x, y) is used to find and test
+                     the corresponding tile.
 
   Return:
     true if the specified tile or object is a water tile, false otherwise.

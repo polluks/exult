@@ -8,7 +8,7 @@
 #define INCL_SHAPELST   1
 
 /*
-Copyright (C) 1999  Jeffrey S. Freedman
+Copyright (C) 1999-2022 Jeffrey S. Freedman
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,11 +26,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "objbrowse.h"
-#include "shapedraw.h"
 #include "rect.h"
+#include "shapedraw.h"
+
+#include <ctime>
 #include <memory>
 #include <vector>
-#include <ctime>
 
 class Vga_file;
 class Image_buffer8;
@@ -43,12 +44,12 @@ class Editing_file;
 class Shape_entry {
 	friend class Shape_chooser;
 	short shapenum, framenum;   // The given shape/frame.
-	Rectangle box;          // Box where drawn.
+	TileRect box;          // Box where drawn.
 public:
 	void set(int shnum, int frnum, int rx, int ry, int rw, int rh) {
 		shapenum = static_cast<short>(shnum);
 		framenum = static_cast<short>(frnum);
-		box = Rectangle(rx, ry, rw, rh);
+		box = TileRect(rx, ry, rw, rh);
 	}
 };
 
@@ -80,7 +81,7 @@ class Shape_chooser: public Object_browser, public Shape_draw {
 	int last_shape;         // Last shape visible in window.
 	bool frames_mode;       // Show all frames horizontally.
 	int hoffset;            // Horizontal offset in pixels (when in
-	//   frames_mode).
+	                        //   frames_mode).
 	int voffset;            // Vertical offset in pixels.
 	int status_id;          // Statusbar msg. ID.
 	void (*sel_changed)();      // Called when selection changes.
@@ -90,10 +91,6 @@ class Shape_chooser: public Object_browser, public Shape_draw {
 	static int check_editing_timer; // For monitoring files being edited.
 	// Blit onto screen.
 	void show(int x, int y, int w, int h) override;
-	void show() override {
-		Shape_chooser::show(0, 0,
-		                    draw->allocation.width, draw->allocation.height);
-	}
 	void tell_server_shape();   // Tell Exult what shape is selected.
 	void select(int new_sel);   // Show new selection.
 	void render() override;      // Draw list.
@@ -144,8 +141,10 @@ public:
 	// Configure when created/resized.
 	gint configure(GdkEventConfigure *event);
 	// Blit to screen.
-	static gint expose(GtkWidget *widget, GdkEventExpose *event,
-	                   gpointer data);
+	static gint expose(
+	    GtkWidget *widget, cairo_t *cairo, gpointer data);
+	static gboolean on_new_shape_font_color_draw_expose_event(
+	    GtkWidget *widget, cairo_t *cairo, gpointer data);
 	// Handle mouse press.
 	gint mouse_press(GtkWidget *widget, GdkEventButton *event);
 	// Export current frame as a PNG.
@@ -180,10 +179,8 @@ public:
 	void del_frame();
 	// Give dragged shape.
 	static void drag_data_get(GtkWidget *widget, GdkDragContext *context,
-	                          GtkSelectionData *seldata, guint info, guint time, gpointer data);
-	// Someone else selected.
-	static gint selection_clear(GtkWidget *widget,
-	                            GdkEventSelection *event, gpointer data);
+	                          GtkSelectionData *seldata,
+	                          guint info, guint time, gpointer data);
 	static gint drag_begin(GtkWidget *widget, GdkDragContext *context,
 	                       gpointer data);
 	// Handle scrollbar.
@@ -193,13 +190,8 @@ public:
 	static void frame_changed(GtkAdjustment *adj, gpointer data);
 	static void all_frames_toggled(GtkToggleButton *btn,
 	                               gpointer user_data);
-#ifdef _WIN32
-	static gint win32_drag_motion(GtkWidget *widget, GdkEventMotion *event,
-	                              gpointer data);
-#else
 	static gint drag_motion(GtkWidget *widget, GdkEventMotion *event,
 	                        gpointer data);
-#endif
 	// Menu items:
 	static void on_shapes_popup_info_activate(
 	    GtkMenuItem *item, gpointer udata);

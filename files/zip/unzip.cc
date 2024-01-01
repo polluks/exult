@@ -2,7 +2,7 @@
    Version 0.15 beta, Mar 19th, 1998,
 
    Modified by Ryan Nunn. Nov 9th 2001
-
+   Modified by the Exult Team. Nov 10th 2001 - 2022
    Read unzip.h for more info
 */
 
@@ -27,8 +27,77 @@ extern int errno;
 #endif
 using namespace std;
 
-#include "zlib.h"
 #include "unzip.h"
+
+// Some platforms have non-standard filesystem organizations which can cause a
+// simple fopen() to fail.  Exult also only ever uses this library to open files in U7
+// paths.  Redirectiong file I/O to the U7 abstractions addresses both issues.
+#include "../utils.h"
+
+// The U7* functions here map the U7 std::istream API back to standard std:fopen
+// semantics to better match the original unzip source code.
+static void* U7fopen(const char* filename, bool is_text) {
+	auto *handle = new std::unique_ptr<std::istream>;
+	try {
+		*handle = U7open_in(filename, is_text);
+	} catch (...) {
+		delete handle;
+		return nullptr;
+	}
+	return handle;
+}
+
+static std::size_t U7fread(void* buffer, std::size_t size, std::size_t count, void* handle) {
+	std::unique_ptr<std::istream>& stream = *static_cast<std::unique_ptr<std::istream>*>(handle);
+	stream->read(static_cast<char *>(buffer), size * count);
+	return stream->gcount() / size;
+}
+
+static int U7ferror(void* handle) {
+	std::unique_ptr<std::istream>& stream = *static_cast<std::unique_ptr<std::istream>*>(handle);
+	return stream->fail();
+}
+
+static int U7fseek(void* handle, long offset, int origin) {
+	std::unique_ptr<std::istream>& stream = *static_cast<std::unique_ptr<std::istream>*>(handle);
+	std::ios_base::seekdir dir;
+	switch (origin) {
+	case SEEK_SET:
+		dir = std::ios_base::beg;
+		break;
+	case SEEK_CUR:
+		dir = std::ios_base::cur;
+		break;
+	case SEEK_END:
+		dir = std::ios_base::end;
+		break;
+	default:
+		return -1;
+	}
+	stream->seekg(offset, dir);
+	return !stream->good();
+}
+
+static long U7ftell(void* handle) {
+	std::unique_ptr<std::istream>& stream = *static_cast<std::unique_ptr<std::istream>*>(handle);
+	return stream->tellg();
+}
+
+static int U7fclose(void* handle) {
+	auto* streamPointer = static_cast<std::unique_ptr<std::istream>*>(handle);
+	delete streamPointer;
+	return 0;
+}
+
+// Stubbing in the U7 file I/O using macros to minimize changes to the original unzip
+// code.
+#define FILE void
+#define fread U7fread
+#define ferror U7ferror
+#define fseek U7fseek
+#define ftell U7ftell
+#define fclose U7fclose
+
 
 #if !defined(unix) && !defined(CASESENSITIVITYDEFAULT_YES) && \
                       !defined(CASESENSITIVITYDEFAULT_NO)
@@ -64,6 +133,17 @@ using namespace std;
 
 const char unz_copyright[] =
     " unzip 0.15 Copyright 1998 Gilles Vollant ";
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif  // __GNUC__
+static int U7inflateInit2(z_stream *stream) {
+	return inflateInit2(stream, -MAX_WBITS);
+}
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif  // __GNUC__
 
 /* unz_file_info_interntal contain internal info about a file in zipfile*/
 struct unz_file_info_internal {
@@ -125,7 +205,7 @@ struct unz_s {
 
 static int unzlocal_getByte(FILE *fin, int *pi) {
 	unsigned char c;
-	int err = fread(&c, 1, 1, fin);
+	const int err = fread(&c, 1, 1, fin);
 	if (err == 1) {
 		*pi = c;
 		return UNZ_OK;
@@ -143,7 +223,7 @@ static int unzlocal_getByte(FILE *fin, int *pi) {
 */
 static int unzlocal_getShort(FILE *fin, uLong *pX) {
 	uLong x ;
-	int i;
+	int i = 0;
 	int err;
 
 	err = unzlocal_getByte(fin, &i);
@@ -162,7 +242,7 @@ static int unzlocal_getShort(FILE *fin, uLong *pX) {
 
 static int unzlocal_getLong(FILE *fin, uLong *pX) {
 	uLong x ;
-	int i;
+	int i = 0;
 	int err;
 
 	err = unzlocal_getByte(fin, &i);
@@ -320,7 +400,7 @@ extern unzFile ZEXPORT unzOpen(const char *path) {
 	if (unz_copyright[0] != ' ')
 		return nullptr;
 
-	fin = fopen(path, "rb");
+	fin = U7fopen(path, false);
 	if (fin == nullptr)
 		return nullptr;
 
@@ -688,7 +768,7 @@ extern int ZEXPORT unzLocateFile(unzFile file, const char *szFileName, int iCase
 	err = unzGoToFirstFile(file);
 
 	while (err == UNZ_OK) {
-		char szCurrentFileName[UNZ_MAXFILENAMEINZIP + 1];
+		char szCurrentFileName[UNZ_MAXFILENAMEINZIP + 1]{};
 		unzGetCurrentFileInfo(file, nullptr,
 		                      szCurrentFileName, sizeof(szCurrentFileName) - 1,
 		                      nullptr, 0, nullptr, 0);
@@ -855,7 +935,7 @@ extern int ZEXPORT unzOpenCurrentFile(unzFile file) {
 	  pfile_in_zip_read_info->stream.zfree = nullptr;
 	  pfile_in_zip_read_info->stream.opaque = nullptr;
 
-		err = inflateInit2(&pfile_in_zip_read_info->stream, -MAX_WBITS);
+		err = U7inflateInit2(&pfile_in_zip_read_info->stream);
 		if (err == Z_OK)
 			pfile_in_zip_read_info->stream_initialised = 1;
 		/* windowBits is passed < 0 to tell that there is no zlib header.
@@ -971,7 +1051,7 @@ extern int ZEXPORT unzReadCurrentFile(unzFile file, voidp buf, unsigned len) {
 			uLong uTotalOutAfter;
 			const Bytef *bufBefore;
 			uLong uOutThis;
-			int flush = Z_SYNC_FLUSH;
+			const int flush = Z_SYNC_FLUSH;
 
 			uTotalOutBefore = pfile_in_zip_read_info->stream.total_out;
 			bufBefore = pfile_in_zip_read_info->stream.next_out;

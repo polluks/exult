@@ -2,7 +2,7 @@
  *  ucmachine.cc - Interpreter for usecode.
  *
  *  Copyright (C) 1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -42,8 +42,7 @@ class Tile_coord;
  *  Here's our virtual machine for running usecode.  The actual internals
  *  are in Usecode_internal.
  */
-class Usecode_machine : public Game_singletons {
-	UNREPLICATABLE_CLASS(Usecode_machine)
+class Usecode_machine : nonreplicatable, public Game_singletons {
 protected:
 	unsigned char gflags[c_last_gflag + 1]; // Global flags.
 	Keyring *keyring = nullptr;
@@ -66,7 +65,8 @@ public:
 	    readied = 5,        // Wear an item.
 	    unreadied = 6,      // Removed an item.
 	    died = 7,       // In SI only, I think.
-	    chat = 9    // When a NPC wants to talk to you in SI
+	    chat = 9,    // When a NPC wants to talk to you in SI
+		si_path_fail = 14
 	};
 	enum Global_flag_names {
 	    did_first_scene = 0x3b, // Went through 1st scene with Iolo.

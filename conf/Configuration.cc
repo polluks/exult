@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 #include "common_types.h"
 #include "Configuration.h"
 #include "exceptions.h"
+#include "ignore_unused_variable_warning.h"
 #include "utils.h"
 
 #include <cassert>
-#include <cstdio>
 #include <cstdio>
 #include <iostream>
 #include <cstdlib>
@@ -97,23 +97,19 @@ void    Configuration::set(const string &key, const string &value, bool write_ou
 }
 
 void    Configuration::set(const char *key, const char *value, bool write_out) {
-	string  k(key);
-	string  v(value);
+	const string k(key);
+	const string v(value);
 	set(k, v, write_out);
 }
 
 void    Configuration::set(const char *key, const string &value, bool write_out) {
-	string  k(key);
+	const string  k(key);
 	set(k, value, write_out);
 }
 
 void    Configuration::set(const char *key, int value, bool write_out) {
-	string  k(key);
-	string  v;
-	char    buf[32];
-
-	snprintf(buf, 32, "%d", value);
-	v = buf;
+	const string k(key);
+	const string v = std::to_string(value);
 	set(k, v, write_out);
 }
 
@@ -137,13 +133,20 @@ bool    Configuration::read_config_string(const string &s) {
 }
 
 static inline bool is_path_absolute(const string &path) {
-	return (path.find("./") == 0) || (path.find("../") == 0) || (path[0] == '/')
-#if defined(_WIN32)
-	        || (path.find(".\\") == 0) || (path.find("..\\") == 0) || (path[0] == '\\')
-	        || (std::isalpha(path[0]) && path[1] == ':' &&
-	            (path[2] == '/' || path[2] == '\\'))
+#ifdef _WIN32
+	const auto is_win32_abs_path = [](const string &path) {
+			return (path.find(".\\") == 0) || (path.find("..\\") == 0) || (path[0] == '\\')
+			        || (std::isalpha(path[0]) && path[1] == ':' &&
+			            (path[2] == '/' || path[2] == '\\'));
+		};
+#else
+	const auto is_win32_abs_path = [](const string &path) {
+			ignore_unused_variable_warning(path);
+			return false;
+		};
 #endif
-	       ;
+
+	return (path.find("./") == 0) || (path.find("../") == 0) || (path[0] == '/') || is_win32_abs_path(path);
 }
 
 bool    Configuration::read_config_file(const string &input_filename, const string &root) {
@@ -177,10 +180,10 @@ bool    Configuration::read_config_file(const string &input_filename, const stri
 				     << "' is being copied to file '" << fname
 				     << "' and will no longer be used." << endl;
 				try {
-					size_t pos = fname.find_last_of("/\\");
+					const size_t pos = fname.find_last_of("/\\");
 					if (pos != string::npos) {
 						// First, try to make the directory.
-						std::string path = fname.substr(0, pos);
+						const std::string path = fname.substr(0, pos);
 						U7mkdir(path.c_str(), 0755);
 					}
 					U7copy(input_filename.c_str(), fname.c_str());
@@ -208,13 +211,14 @@ bool Configuration::read_abs_config_file(const string &input_filename, const str
 
 	is_file = true; // set to file, even if file not found
 
-	std::ifstream ifile;
+	std::unique_ptr<std::istream> pIfile;
 	try {
-		U7open(ifile, filename.c_str(), true);
+		pIfile = U7open_in(filename.c_str(), true);
 	} catch (exult_exception &) {
 		// configuration file not found
 		return false;
 	}
+	auto& ifile = *pIfile;
 
 	if (ifile.fail())
 		return false;
@@ -227,8 +231,6 @@ bool Configuration::read_abs_config_file(const string &input_filename, const str
 		sbuf += line + "\n";
 		getline(ifile, line);
 	}
-
-	ifile.close();
 
 	CTRACE("Configuration::read_config_file - file read");
 
@@ -252,18 +254,18 @@ void Configuration::write_back() {
 	if (!is_file)
 		return; // Don't write back if not from a file
 
-	std::ofstream ofile;
+	std::unique_ptr<std::ostream> pOfile;
 	try {
-		U7open(ofile, filename.c_str(), true);
+		pOfile = U7open_out(filename.c_str(), true);
 	} catch (const file_open_exception &) {
 		perror("Failed to write configuration file");
 		return;
 	}
+	auto& ofile = *pOfile;
 	if (ofile.fail()) {
 		perror("Failed to write configuration file");
 	}
 	ofile << dump() << endl;
-	ofile.close();
 }
 
 
@@ -277,7 +279,7 @@ std::vector<string> Configuration::listkeys(const string &key, bool longformat) 
 }
 
 std::vector<string> Configuration::listkeys(const char *key, bool longformat) {
-	string s(key);
+	const string s(key);
 	return listkeys(s, longformat);
 }
 

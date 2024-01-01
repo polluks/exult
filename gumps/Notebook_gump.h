@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -42,7 +42,6 @@ public:
  *  A notebook gump represents the in-game journal.
  */
 class Notebook_gump : public Gump {
-	UNREPLICATABLE_CLASS(Notebook_gump)
 	static std::vector<One_note *> notes;// The text.
 	// Indexed by page#.
 	static std::vector<Notebook_top> page_info;
@@ -58,7 +57,7 @@ class Notebook_gump : public Gump {
 	Gump_button *leftpage, *rightpage;
 	// Add new note.
 	static void add_new(const std::string &text, int gflag = -1);
-	bool paint_page(Rectangle const &box, One_note *note, int &offset,
+	bool paint_page(TileRect const &box, One_note *note, int &offset,
 	                int pagenum);
 	bool need_next_page() const {
 		return curpage % 2 == 1 && curpage < static_cast<int>(page_info.size()) - 1 &&

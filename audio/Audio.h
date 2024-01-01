@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,17 +22,28 @@
 #include <map>
 #include <memory>
 #include <vector>
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
 #include <SDL.h>
-#include <SDL_audio.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "AudioMixer.h"
 #include "exceptions.h"
 #include "exult_constants.h"
 #include "Flex.h"
 #include "Midi.h"
+#include <functional>
 
 namespace Pentagram {
 	class AudioSample;
 }
+struct File_spec;
 class Game_object;
 class MyMidiPlayer;
 class SFX_cached;
@@ -61,7 +72,6 @@ enum Combat_song
  */
 class SFX_cache_manager {
 	using SFX_cached = std::pair<int,Pentagram::AudioSample*>;
-	using cache_iterator = std::map<int, SFX_cached>::iterator;
 
 	std::map<int, SFX_cached> cache;
 
@@ -87,10 +97,9 @@ public:
 
 //---- Audio -----------------------------------------------------------
 
-class Audio 
+class Audio : nonreplicatable
 {
 private:
-	UNREPLICATABLE_CLASS(Audio)
 	static	Audio	*self;
 	static	const int *bg2si_songs;	// Converts BG songs to SI songs.
 	static	const int *bg2si_sfxs;	// Converts BG sfx's to SI sfx's.
@@ -101,6 +110,7 @@ private:
 	bool initialized = false;
 	SDL_AudioSpec wanted;
 	std::unique_ptr<Pentagram::AudioMixer> mixer;
+	sint32 speech_id = -1;
 	bool audio_enabled;
 	std::unique_ptr<Flex> sfx_file;			// Holds .wav sound effects.
 	// You never allocate an Audio object directly, you rather access it using get_ptr()
@@ -130,23 +140,27 @@ public:
 	void	pause_audio();
 	void    resume_audio();
 
-	void	copy_and_play(const uint8 *sound_data,uint32 len,bool);
-	void	play(std::unique_ptr<uint8[]> sound_data,uint32 len,bool);
-	void	playfile(const char *,const char *,bool);
+	sint32  copy_and_play(const uint8* sound_data, uint32 len, bool);
+	sint32	play(std::unique_ptr<uint8[]> sound_data,uint32 len,bool);
+	sint32  playfile(const char*, const char*, bool);
 	bool	playing();
 	void	start_music(int num,bool continuous=false,const std::string& flex=MAINMUS);
 	void	start_music(const std::string& fname,int num,bool continuous=false);
 	void	start_music_combat(Combat_song song,bool continuous);
 	void	stop_music();
-	int		play_sound_effect (int num, int volume = AUDIO_MAX_VOLUME,
+	int		play_sound_effect(int num, int volume = AUDIO_MAX_VOLUME,
 					int balance = 0, int repeat = 0, int distance=0);
 	int		play_wave_sfx(int num, int volume = AUDIO_MAX_VOLUME,
 					int balance = 0, int repeat = 0, int distance=0);
+	int		play_sound_effect(int num, const Game_object *obj, int volume = AUDIO_MAX_VOLUME, int repeat = 0);
+	int		play_sound_effect(int num, const Tile_coord &tile, int volume = AUDIO_MAX_VOLUME, int repeat = 0);
+	// These two do not cache the SFX, and play it directly from the file.
+	int		play_sound_effect(const File_spec& sfxfile, int num, int volume = AUDIO_MAX_VOLUME,
+					int balance = 0, int repeat = 0, int distance=0);
+	int		play_wave_sfx(const File_spec& sfxfile, int num, int volume = AUDIO_MAX_VOLUME,
+					int balance = 0, int repeat = 0, int distance=0);
 
 	static void get_2d_position_for_tile(const Tile_coord &tile, int &distance, int &balance);
-
-	int		play_sound_effect (int num, const Game_object *obj, int volume = AUDIO_MAX_VOLUME, int repeat = 0);
-	int		play_sound_effect (int num, const Tile_coord &tile, int volume = AUDIO_MAX_VOLUME, int repeat = 0);
 
 	int		update_sound_effect(int chan, const Game_object *obj);
 	int		update_sound_effect(int chan, const Tile_coord &tile);
@@ -156,9 +170,14 @@ public:
 	void	stop_sound_effects();
 	bool	start_speech(int num,bool wait=false);
 	void	stop_speech();
+	bool    is_speech_playing();
+	int     wait_for_speech(
+				std::function<int(Uint32 ms)> waitfunc
+				= std::function < int(Uint32 ms)>());
 	bool	is_speech_enabled() const { return speech_enabled; }
 	void	set_speech_enabled(bool ena) { speech_enabled = ena; }
 	bool	is_speech_with_subs() const { return speech_with_subs; }
+	void	set_speech_with_subs(bool ena) { speech_with_subs = ena; }
 	bool	is_music_enabled() const { return music_enabled; }
 	void	set_music_enabled(bool ena) { music_enabled = ena; }
 	bool	are_effects_enabled() const { return effects_enabled; }
@@ -174,14 +193,15 @@ public:
 	static bool have_config_sfx(const std::string &game, std::string *out = nullptr);
 	static void	channel_complete_callback(int chan);
 
-	bool	is_track_playing(int num);
+	bool	is_track_playing(int num) const;
+	bool	is_voice_playing() const;
 
-	Flex *get_sfx_file()                   
+	Flex *get_sfx_file()
 		{ return sfx_file.get(); }
 	SFX_cache_manager *get_sfx_cache() const
 		{ return sfxs.get(); }
 
-	MyMidiPlayer *get_midi();
+	MyMidiPlayer *get_midi() const;
 };
 
 #endif

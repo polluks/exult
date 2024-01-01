@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2005 The Pentagram team
-Copyright (C) 2010 The Exult team
+Copyright (C) 2010-2022 The Exult team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -31,6 +31,9 @@ public:
 	void initDecompressor(void *DecompData) const override;
 	uint32 decompressFrame(void *DecompData, void *samples) const override;
 	void freeDecompressor(void *DecompData) const override;
+	bool isVocSample() const override {
+		return true;
+	}
 
 	static bool isThis(IDataSource *ds);
 protected:

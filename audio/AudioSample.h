@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2005 The Pentagram team
-Copyright (C) 2010 The Exult team
+Copyright (C) 2005 The Pentagram Team
+Copyright (C) 2010-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -31,9 +31,7 @@ namespace Pentagram {
 class AudioSample
 {
 protected:
-	uint32	sample_rate;
 	uint32	bits;
-	bool	stereo;
 	int		frame_size;
 	uint32	decompressor_size;
 	uint32	decompressor_align;
@@ -43,6 +41,9 @@ protected:
 	std::unique_ptr<uint8[]> buffer;
 
 	uint32	refcount;
+
+	mutable uint32	sample_rate;
+	mutable bool	stereo;
 
 public:
 	AudioSample(std::unique_ptr<uint8[]> buffer, uint32 size);
@@ -74,6 +75,9 @@ public:
 			delete this;
 	}
 	uint32			getRefCount() { return refcount; }
+	virtual bool isVocSample() const {
+		return false;
+	}
 
 	static AudioSample *createAudioSample(std::unique_ptr<uint8[]> data, uint32 size);
 };

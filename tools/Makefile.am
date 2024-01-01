@@ -1,12 +1,24 @@
-AM_CPPFLAGS = -I$(srcdir)/../headers -I$(srcdir)/../files -I$(srcdir)/../usecode \
-	-I$(srcdir)/.. -I$(srcdir)/../shapes -I$(srcdir)/../imagewin \
-	-I$(srcdir)/../conf $(DEBUG_FLAGS) $(CPPFLAGS) $(SDL_CFLAGS) \
-	$(LIBGNOMEUI_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir)/files -I$(top_srcdir)/usecode \
+	-I$(top_srcdir) -I$(top_srcdir)/shapes -I$(top_srcdir)/imagewin \
+	-I$(top_srcdir)/conf $(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS) $(SDL_CFLAGS) \
+	$(GDK_PIXBUF_CFLAGS)
+
+if CROSS_COMPILING
+if BUILD_TOOLS
+EXPACK_BIN = expack
+else
+EXPACK_BIN =
+endif
+else
+EXPACK_BIN = expack
+endif
 
 if HAVE_PNG
+if HAVE_SDL
 IPACK = ipack
 else
 IPACK =
+endif
 GTHUMB=
 endif
 
@@ -24,7 +36,7 @@ EXTRATOOLS =
 NOINSTTOOLS =
 endif
 
-bin_PROGRAMS = expack $(EXTRATOOLS) $(IPACK) $(GTHUMB)
+bin_PROGRAMS = $(EXPACK_BIN) $(EXTRATOOLS) $(IPACK) $(GTHUMB)
 noinst_PROGRAMS = $(NOINSTTOOLS)
 
 expack_SOURCES = \
@@ -50,7 +62,7 @@ gnome_shp_thumbnailer_LDADD = \
 	../shapes/libshapes.la \
 	../imagewin/libimagewin.la \
 	../files/libu7file.la \
-	-lpng -lz $(SYSLIBS) $(LIBGNOMEUI_LIBS)
+	-lpng -lz $(SYSLIBS) $(GDK_PIXBUF_LIBS)
 
 if BUILD_GTHUMB
 ## Does not work:
@@ -121,6 +133,17 @@ EXTRA_DIST = \
 	u7bgflag.txt \
 	u7siflag.txt \
 	ucformat.txt \
+	expack.1 \
+	gnome_u7shapes.thumbnailer.in \
+	ipack.1 \
+	ipack.txt \
+	shp2pcx.1 \
+	shp2pcx.txt \
+	splitshp.1 \
+	splitshp.txt \
+	textpack.1 \
+	textpack.txt \
+	x-shapefile.xml \
 	expack.txt
 
 CLEANFILES = *~ gnome_u7shapes.thumbnailer

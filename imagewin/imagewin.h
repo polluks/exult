@@ -6,6 +6,7 @@
 
 /*
 Copyright (C) 1998 Jeffrey S. Freedman
+Copyright (C) 2000-2022 The Exult Team
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -26,7 +27,6 @@ Boston, MA  02111-1307, USA.
 #ifndef INCL_IMAGEWIN
 #define INCL_IMAGEWIN   1
 
-//#include "SDL_video.h"
 #include "imagebuf.h"
 #include "common_types.h"
 #include <string>
@@ -34,7 +34,16 @@ Boston, MA  02111-1307, USA.
 #include <memory>
 #include <vector>
 
-#include "SDL_video.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "ignore_unused_variable_warning.h"
 
 struct SDL_Surface;
@@ -93,9 +102,6 @@ public:
 	struct Resolution {
 		sint32 width;
 		sint32 height;
-		bool palette;
-		bool rgb16;
-		bool rgb32;
 	};
 
 	struct ScalerVector : public std::vector<Image_window::ScalerInfo> {
@@ -173,7 +179,8 @@ protected:
 	struct SDL_Window *screen_window;
 	struct SDL_Renderer *screen_renderer;
 	struct SDL_Texture *screen_texture;
-	static int VideoModeOK(int width, int height, int bpp, Uint32 flags);
+        // Returns 0 on failure, else highest bpp for resolution
+	static int VideoModeOK(int width, int height);
 	void UpdateRect(SDL_Surface *surf, int x, int y, int w, int h);
 
 	SDL_Surface *paletted_surface;  // Surface that palette is set on   (Example res)
@@ -279,9 +286,7 @@ protected:
 
 	static int force_bpp;
 	static int desktop_depth;
-	static int windowed_8;
-	static int windowed_16;
-	static int windowed_32;
+	static int windowed;
 	static float nativescale;
 
 public:

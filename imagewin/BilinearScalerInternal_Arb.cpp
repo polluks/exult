@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2005 The Pentagram Team
-Copyright (C) 2010 The Exult Team
+Copyright (C) 2010-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,7 +27,7 @@ template<class uintX, class Manip, class uintS>
 bool BilinearScalerInternal_Arb(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 sw, sint32 sh,
                                 uint8 *pixel, sint32 dw, sint32 dh, sint32 pitch, bool clamp_src) {
 	// Source buffer pointers
-	int tpitch = tex->pitch / sizeof(uintS);
+	const int tpitch = tex->pitch / sizeof(uintS);
 	uintS *texel = static_cast<uintS *>(tex->pixels) + (sy * tpitch + sx);
 	uintS *tline_end = texel + (sw - 1);
 	uintS *tex_end = texel + (sh - 4) * tpitch;
@@ -47,8 +47,8 @@ bool BilinearScalerInternal_Arb(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 s
 	uint32 pos_y = 0;
 	uint32 pos_x = 0;
 
-	uint32 add_y = (sh << 16) / dh;
-	uint32 add_x = (sw << 16) / dw;
+	const uint32 add_y = (sh << 16) / dh;
+	const uint32 add_x = (sw << 16) / dw;
 
 	uint32 start_x = (sw << 16) - (add_x * dw);
 	uint32 dst_y = (sh << 16) - (add_y * dh);
@@ -152,7 +152,7 @@ bool BilinearScalerInternal_Arb(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 s
 			end_y -= 4 << 16;
 			dst_x = pos_x;
 			end_x += 1 << 16;
-		};
+		}
 
 		pixel += pitch - sizeof(uintX) * (dw);
 
@@ -245,7 +245,7 @@ bool BilinearScalerInternal_Arb(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 s
 			end_y -= 4 << 16;
 			dst_x = pos_x;
 			end_x += 1 << 16;
-		};
+		}
 	}
 
 

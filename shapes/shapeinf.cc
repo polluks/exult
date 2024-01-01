@@ -6,7 +6,7 @@
 
 /*
 Copyright (C) 1998  Jeffrey S. Freedman
-Copyright (C) 1999-2013 The Exult Team
+Copyright (C) 1999-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -419,9 +419,8 @@ const Paperdoll_item *Shape_info::get_item_paperdoll(int frame, int spot) const 
 	else if (spot == scabbard)
 		spot = belt;
 	inf.spot = spot;
-	vector<Paperdoll_item>::const_iterator it;
 	// Try finding exact match first.
-	it = std::lower_bound(objpaperdoll.begin(), objpaperdoll.end(), inf);
+	auto it = std::lower_bound(objpaperdoll.begin(), objpaperdoll.end(), inf);
 	if (it == objpaperdoll.end())   // Nowhere to be found.
 		return nullptr;
 	else if (*it == inf && !it->is_invalid())   // Have it already.
@@ -513,7 +512,7 @@ int Shape_info::get_rotated_frame(
 ) const {
 	// Seat is a special case.
 	if (barge_type == barge_seat) {
-		int dir = curframe % 4; // Current dir (0-3).
+		const int dir = curframe % 4; // Current dir (0-3).
 		return (curframe - dir) + (dir + quads) % 4;
 	} else if (is_barge_part())     // Piece of a barge?
 		switch (quads) {

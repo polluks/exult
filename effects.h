@@ -1,7 +1,7 @@
 /*
  *  effects.h - Special effects.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,6 +28,8 @@
 #include "rect.h"
 #include "tqueue.h"
 #include "tiles.h"
+#include <list>
+#include <memory>
 
 class Xform_palette;
 class PathFinder;
@@ -46,21 +48,20 @@ using Game_object_weak = std::weak_ptr<Game_object>;
  */
 class Effects_manager {
 	Game_window *gwin;      // Handy pointer.
-	Special_effect *effects;    // Sprite effects, projectiles, etc.
-	Text_effect *texts;     // Text snippets.
+	std::list<std::unique_ptr<Special_effect>> effects;    // Sprite effects, projectiles, etc.
+	std::list<std::unique_ptr<Text_effect>> texts;     // Text snippets.
 public:
-	Effects_manager(Game_window *g) : gwin(g), effects(nullptr), texts(nullptr)
+	Effects_manager(Game_window *g) : gwin(g)
 	{  }
 	~Effects_manager();
 	// Add text item.
 	void add_text(const char *msg, Game_object *item);
 	void add_text(const char *msg, int x, int y);
 	void center_text(const char *msg);
-	void add_effect(Special_effect *effect);
-	void add_text_effect(Text_effect *effect);
+	void add_effect(std::unique_ptr<Special_effect> effect);
 	void remove_text_effect(Game_object *item);
 	// Remove text item & delete it.
-	void remove_effect(Special_effect *effect);
+	std::unique_ptr<Special_effect> remove_effect(Special_effect *effect);
 	void remove_text_effect(Text_effect *txt);
 	void remove_all_effects(bool repaint = false);
 	void remove_text_effects();
@@ -77,12 +78,17 @@ public:
  *  Base class for special-effects:
  */
 class Special_effect : public Time_sensitive, public Game_singletons {
-	Special_effect *next = nullptr, *prev = nullptr;    // All of them are chained together.
+protected:
+	Game_window *gwin;
 public:
-	friend class Effects_manager;
+	Special_effect();
+	~Special_effect() override;
 	// Render.
 	virtual void paint();
-	virtual bool is_weather() {  // Need to distinguish weather.
+	virtual bool is_weather() const {  // Need to distinguish weather.
+		return false;
+	}
+	virtual bool is_usecode_lightning() const {
 		return false;
 	}
 };
@@ -207,20 +213,19 @@ public:
  *  Game_window.
  */
 class Text_effect : public Time_sensitive, public Game_singletons {
-	Text_effect *next, *prev;   // All of them are chained together.
+	Game_window *gwin;
 	std::string msg;        // What to print.
 	Game_object_weak item;      // Item text is on.  May be null.
 	Tile_coord tpos;        // Position to display it at.
-	Rectangle pos;
+	TileRect pos;
 	short width, height;        // Dimensions of rectangle.
 	int num_ticks;          // # ticks passed.
 	void add_dirty();
 	void init();
-	Rectangle Figure_text_pos();
+	TileRect Figure_text_pos();
 public:
-	friend class Effects_manager;
-	Text_effect(const std::string &m, Game_object *it);
-	Text_effect(const std::string &m, int t_x, int t_y);
+	Text_effect(const std::string &m, Game_object *it, Game_window* gwin_);
+	Text_effect(const std::string &m, int t_x, int t_y, Game_window* gwin_);
 	// At timeout, remove from screen.
 	void handle_event(unsigned long curtime, uintptr udata) override;
 	// Render.
@@ -230,6 +235,7 @@ public:
 	    return it == item.lock().get();
 	}
 	virtual void update_dirty();
+	~Text_effect() override;
 };
 
 /*
@@ -244,7 +250,7 @@ public:
 	Weather_effect(int duration, int delay, int n, Game_object *egg = nullptr);
 	// Avatar out of range?
 	bool out_of_range(Tile_coord &avpos, int dist);
-	bool is_weather() override {
+	bool is_weather() const override {
 		return true;
 	}
 	int get_num() {
@@ -278,6 +284,9 @@ public:
 	{ }
 	bool from_usecode() const {
 		return fromusecode;
+	}
+	bool is_usecode_lightning() const override {
+		return from_usecode();
 	}
 	~Lightning_effect() override;
 	// Execute when due.
@@ -341,7 +350,7 @@ public:
  */
 class Clouds_effect : public Weather_effect {
 	int num_clouds;
-	Cloud **clouds;         // ->clouds.
+	std::vector<std::unique_ptr<Cloud>> clouds;	
 	bool overcast;
 public:
 	Clouds_effect(int duration, int delay = 0, Game_object *egg = nullptr, int n = -1);
@@ -370,8 +379,9 @@ public:
  */
 class Fire_field_effect : public Special_effect {
 	Game_object_weak field;     // What we create.
+	int remaining_ticks;
 public:
-	Fire_field_effect(Tile_coord const &t);
+	Fire_field_effect(Tile_coord const &t, int base_lifespan, bool endless);
 	void handle_event(unsigned long curtime, uintptr udata) override;
 };
 

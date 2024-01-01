@@ -21,13 +21,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef COREAUDIOMIDIDRIVER_H_INCLUDED
 #define COREAUDIOMIDIDRIVER_H_INCLUDED
 
-#if defined(MACOSX)
+#if defined(MACOSX) || defined(__IPHONEOS__)
 #define USE_CORE_AUDIO_MIDI
 
 #include "LowLevelMidiDriver.h"
 
 #include <AudioToolbox/AUGraph.h>
-#include <CoreServices/CoreServices.h>
 
 class CoreAudioMidiDriver : public LowLevelMidiDriver {
 	AUGraph _auGraph;
@@ -55,6 +54,6 @@ protected:
 	void        yield() override;
 };
 
-#endif //MACOSX
+#endif //MACOSX || __IPHONEOS__
 
 #endif //COREAUDIOMIDIDRIVER_H_INCLUDED

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -45,7 +45,7 @@ public:
 	// Return false if no path can be traced.
 	// Return true if path found
 	bool NewPath(Tile_coord const &s, Tile_coord const &d,
-	            Pathfinder_client *client) override;
+	            Pathfinder_client const *client) override;
 
 	// Retrieve the coordinates of the next step on the path
 	bool GetNextStep(Tile_coord &n, bool &done) override;

@@ -1,7 +1,7 @@
 /*
  *  gamedat.cc - Create gamedat files from a savegame.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -65,7 +65,6 @@
 #   define offsetof(type, field) reinterpret_cast<long>(&(static_cast<type *>(0)->field))
 #endif
 
-using std::cerr;
 using std::cout;
 using std::stringstream;
 using std::istream;
@@ -74,20 +73,16 @@ using std::string;
 using std::endl;
 using std::ifstream;
 using std::ios;
-using std::memset;
 using std::ofstream;
 using std::ostream;
 using std::size_t;
 using std::strchr;
 using std::strcmp;
-using std::strcpy;
-using std::strlen;
 using std::strncpy;
 using std::time_t;
 using std::tm;
 using std::localtime;
 using std::time;
-using std::vector;
 
 // Save game compression level
 extern int save_compression;
@@ -101,7 +96,7 @@ void Game_window::restore_flex_files(
     const char *basepath
 ) {
 	in.seek(0x54);          // Get to where file count sits.
-	int numfiles = in.read4();
+	const int numfiles = in.read4();
 	in.seek(0x80);          // Get to file info.
 	// Read pos., length of each file.
 	long *finfo = new long[2 * numfiles];
@@ -110,7 +105,7 @@ void Game_window::restore_flex_files(
 		finfo[2 * i] = in.read4();  // The position, then the length.
 		finfo[2 * i + 1] = in.read4();
 	}
-	int baselen = strlen(basepath);
+	const int baselen = strlen(basepath);
 	for (i = 0; i < numfiles; i++) { // Now read each file.
 		// Get file length.
 		size_t len = finfo[2 * i + 1];
@@ -151,14 +146,15 @@ void Game_window::restore_flex_files(
 			}
 			continue;
 		}
-		ofstream out;
-		U7open(out, fname);
+		auto pOut = U7open_out(fname);
+		if (!pOut)
+			abort("Error opening '%s'.", fname);
+		auto& out = *pOut;
 		out.write(buf, len);    // Then write it out.
 		delete [] buf;
 		if (!out.good())
 			abort("Error writing '%s'.", fname);
-		out.close();
-		CYCLE_RED_PLASMA();
+		cycle_load_palette();
 	}
 	delete [] finfo;
 }
@@ -177,7 +173,7 @@ void Game_window::restore_gamedat(
 ) {
 	// Check IDENTITY.
 	string id = get_game_identity(fname, Game::get_gametitle());
-	string static_identity = get_game_identity(INITGAME, Game::get_gametitle());
+	const string static_identity = get_game_identity(INITGAME, Game::get_gametitle());
 	// Note: "*" means an old game.
 	if (id.empty() || (id[0] != '*' && static_identity != id)) {
 		std::string msg("Wrong identity '");
@@ -193,12 +189,8 @@ void Game_window::restore_gamedat(
 		return;
 #endif
 
-	ifstream in_stream;
-
-#ifdef RED_PLASMA
 	// Display red plasma during load...
 	setup_load_palette();
-#endif
 
 	U7mkdir("<GAMEDAT>", 0755);     // Create dir. if not already there. Don't
 	// use GAMEDAT define cause that's got a
@@ -235,9 +227,7 @@ void Game_window::restore_gamedat(
 
 	cout.flush();
 
-#ifdef RED_PLASMA
 	load_palette_timer = 0;
-#endif
 }
 
 /*
@@ -339,19 +329,18 @@ void Game_window::save_gamedat(
 #endif
 
 	// setup correct file list
-	int numsavefiles = (Game::get_game_type() == BLACK_GATE) ?
+	const int numsavefiles = (Game::get_game_type() == BLACK_GATE) ?
 	                   bgnumsavefiles : sinumsavefiles;
 	const char **savefiles = (Game::get_game_type() == BLACK_GATE) ?
 	                         bgsavefiles : sisavefiles;
 
 	OFileDataSource out(fname);
-	vector<Game_map *>::iterator it;
 	int count = numsavefiles;   // Count up #files to write.
 	count += 12 * 12 - 1; // First map outputs IREG's directly to
 	// gamedat flex, while all others have a flex
 	// of their own contained in gamedat flex.
-	for (it = maps.begin(); it != maps.end(); ++it)
-		if (*it)
+	for (auto *map : maps)
+		if (map)
 			count++;
 	// Use samename for title.
 	Flex_writer flex(out, savename, count);
@@ -360,12 +349,12 @@ void Game_window::save_gamedat(
 		Savefile(flex, savefiles[i]);
 	}
 	// Now the Ireg's.
-	for (it = maps.begin(); it != maps.end(); ++it) {
-		if (!*it)
+	for (auto *map : maps) {
+		if (!map)
 			continue;
-		if (!(*it)->get_num())
+		if (!map->get_num())
 			// Map 0 is a special case.
-			save_gamedat_chunks(*it, flex);
+			save_gamedat_chunks(map, flex);
 		else {
 			// Multimap directory entries. Each map is stored in their
 			// own flex file contained inside the general gamedat flex.
@@ -375,9 +364,9 @@ void Game_window::save_gamedat(
 			OStreamDataSource outds(&outbuf);
 			{
 				Flex_writer flexbuf(outds,
-			                        (*it)->get_mapped_name(GAMEDAT, dname), 12 * 12);
+			                        map->get_mapped_name(GAMEDAT, dname), 12 * 12);
 				// Save chunks to memory flex
-				save_gamedat_chunks(*it, flexbuf);
+				save_gamedat_chunks(map, flexbuf);
 			}
 			outbuf.seekg(0);
 			IStreamDataSource inds(&outbuf);
@@ -416,9 +405,13 @@ void Game_window::read_save_names(
 		char fname[50];     // Set up name.
 		snprintf(fname, 50, SAVENAME, static_cast<int>(i),
 		         GAME_BG ? "bg" : (GAME_SI ? "si" : "dev"));
-		ifstream in;
 		try {
-			U7open(in, fname);
+			auto pIn = U7open_in(fname);
+			if (!pIn) {        // Okay if file not there.
+			    save_names[i] = newstrdup("");
+			    continue;
+			}
+			auto& in = *pIn;
 			char buf[0x50];     // It's at start of file.
 			memset(buf, 0, sizeof(buf));
 			in.read(buf, sizeof(buf) - 1);
@@ -426,7 +419,6 @@ void Game_window::read_save_names(
 				save_names[i] = newstrdup(buf);
 			else
 				save_names[i] = newstrdup("");
-			in.close();
 		} catch (const file_exception & /*f*/) {
 			save_names[i] = newstrdup("");
 		}
@@ -445,12 +437,12 @@ void Game_window::write_saveinfo() {
 		}
 	}
 
-	int party_size = party_man->get_count() + 1;
+	const int party_size = party_man->get_count() + 1;
 
 	{
 		OFileDataSource out(GSAVEINFO);   // Open file; throws an exception - Don't care
 
-		time_t t = time(nullptr);
+		const time_t t = time(nullptr);
 		tm *timeinfo = localtime(&t);
 
 		// This order must match struct SaveGame_Details
@@ -487,7 +479,7 @@ void Game_window::write_saveinfo() {
 				npc = get_npc(party_man->get_member(i - 1));
 
 			char name[18];
-			std::string namestr = npc->get_npc_name();
+			const std::string namestr = npc->get_npc_name();
 			strncpy(name, namestr.c_str(), 18);
 			out.write(name, 18);
 			out.write2(npc->get_shapenum());
@@ -524,9 +516,9 @@ void Game_window::write_saveinfo() {
 
 	{
 		// Current Exult version
-		ofstream out_stream;
-		U7open(out_stream, GEXULTVER);     // Open file; throws an exception - Don't care
-		getVersionInfo(out_stream);
+		auto out_stream = U7open_out(GEXULTVER);     // Open file; throws an exception - Don't care
+		if (out_stream)
+			getVersionInfo(*out_stream);
 	}
 
 	// Exult version that started this game
@@ -623,7 +615,7 @@ bool Game_window::get_saveinfo(int num, char *&name, std::unique_ptr<Shape_file>
 
 	// Now get dir info
 	in.seek(0x54);          // Get to where file count sits.
-	size_t numfiles = in.read4();
+	const size_t numfiles = in.read4();
 	in.seek(0x80);          // Get to file info.
 	// Read pos., length of each file.
 	auto finfo = std::make_unique<uint32[]>(2 * numfiles);
@@ -643,7 +635,7 @@ bool Game_window::get_saveinfo(int num, char *&name, std::unique_ptr<Shape_file>
 		char fname[50];     // Set up name.
 		strcpy(fname, GAMEDAT);
 		in.read(&fname[sizeof(GAMEDAT) - 1], 13);
-		size_t namelen = strlen(fname);
+		const size_t namelen = strlen(fname);
 		// Watch for names ending in '.'.
 		if (fname[namelen - 1] == '.')
 			fname[namelen - 1] = 0;
@@ -698,7 +690,7 @@ bool Game_window::get_saveinfo_zip(const char *fname, char *&name, std::unique_p
 	// If a flex, so can't read it
 	if (Flex::is_flex(fname)) return false;
 
-	std::string filestr = get_system_path(fname);
+	const std::string filestr = get_system_path(fname);
 	unzFile unzipfile = unzOpen(filestr.c_str());
 	if (!unzipfile) return false;
 
@@ -784,11 +776,11 @@ bool Game_window::Restore_level2(
 			return false;
 		}
 		const unsigned char *ptr = size_buffer;
-		int size = Read4(ptr);
+		const int size = Read4(ptr);
 
 		if (size) {
 			// Watch for names ending in '.'.
-			int namelen = strlen(oname);
+			const int namelen = strlen(oname);
 			if (oname[namelen - 1] == '.')
 				oname[namelen - 1] = 0;
 
@@ -802,8 +794,12 @@ bool Game_window::Restore_level2(
 			}
 
 			// Then write it out.
-			ofstream out;
-			U7open(out, oname);
+			auto pOut = U7open_out(oname);
+			if (!pOut) {
+				std::cerr << "couldn't open " << oname<< std::endl;
+				return false;
+			}
+			auto& out = *pOut;
 			out.write(buf, size);
 
 			delete [] buf;
@@ -811,8 +807,7 @@ bool Game_window::Restore_level2(
 				std::cerr << "out was bad" << std::endl;
 				return false;
 			}
-			out.close();
-			CYCLE_RED_PLASMA();
+			cycle_load_palette();
 		}
 	}
 
@@ -835,11 +830,9 @@ bool Game_window::restore_gamedat_zip(
 	} catch (const file_exception & /*f*/) {
 		return false;       // Ignore if not found.
 	}
-#ifdef RED_PLASMA
 	// Display red plasma during load...
 	setup_load_palette();
-#endif
-	std::string filestr = get_system_path(fname);
+	const std::string filestr = get_system_path(fname);
 	unzFile unzipfile = unzOpen(filestr.c_str());
 	if (!unzipfile) return false;
 
@@ -883,7 +876,7 @@ bool Game_window::restore_gamedat_zip(
 		                      nullptr, 0,
 		                      nullptr, 0);
 		// Get the needed buffer size.
-		int filenamelen = file_info.size_filename;
+		const int filenamelen = file_info.size_filename;
 		unzGetCurrentFileInfo(unzipfile, nullptr,
 		                      oname2, filenamelen,
 		                      nullptr, 0,
@@ -891,7 +884,7 @@ bool Game_window::restore_gamedat_zip(
 		oname2[filenamelen] = 0;
 
 		// Get file length.
-		int len = file_info.uncompressed_size;
+		const int len = file_info.uncompressed_size;
 		if (len <= 0)
 			continue;
 
@@ -913,7 +906,7 @@ bool Game_window::restore_gamedat_zip(
 		}
 
 		// Watch for names ending in '.'.
-		int namelen = strlen(oname);
+		const int namelen = strlen(oname);
 		if (oname[namelen - 1] == '.')
 			oname[namelen - 1] = 0;
 		// Watch out for multimap games.
@@ -937,27 +930,26 @@ bool Game_window::restore_gamedat_zip(
 			abort("Error reading current from zip '%s'.", fname);
 
 		// now write it out.
-		ofstream out;
-		U7open(out, oname);
+		auto pOut = U7open_out(oname);
+		if (!pOut)
+		    abort("Error opening '%s'.", oname);
+		auto& out = *pOut;
 		out.write(buf, len);
 		if (!out.good()) abort("Error writing to '%s'.", oname);
-		out.close();
 
 		// Close the file in the zip
 		if (unzCloseCurrentFile(unzipfile) != UNZ_OK)
 			abort("Error closing current in zip '%s'.", fname);
 		delete [] buf;
 
-		CYCLE_RED_PLASMA();
+		cycle_load_palette();
 	} while (unzGoToNextFile(unzipfile) == UNZ_OK);
 
 	unzClose(unzipfile);
 
 	cout.flush();
 
-#ifdef RED_PLASMA
 	load_palette_timer = 0;
-#endif
 
 	return true;
 }
@@ -972,8 +964,8 @@ static bool Save_level1(zipFile zipfile, const char *fname) {
 		throw file_read_exception(fname);
 	}
 
-	unsigned int size = ds.getSize();
-	auto buf = ds.readN(size);
+	const size_t size = ds.getSize();
+	const auto buf = ds.readN(size);
 
 	zipOpenNewFileInZip(zipfile, remove_dir(fname), nullptr, nullptr, 0,
 	                    nullptr, 0, nullptr, Z_DEFLATED, Z_BEST_COMPRESSION);
@@ -1008,8 +1000,8 @@ static bool Save_level2(zipFile zipfile, const char *fname) {
 		throw file_read_exception(fname);
 	}
 
-	size_t size = ds.getSize();
-	char *buf = new char[size < 13 ? 13 : size]; // We want at least 13 bytes
+	const size_t size = ds.getSize();
+	char * const buf = new char[size < 13 ? 13 : size]; // We want at least 13 bytes
 
 	// Filename first
 	memset(buf, 0, 13);
@@ -1052,7 +1044,7 @@ static bool End_level2(zipFile zipfile) {
 	if (err == ZIP_OK) err = zipWriteInFileInZip(zipfile, &zeros, 4);
 	if (err == ZIP_OK) err = zipWriteInFileInZip(zipfile, &zeros, 4);
 
-	return zipCloseFileInZip(zipfile) == ZIP_OK;
+	return zipCloseFileInZip(zipfile) == ZIP_OK && err == ZIP_OK;
 }
 
 
@@ -1065,24 +1057,22 @@ bool Game_window::save_gamedat_zip(
 	if (save_compression < 1) return false;
 
 	// setup correct file list
-	int numsavefiles = (Game::get_game_type() == BLACK_GATE) ?
+	const int numsavefiles = (Game::get_game_type() == BLACK_GATE) ?
 	                   bgnumsavefiles : sinumsavefiles;
 	const char **savefiles = (Game::get_game_type() == BLACK_GATE) ?
 	                         bgsavefiles : sisavefiles;
-	vector<Game_map *>::iterator it;
 
 	// Name
 	{
-		ofstream out;
 		char title[0x50];
 		memset(title, 0, 0x50);
 		std::strncpy(title, savename, 0x50);
-		U7open(out, fname);
-		out.write(title, 0x50);
-		out.close();
+		auto out = U7open_out(fname);
+		if (out)
+			out->write(title, 0x50);
 	}
 
-	std::string filestr = get_system_path(fname);
+	const std::string filestr = get_system_path(fname);
 	zipFile zipfile = zipOpen(filestr.c_str(), 1);
 
 	// Level 1 Compression
@@ -1091,14 +1081,14 @@ bool Game_window::save_gamedat_zip(
 			Save_level1(zipfile, savefiles[i]);
 
 		// Now the Ireg's.
-		for (it = maps.begin(); it != maps.end(); ++it) {
-			if (!*it)
+		for (auto *map : maps) {
+			if (!map)
 				continue;
 			for (int schunk = 0; schunk < 12 * 12; schunk++) {
 				//Check to see if the ireg exists before trying to
 				//save it; prevents crash when creating new maps
 				//for existing games
-				if (U7exists((*it)->get_schunk_file_name(U7IREG,
+				if (U7exists(map->get_schunk_file_name(U7IREG,
 				             schunk, iname)))
 					Save_level1(zipfile, iname);
 			}
@@ -1119,20 +1109,20 @@ bool Game_window::save_gamedat_zip(
 			Save_level2(zipfile, savefiles[i]);
 
 		// Now the Ireg's.
-		for (it = maps.begin(); it != maps.end(); ++it) {
-			if (!*it)
+		for (auto *map : maps) {
+			if (!map)
 				continue;
-			if ((*it)->get_num() != 0) {
+			if (map->get_num() != 0) {
 				// Finish the open file (GAMEDAT or mapXX).
 				End_level2(zipfile);
 				// Start the next file (mapXX).
-				Begin_level2(zipfile, (*it)->get_num());
+				Begin_level2(zipfile, map->get_num());
 			}
 			for (int schunk = 0; schunk < 12 * 12; schunk++)
 				//Check to see if the ireg exists before trying to
 				//save it; prevents crash when creating new maps
 				//for existing games
-				if (U7exists((*it)->get_schunk_file_name(U7IREG,
+				if (U7exists(map->get_schunk_file_name(U7IREG,
 				             schunk, iname)))
 					Save_level2(zipfile, iname);
 		}

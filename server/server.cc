@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -55,6 +55,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <sys/un.h>
 #endif
 
+#include "array_size.h"
 #include "server.h"
 #include "servemsg.h"
 #include "utils.h"
@@ -75,8 +76,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef _WIN32
 #include "servewin32.h"
-#include "cheat.h"
 #endif
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 using std::cout;
 using std::cerr;
@@ -84,7 +94,6 @@ using std::endl;
 /*
  *  Sockets, etc.
  */
-extern int xfd;             // X-windows fd.
 int listen_socket = -1;         // Listen here for map-editor.
 int client_socket = -1;         // Socket to the map-editor.
 int highest_fd = -1;            // Largest fd + 1.
@@ -94,7 +103,7 @@ int highest_fd = -1;            // Largest fd + 1.
  */
 inline void Set_highest_fd(
 ) {
-	highest_fd = xfd;       // Figure highest to listen to.
+	highest_fd = -1;       // Figure highest to listen to.
 	if (listen_socket > highest_fd)
 		highest_fd = listen_socket;
 	if (client_socket > highest_fd)
@@ -109,7 +118,7 @@ inline void Set_highest_fd(
 void Server_init(
 ) {
 	// Get location of socket file.
-	std::string servename = get_system_path(EXULT_SERVER);
+	const std::string servename = get_system_path(EXULT_SERVER);
 #ifndef _WIN32
 	// Make sure it isn't there.
 	unlink(servename.c_str());
@@ -182,6 +191,8 @@ void Server_close(
 	listen_socket = client_socket = -1;
 #else
 	// unlink socket file+++++++
+	std::string servename = get_system_path(EXULT_SERVER);
+	unlink(servename.c_str());
 #endif
 }
 
@@ -195,11 +206,15 @@ static void Handle_client_message(
 ) {
 	unsigned char data[Exult_server::maxlength];
 	Exult_server::Msg_type id;
-	int datalen = Exult_server::Receive_data(fd, id, data, sizeof(data));
+	const int datalen = Exult_server::Receive_data(fd, id, data, sizeof(data));
 	if (datalen < 0)
 		return;
 	const unsigned char *ptr = &data[0];
 	Game_window *gwin = Game_window::get_instance();
+	auto unhandled_message = [](Exult_server::Msg_type id) {
+		cout << "Unhandled message received from Exult Studio (id = "
+		     << id << ")" << endl;
+	};
 	switch (id) {
 	case Exult_server::obj:
 		Game_object::update_from_studio(&data[0], datalen);
@@ -232,19 +247,19 @@ static void Handle_client_message(
 		gwin->read_map();
 		break;
 	case Exult_server::map_editing_mode: {
-		int onoff = Read2(ptr);
+		const int onoff = Read2(ptr);
 		if ((onoff != 0) != cheat.in_map_editor())
 			cheat.toggle_map_editor();
 		break;
 	}
 	case Exult_server::tile_grid: {
-		int onoff = Read2(ptr);
+		const int onoff = Read2(ptr);
 		if ((onoff != 0) != cheat.show_tile_grid())
 			cheat.toggle_tile_grid();
 		break;
 	}
 	case Exult_server::edit_lift: {
-		int lift = Read2(ptr);
+		const int lift = Read2(ptr);
 		cheat.set_edit_lift(lift);
 		break;
 	}
@@ -252,11 +267,11 @@ static void Handle_client_message(
 		gwin->reload_usecode();
 		break;
 	case Exult_server::locate_terrain: {
-		int tnum = Read2(ptr);
+		const int tnum = Read2(ptr);
 		int cx = Read2s(ptr);
 		int cy = Read2s(ptr);
-		bool up = *ptr++ != 0;
-		bool okay = gwin->get_map()->locate_terrain(tnum, cx, cy, up);
+		const bool up = *ptr++ != 0;
+		const bool okay = gwin->get_map()->locate_terrain(tnum, cx, cy, up);
 		unsigned char *wptr = &data[2];
 		// Set back reply.
 		Write2(wptr, cx);
@@ -268,8 +283,8 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::swap_terrain: {
-		int tnum = Read2(ptr);
-		bool okay = Game_map::swap_terrains(tnum);
+		const int tnum = Read2(ptr);
+		const bool okay = Game_map::swap_terrains(tnum);
 		unsigned char *wptr = &data[2];
 		*wptr++ = okay ? 1 : 0;
 		Exult_server::Send_data(client_socket,
@@ -277,9 +292,9 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::insert_terrain: {
-		int tnum = Read2s(ptr);
-		bool dup = *ptr++ != 0;
-		bool okay = Game_map::insert_terrain(tnum, dup);
+		const int tnum = Read2s(ptr);
+		const bool dup = *ptr++ != 0;
+		const bool okay = Game_map::insert_terrain(tnum, dup);
 		unsigned char *wptr = &data[3];
 		*wptr++ = okay ? 1 : 0;
 		Exult_server::Send_data(client_socket,
@@ -287,8 +302,8 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::delete_terrain: {
-		int tnum = Read2s(ptr);
-		bool okay = Game_map::delete_terrain(tnum);
+		const int tnum = Read2s(ptr);
+		const bool okay = Game_map::delete_terrain(tnum);
 		unsigned char *wptr = &data[2];
 		*wptr++ = okay ? 1 : 0;
 		Exult_server::Send_data(client_socket,
@@ -297,7 +312,7 @@ static void Handle_client_message(
 	}
 	case Exult_server::send_terrain: {
 		// Send back #, total, 512-bytes data.
-		int tnum = Read2s(ptr);
+		const int tnum = Read2s(ptr);
 		unsigned char *wptr = &data[2];
 		Write2(wptr, gwin->get_map()->get_num_chunk_terrains());
 		Chunk_terrain *ter = Game_map::get_terrain(tnum);
@@ -309,10 +324,10 @@ static void Handle_client_message(
 	}
 	case Exult_server::terrain_editing_mode: {
 		// 1=on, 0=off, -1=undo.
-		int onoff = Read2s(ptr);
+		const int onoff = Read2s(ptr);
 		// skip_lift==0 <==> terrain-editing.
 		gwin->skip_lift = onoff == 1 ? 0 : 256;
-		static const char *msgs[3] = {"Terrain-Editing Aborted",
+		static const char * const msgs[3] = {"Terrain-Editing Aborted",
 		                              "Terrain-Editing Done",
 		                              "Terrain-Editing Enabled"
 		                             };
@@ -326,18 +341,18 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::set_edit_shape: {
-		int shnum = Read2s(ptr);
-		int frnum = Read2s(ptr);
+		const int shnum = Read2s(ptr);
+		const int frnum = Read2s(ptr);
 		cheat.set_edit_shape(shnum, frnum);
 		break;
 	}
 	case Exult_server::view_pos: {
-		int tx = Read4(ptr);
+		const int tx = Read4(ptr);
 		if (tx == -1) {     // This is a query?
 			gwin->send_location();
 			break;
 		}
-		int ty = Read4(ptr);
+		const int ty = Read4(ptr);
 		// +++Later int txs = Read4(ptr);
 		// int tys = Read4(ptr);
 		// int scale = Read4(ptr);
@@ -352,13 +367,13 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::set_edit_mode: {
-		int md = Read2(ptr);
+		const int md = Read2(ptr);
 		if (md >= 0 && md <= 4)
 			cheat.set_edit_mode(static_cast<Cheat::Map_editor_mode>(md));
 		break;
 	}
 	case Exult_server::hide_lift: {
-		int lift = Read2(ptr);
+		const int lift = Read2(ptr);
 		gwin->skip_lift = lift;
 		gwin->set_all_dirty();
 		break;
@@ -377,11 +392,11 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::locate_shape: {
-		int shnum = Read2(ptr);
-		int frnum = Read2s(ptr);
-		int qual = Read2s(ptr);
-		bool up = *ptr++ != 0;
-		bool okay = gwin->locate_shape(shnum, up, frnum, qual);
+		const int shnum = Read2(ptr);
+		const int frnum = Read2s(ptr);
+		const int qual = Read2s(ptr);
+		const bool up = *ptr++ != 0;
+		const bool okay = gwin->locate_shape(shnum, up, frnum, qual);
 		unsigned char *wptr = &data[6];     // Send back reply.
 		wptr++;          // Skip 'up' flag.
 		*wptr++ = okay ? 1 : 0;
@@ -404,13 +419,13 @@ static void Handle_client_message(
 		break;
 	}
 	case Exult_server::npc_info: {
-		int npcnum = Read2(ptr);
+		const int npcnum = Read2(ptr);
 		Actor *npc = gwin->get_npc(npcnum);
 		unsigned char *wptr = &data[2];
 		if (npc) {
 			Write2(wptr, npc->get_shapenum());
 			*wptr++ = npc->is_unused();
-			std::string nm = npc->get_npc_name();
+			const std::string nm = npc->get_npc_name();
 			strcpy(reinterpret_cast<char *>(wptr), nm.c_str());
 			// Point past ending nullptr.
 			wptr += strlen(reinterpret_cast<char *>(wptr)) + 1;
@@ -424,14 +439,14 @@ static void Handle_client_message(
 		gwin->locate_npc(Read2(ptr));
 		break;
 	case Exult_server::edit_npc: {
-		int npcnum = Read2(ptr);
+		const int npcnum = Read2(ptr);
 		Actor *npc = gwin->get_npc(npcnum);
 		if (npc)
 			npc->edit();
 		break;
 	}
 	case Exult_server::edit_selected: {
-		unsigned char basic = *ptr;
+		const unsigned char basic = *ptr;
 		const Game_object_shared_vector &sel = cheat.get_selected();
 		if (!sel.empty()) {
 			if (basic)      // Basic obj. props?
@@ -445,7 +460,7 @@ static void Handle_client_message(
 		cheat.set_edit_chunknum(Read2s(ptr));
 		break;
 	case Exult_server::game_pos: {
-		Tile_coord pos = gwin->get_main_actor()->get_tile();
+		const Tile_coord pos = gwin->get_main_actor()->get_tile();
 		unsigned char *wptr = &data[0];
 		Write2(wptr, pos.tx);
 		Write2(wptr, pos.ty);
@@ -456,10 +471,10 @@ static void Handle_client_message(
 	}
 	case Exult_server::goto_map: {
 		char msg[80];
-		Tile_coord pos = gwin->get_main_actor()->get_tile();
-		int num = Read2(ptr);
+		const Tile_coord pos = gwin->get_main_actor()->get_tile();
+		const int num = Read2(ptr);
 		gwin->teleport_party(pos, true, num);
-		sprintf(msg, "Map #%02x", num);
+		snprintf(msg, array_size(msg), "Map #%02x", num);
 		gwin->get_effects()->center_text(msg);
 		break;
 	}
@@ -468,7 +483,7 @@ static void Handle_client_message(
 		uintptr addr;
 		io << addr;
 		auto *p = reinterpret_cast<Game_object *>(addr);
-		auto *obj = dynamic_cast<Container_game_object *>(p);
+		auto *obj = p->as_container();
 		if (!obj) {
 			cout << "Error decoding container data" << endl;
 			break;
@@ -479,7 +494,7 @@ static void Handle_client_message(
 			act->show_inventory();
 		else {
 			// Avoid all frame-usecode and force-usecode subtleties.
-			int gump = ShapeID::get_info(obj->get_shapenum()).get_gump_shape();
+			const int gump = ShapeID::get_info(obj->get_shapenum()).get_gump_shape();
 			if (gump >= 0) {
 				Gump_manager *gump_man =
 				    Game_window::get_instance()->get_gump_man();
@@ -492,14 +507,15 @@ static void Handle_client_message(
 	case Exult_server::reload_shapes_info:
 		Shape_manager::get_instance()->reload_shape_info();
 		break;
-#ifdef USECODE_DEBUGGER
 	case Exult_server::usecode_debugging:
+#ifdef USECODE_DEBUGGER
 		Handle_debug_message(&data[0], datalen);
-		break;
+#else
+		unhandled_message(id);
 #endif
+		break;
 	default:
-		cout << "Unhandled message received from Exult Studio (id = "
-		     << id << ")" << endl;
+		unhandled_message(id);
 	}
 }
 
@@ -508,41 +524,52 @@ static void Handle_client_message(
  *  If a server request comes, it's handled here.
  */
 
+#ifndef _WIN32
+#define DELAY_TOTAL_MS 10
+#define DELAY_SINGLE_MS 1
+#endif
+
 void Server_delay(
     Message_handler handle_message
 ) {
 #ifndef _WIN32
-	fd_set rfds;
-	struct timeval timer;
-	timer.tv_sec = 0;
-	timer.tv_usec = 50000;      // Try 1/50 second.
-	FD_ZERO(&rfds);
-	FD_SET(xfd, &rfds);
-	if (listen_socket >= 0)
-		FD_SET(listen_socket, &rfds);
-	if (client_socket >= 0)
-		FD_SET(client_socket, &rfds);
-	// Wait for timeout or event.
-	if (select(highest_fd, &rfds, nullptr, nullptr, &timer) > 0) {
-		// Something's come in.
-		if (listen_socket >= 0 && FD_ISSET(listen_socket, &rfds)) {
-			// New client connection.
-			// For now, just one at a time.
-			if (client_socket >= 0)
-				close(client_socket);
-			client_socket = accept(listen_socket, nullptr, nullptr);
-			cout << "Accept returned client_socket = " <<
-			     client_socket << endl;
-			// Non-blocking.
-			fcntl(client_socket, F_SETFL,
-			      fcntl(client_socket, F_GETFL) | O_NONBLOCK);
-			Set_highest_fd();
-		}
-		if (client_socket >= 0 && FD_ISSET(client_socket, &rfds)) {
-			handle_message(client_socket);
-			// Client gone?
-			if (client_socket == -1)
+	Uint32 expiration = DELAY_TOTAL_MS + SDL_GetTicks();
+	for (;;) {
+		SDL_PumpEvents();
+		if ((SDL_PeepEvents(nullptr, 0, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) != 0) ||
+		    (static_cast<Sint32>(SDL_GetTicks()) >= static_cast<Sint32>(expiration))) return;
+
+		fd_set rfds;
+		struct timeval timer;
+		timer.tv_sec = 0;
+		timer.tv_usec = DELAY_SINGLE_MS * 1000;      // Try 1/1000 second.
+		FD_ZERO(&rfds);
+		if (listen_socket >= 0)
+			FD_SET(listen_socket, &rfds);
+		if (client_socket >= 0)
+			FD_SET(client_socket, &rfds);
+		// Wait for timeout or event.
+		if (select(highest_fd, &rfds, nullptr, nullptr, &timer) > 0) {
+			// Something's come in.
+			if (listen_socket >= 0 && FD_ISSET(listen_socket, &rfds)) {
+				// New client connection.
+				// For now, just one at a time.
+				if (client_socket >= 0)
+					close(client_socket);
+				client_socket = accept(listen_socket, nullptr, nullptr);
+				cout << "Accept returned client_socket = " <<
+				     client_socket << endl;
+				// Non-blocking.
+				fcntl(client_socket, F_SETFL,
+				      fcntl(client_socket, F_GETFL) | O_NONBLOCK);
 				Set_highest_fd();
+			}
+			if (client_socket >= 0 && FD_ISSET(client_socket, &rfds)) {
+				handle_message(client_socket);
+				// Client gone?
+				if (client_socket == -1)
+					Set_highest_fd();
+			}
 		}
 	}
 #else
@@ -552,7 +579,7 @@ void Server_delay(
 		// Only do this in map edit mode
 		if (!cheat.in_map_editor()) return;
 
-		std::string servename = get_system_path("<GAMEDAT>");
+		const std::string servename = get_system_path("<GAMEDAT>");
 		if (!Exult_server::try_connect_to_client(servename.c_str())) return;
 		else client_socket = 1;
 		std::cout << "Connected to client" << endl;

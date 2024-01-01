@@ -22,6 +22,8 @@
 #ifndef INCL_SCALE_2X_H
 #define INCL_SCALE_2X_H 1
 
+#include <utility>
+
 /**
  ** Note: This file should only be included by source files that use the
  ** templates below; the templates will only be instantiated when they
@@ -43,10 +45,8 @@ static inline void cycle_buffers(
     Dest_pixel *&b1,
     Dest_pixel *&b2,
     Dest_pixel *&b3) {
-	Dest_pixel *b0 = b1;
-	b1 = b2;
-	b2 = b3;
-	b3 = b0;
+	std::swap(b1, b2);
+	std::swap(b2, b3);
 }
 
 // Expand `row' into the destination pixel format.
@@ -109,8 +109,8 @@ void Scale2x_noblur(
 	Source_pixel *end_src = source + sheight * sline_pixels;
 
 	// Check for edge pixels.
-	int to_right_edge = srcx + srcw == sline_pixels ? 1 : 0;
-	int edge_off = srcx == 0 ? 0 : 1;
+	const int to_right_edge = srcx + srcw == sline_pixels ? 1 : 0;
+	const int edge_off = srcx == 0 ? 0 : 1;
 	int copy_width = srcw + 1 - to_right_edge + edge_off;
 	// Initial fill of the buffers.
 	if (ptr0 >= source)     // But don't go before row 0.

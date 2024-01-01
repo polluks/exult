@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -31,8 +31,6 @@ class Combat_mode_button;
  *  A rectangular area showing a character and his/her possessions:
  */
 class Actor_gump : public Gump {
-	UNREPLICATABLE_CLASS(Actor_gump)
-
 protected:
 	struct Position {
 		short x;

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,8 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <config.h>
 #endif
 
-#include "SDL_events.h"
-#include "SDL_keyboard.h"
 #include "game.h"
 #include "gamewin.h"
 #include "Gump_button.h"
@@ -80,7 +78,7 @@ void Slider_gump::set_val(
     int newval
 ) {
 	val = newval;
-	static int xdist = xmax - xmin;
+	static const int xdist = xmax - xmin;
 	if (max_val - min_val == 0) {
 		val = 0;
 		diamondx = xmin;
@@ -100,7 +98,7 @@ Slider_gump::Slider_gump(
 	min_val(mival), max_val(mxval), step_val(step),
 	val(defval), dragging(0), prev_dragx(0) {
 	diamond = ShapeID(game->get_shape("gumps/slider_diamond"), 0, SF_GUMPS_VGA);
-	set_object_area(Rectangle(0, 0, 0, 0), 6, 30);
+	set_object_area(TileRect(0, 0, 0, 0), 6, 30);
 
 #ifdef DEBUG
 	cout << "Slider:  " << min_val << " to " << max_val << " by " << step << endl;
@@ -195,11 +193,11 @@ bool Slider_gump::mouse_down(
 		if (mx - get_x() < xmin || mx - get_x() > xmax)
 			return true;
 		diamondx = mx - get_x();
-		static int xdist = xmax - xmin;
+		static const int xdist = xmax - xmin;
 		int delta = (diamondx - xmin) * (max_val - min_val) / xdist;
 		// Round down to nearest step.
 		delta -= delta % step_val;
-		int newval = min_val + delta;
+		const int newval = min_val + delta;
 		if (newval != val)      // Set value.
 			val = newval;
 		paint();
@@ -249,11 +247,11 @@ void Slider_gump::mouse_drag(
 		diamondx = xmin;
 	else if (diamondx > xmax)
 		diamondx = xmax;
-	static int xdist = xmax - xmin;
+	static const int xdist = xmax - xmin;
 	int delta = (diamondx - xmin) * (max_val - min_val) / xdist;
 	// Round down to nearest step.
 	delta -= delta % step_val;
-	int newval = min_val + delta;
+	const int newval = min_val + delta;
 	if (newval != val)      // Set value.
 		val = newval;
 	paint();
@@ -279,7 +277,7 @@ void Slider_gump::key_down(int chr) {
 }
 
 void Slider_gump::mousewheel_up() {
-	SDL_Keymod mod = SDL_GetModState();
+	const SDL_Keymod mod = SDL_GetModState();
 	if (mod & KMOD_ALT)
 		move_diamond(-10 * step_val);
 	else
@@ -287,7 +285,7 @@ void Slider_gump::mousewheel_up() {
 }
 
 void Slider_gump::mousewheel_down() {
-	SDL_Keymod mod = SDL_GetModState();
+	const SDL_Keymod mod = SDL_GetModState();
 	if (mod & KMOD_ALT)
 		move_diamond(10 * step_val);
 	else

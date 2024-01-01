@@ -6,7 +6,7 @@
  **/
 
 /*
- *  Copyright (C) 2010  The Exult Team
+ *  Copyright (C) 2010-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,25 +28,32 @@
 #endif
 
 #ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wcast-qual"
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	if !defined(__llvm__) && !defined(__clang__)
+#		pragma GCC diagnostic ignored "-Wuseless-cast"
+#	else
+#		pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#		if __clang_major__ >= 16
+#			pragma GCC diagnostic ignored "-Wcast-function-type-strict"
+#		endif
+#	endif
 #endif  // __GNUC__
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #ifdef __GNUC__
-#pragma GCC diagnostic pop
+#	pragma GCC diagnostic pop
 #endif  // __GNUC__
 
-#include <libgnomeui/libgnomeui.h>
-#include <iostream>
-#include <cstdlib>
-#include "Flex.h"
-#include "utils.h"
 #include "exceptions.h"
-#include "vgafile.h"
-#include "pngio.h"
 #include "ibuf8.h"
 #include "ignore_unused_variable_warning.h"
+#include "pngio.h"
+#include "utils.h"
+#include "vgafile.h"
+
+#include <array>
+#include <iostream>
 
 using namespace std;
 
@@ -57,7 +64,8 @@ using namespace std;
 // better, but others to look worse; most shapes are unaffected.
 // The values used for the OpenGL translucent pixels in shapeid.cc (also
 // in the blends.dat files for BG and SI) could be used for this purpose.
-static unsigned char shppal[768] = {
+using U7Palette = std::array<unsigned char, 768>;
+constexpr static const U7Palette shppal = {
 	0x00, 0x00, 0x00, 0xF8, 0xF0, 0xCC, 0xF4, 0xE4, 0xA4, 0xF0, 0xDC, 0x78,
 	0xEC, 0xD0, 0x50, 0xEC, 0xC8, 0x28, 0xD8, 0xAC, 0x20, 0xC4, 0x94, 0x18,
 	0xB0, 0x80, 0x10, 0x9C, 0x68, 0x0C, 0x88, 0x54, 0x08, 0x74, 0x44, 0x04,
@@ -124,18 +132,13 @@ static unsigned char shppal[768] = {
 	0xFC, 0xFC, 0xFC, 0x61, 0x61, 0x61, 0xC0, 0xC0, 0xC0, 0xFC, 0x00, 0xF1
 };
 
-// Finds the integer square root of a positive number of any type.
-// This is utter overkill...
-template <typename type>
-type intSqrt(type remainder) {
-	if (remainder < 0) // if type is unsigned this will be ignored = no runtime
-		return 0; // negative number ERROR
-
-	type place = static_cast<type>(1) << (sizeof(type) * 8 - 2);  // calculated by precompiler = same runtime as: place = 0x40000000
+// Finds the integer square root of a positive number
+unsigned intSqrt(unsigned remainder) {
+	unsigned place = 1U << (sizeof(unsigned) * 8 - 2);  // calculated by precompiler = same runtime as: place = 0x40000000
 	while (place > remainder)
 		place /= 4; // optimized by complier as place >>= 2
 
-	type root = 0;
+	unsigned root = 0;
 	while (place) {
 		if (remainder >= root + place) {
 			remainder -= root + place;
@@ -150,13 +153,13 @@ type intSqrt(type remainder) {
 const unsigned char transp = 255;   // Transparent pixel.
 
 static unsigned char *Convert8to32(
-    unsigned char *bits,
+    const unsigned char *bits,
     size_t nsize,
-    unsigned char *palette
+    const U7Palette& palette
 ) {
-	unsigned char *out = new unsigned char[nsize * 4];
+	auto *out = new unsigned char[nsize * 4];
 	for (size_t i = 0; i < nsize; i++) {
-		size_t pix = bits[i];
+		const size_t pix = bits[i];
 		out[4 * i    ] = palette[3 * pix    ];
 		out[4 * i + 1] = palette[3 * pix + 1];
 		out[4 * i + 2] = palette[3 * pix + 2];
@@ -172,12 +175,12 @@ struct Render_frame {
 	void operator()
 	(
 	    Image_buffer8 &img,
-	    Shape_frame *frame,
+	    Shape_frame& frame,
 	    int w, int h,
 	    int xo, int yo
 	) {
 		ignore_unused_variable_warning(w, h);
-		frame->paint(&img, xo + frame->get_xleft(), yo + frame->get_yabove());
+		frame.paint(&img, xo + frame.get_xleft(), yo + frame.get_yabove());
 	}
 };
 
@@ -188,23 +191,24 @@ struct Render_tiles {
 	void operator()
 	(
 	    Image_buffer8 &img,
-	    Shape *shape,
+	    Shape& shape,
 	    int w, int h,
 	    int xo, int yo
 	) {
 		ignore_unused_variable_warning(h);
-		int nframes = shape->get_num_frames();
-		int dim0_cnt = w / 8;
-		for (int f = 0; f < nframes; f++) {
-			Shape_frame *frame = shape->get_frame(f);
+		const int dim0_cnt = w / 8;
+		int f = -1;
+		for (auto& frame : shape) {
+			f++;
 			if (!frame)
 				continue;   // We'll just leave empty ones blank.
-			if (!frame->is_rle() || frame->get_width() != 8 ||
+			if (frame->is_rle() || frame->get_width() != 8 ||
 			        frame->get_height() != 8) {
 				cerr << "Can only tile 8x8 flat shapes, but shape doesn't qualify" << endl;
 				exit(4);
 			}
-			int x = f % dim0_cnt, y = f / dim0_cnt;
+			const int x = f % dim0_cnt;
+			const int y = f / dim0_cnt;
 			frame->paint(&img, xo + x * 8 + frame->get_xleft(),
 			             yo + y * 8 + frame->get_yabove());
 		}
@@ -217,38 +221,27 @@ struct Render_tiles {
 
 template<typename Data, typename Render>
 static void Write_thumbnail(
-    char *filename,         // Base filename to write.
-    Data *data,             // What to write.
-    unsigned char *palette, // 3*256 bytes.
-    int w, int h,           // Width, height of rendered image.
-    int size                // Desired thumbnail size
+    char *filename,           // Base filename to write.
+    Data& data,               // What to write.
+    const U7Palette& palette, // 3*256 bytes.
+    int w, int h,             // Width, height of rendered image.
+    int size                  // Desired thumbnail size
 ) {
-	assert(data != nullptr);
 	cout << "Writing " << filename << endl;
-	int w1 = w, h1 = h;
-	if (w > size || h > size)
-		// Make into a padded square of the largest dimension.
-		w1 = h1 = w > h ? w : h;
-	else {
-		// Pad it to minimum size to avoid blurring.
-		if (w < 16)
-			w1 = 16;
-		if (h < 16)
-			h1 = 16;
-	}
+	// Make into a padded square of the largest dimension, but limit it
+	// to a minimum of 16x16 to avoid blurring.
+	const int w1 = std::max(std::max(w, h), 16);
+	const int h1 = w1;
 	Image_buffer8 img(w1, h1);  // Render into a buffer.
-	img.fill8(transp);      // Fill with transparent pixel.
+	img.fill8(transp);          // Fill with transparent pixel.
 	Render r;
 	r(img, data, w, h, (w1 - w) / 2, (h1 - h) / 2);
 	unsigned char *bits = Convert8to32(img.get_bits(), w1 * h1, palette);
-	if (w > size || h > size) {
-		// Use GTHUMB scaler to reduce large image.
-		// These few lines are all that create dependencies on gdk-pixbuf and
-		// libgnomeui.
+	if (w1 != size) {
 		GdkPixbuf *pixbuf = gdk_pixbuf_new_from_data(bits, GDK_COLORSPACE_RGB,
 		                    true, 8, w1, h1, 4 * w1, nullptr, nullptr);
-		GdkPixbuf *smallpixbuf = gnome_thumbnail_scale_down_pixbuf(pixbuf,
-		                         size, size);
+		GdkPixbuf *smallpixbuf = gdk_pixbuf_scale_simple(pixbuf,
+		                         size, size, GDK_INTERP_HYPER);
 		// Write out to the .png.
 		if (!Export_png32(filename, size, size, 4 * size, 0, 0,
 		                  gdk_pixbuf_get_pixels(smallpixbuf)))
@@ -267,8 +260,7 @@ int main(int argc, char *argv[]) {
 		cerr << "Usage: gnome-shp-thumbnailer -s size inputfile outputfile" << endl;
 		return 1;
 	}
-	gtk_init(&argc, &argv);
-	int  size = atoi(argv[2]);
+	const int  size = atoi(argv[2]);
 	if (size < 0 || size > 2048) {
 		cerr << "Invalid thumbnail size: " << size << "!" << endl;
 		return 2;
@@ -276,37 +268,31 @@ int main(int argc, char *argv[]) {
 	char *inputfile = argv[3];
 	char *outputfile = argv[4];
 	Shape_file shape(inputfile);    // May throw an exception.
-	int nframes = shape.get_num_frames();
-	if (nframes == 0) {
+	if (shape.is_empty()) {
 		cerr << "Shape is empty!" << endl;
 		return 3;
 	}
-	Shape_frame *frame0 = shape.get_frame(0);
-	if (!frame0) {
-		cerr << "Null first frame!" << endl;
-		return 4;
-	}
 	try {
-		if (frame0->is_rle()) {
-			for (int i = 0; i < nframes; i++) {
-				Shape_frame *frame = shape.get_frame(i);
+		if (shape.is_rle()) {
+			for (auto& frame : shape) {
 				if (!frame || frame->is_empty())
 					continue;
-				Write_thumbnail<Shape_frame, Render_frame>(outputfile, frame, shppal,
+				Write_thumbnail<Shape_frame, Render_frame>(outputfile, *frame, shppal,
 					    frame->get_width(), frame->get_height(), size);
 				break;
 			}
 		} else {
-			int dim0 = intSqrt(nframes);
+			const unsigned nframes = shape.get_num_frames();
+			unsigned dim0 = intSqrt(nframes);
 			if (dim0 * dim0 < nframes)
 				dim0 += 1;
-			int dim1 = (nframes + dim0 - 1) / dim0;
-			Write_thumbnail<Shape, Render_tiles>(outputfile, &shape, shppal,
+			const unsigned dim1 = (nframes + dim0 - 1) / dim0;
+			Write_thumbnail<Shape, Render_tiles>(outputfile, shape, shppal,
 				                                 dim0 * 8, dim1 * 8, size);
 		}
 	} catch (const std::exception& except) {
 		cerr << "Could not generate thumbnail: " << except.what() << endl;
-		return 5;
+		return 4;
 	}
 	return 0;
 }

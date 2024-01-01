@@ -1,8 +1,9 @@
-AM_CPPFLAGS = -I$(srcdir)/../headers -I$(srcdir)/.. -I$(srcdir)/../shapes \
-	-I$(srcdir)/../imagewin -I$(srcdir)/../conf -I$(srcdir)/../gamemgr \
-	-I$(srcdir)/../files -I$(srcdir)/../server  -I$(srcdir)/../usecode \
-	-I$(srcdir)/../shapes/shapeinf \
-	$(GTK_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) $(DEBUG_FLAGS) $(CPPFLAGS) -DEXULT_DATADIR=\"$(EXULT_DATADIR)\"
+AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir) -I$(top_srcdir)/shapes \
+	-I$(top_srcdir)/imagewin -I$(top_srcdir)/conf -I$(top_srcdir)/gamemgr \
+	-I$(top_srcdir)/files -I$(top_srcdir)/server  -I$(top_srcdir)/usecode \
+	-I$(top_srcdir)/shapes/shapeinf \
+	$(GTK_CFLAGS) $(ICU_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) \
+	$(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS) -DEXULT_DATADIR=\"$(EXULT_DATADIR)\"
 
 if GIMP_PLUGIN
 GIMP_PLUGINS=u7shp
@@ -11,12 +12,23 @@ GIMP_PLUGINS=
 endif
 
 if BUILD_STUDIO
-bin_PROGRAMS = exult_studio 
+bin_PROGRAMS = exult_studio
 else
 bin_PROGRAMS =
 endif
 
-u7shp_SOURCES = u7shp.c
+u7shp_SOURCES = u7shp.cc
+
+u7shp_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/files -I$(top_srcdir)/headers \
+	-I$(top_srcdir)/shapes -I$(top_srcdir)/imagewin -I$(top_srcdir)/files \
+	$(GIMP_INCLUDES) $(GTK_CFLAGS) $(ICU_CFLAGS) $(INCDIRS) \
+	$(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS) -DHAVE_CONFIG_H
+
+u7shp_LDADD = \
+	../imagewin/libimagewin.la	\
+	../shapes/libshapes.la \
+	../files/libu7file.la \
+	$(GIMP_LIBS)
 
 exult_studio_SOURCES = \
 	bargeedit.cc \
@@ -44,7 +56,6 @@ exult_studio_SOURCES = \
 	objbrowse.cc \
 	paledit.cc \
 	paledit.h \
-	ready.h		\
 	shapedraw.cc \
 	shapedraw.h \
 	shapefile.cc \
@@ -70,9 +81,9 @@ exult_studio_LDADD = \
 	../server/libserver.la		\
 	../usecode/libusecode.la		\
 	../shapes/shapeinf/libshapeinf.la	\
-	-lpng $(FREETYPE2_LIBS) $(SYSLIBS) $(x_libraries) $(GTK_LIBS) $(ZLIB_LIBS)
+	-lpng $(FREETYPE2_LIBS) $(SYSLIBS) $(x_libraries) $(GTK_LIBS) $(ICU_LIBS) $(ZLIB_LIBS)
 
-exult_studio_CFLAGS = $(GTK_CFLAGS)
+exult_studio_CFLAGS = $(GTK_CFLAGS) $(ICU_CFLAGS)
 exult_studio_LDFLAGS = -export-dynamic		# For Gtk+ 2.x
 
 mapeditdir = $(datadir)/exult
@@ -83,11 +94,11 @@ else
 mapedit_DATA =
 endif
 
-u7shp$(EXEEXT): u7shp.c $(top_builddir)/config.h
-	CFLAGS="-O2 -I$(top_srcdir) -DHAVE_CONFIG_H" $(GIMPTOOL) --build $<
-
 EXTRA_DIST=	\
+	gimpwin32.txt \
+	PhotoshopShapePlugin.zip \
 	exult_studio.glade \
+	uniquepal.c \
 	logo.xpm
 
 if GIMP_PLUGIN

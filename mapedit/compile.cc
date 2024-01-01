@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2002-2013 The Exult Team
+Copyright (C) 2002-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,15 +23,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#include <string>
-#include "studio.h"
+#include "execbox.h"
 #include "exult_constants.h"
 #include "utils.h"
-#include "execbox.h"
-#include "ignore_unused_variable_warning.h"
+
+#include <string>
 
 using std::string;
 
@@ -114,10 +113,10 @@ void ExultStudio::compile(
     bool if_needed          // Means check timestamps.
 ) {
 	// Get source (specified in mod's cfg on mod_info/source).
-	string srcdir(get_system_path("<SOURCE>"));
-	string source(srcdir + "/usecode.uc");
-	string incdir("-I" + srcdir);
-	string obj = get_system_path("<PATCH>/usecode");
+	const string srcdir(get_system_path("<SOURCE>"));
+	const string source(srcdir + "/usecode.uc");
+	const string incdir("-I" + srcdir);
+	const string obj = get_system_path("<PATCH>/usecode");
 	if (!U7exists(source)) {
 		if (!if_needed)
 			EStudio::Alert("Source '%s' doesn't exist",

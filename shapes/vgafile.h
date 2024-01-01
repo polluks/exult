@@ -2,7 +2,7 @@
  *  vgafile.h - Handle access to one of the xxx.vga files.
  *
  *  Copyright (C) 1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -193,6 +193,13 @@ public:
 	bool get_from_patch() const {
 		return from_patch;
 	}
+	bool is_rle() const {
+		auto *frame0 = get_frame(0);
+		return frame0 != nullptr && frame0->is_rle();
+	}
+	bool is_empty() const {
+		return num_frames == 0;
+	}
 	Shape_frame *get(std::vector<std::pair<std::unique_ptr<IDataSource>, bool>> const &shapes, int shnum,
 	                 int frnum, std::vector<int> const &counts, int src = -1) {
 		return (size_t(frnum) < frames.size() && frames[frnum])
@@ -202,7 +209,7 @@ public:
 	int get_num_frames() const {
 		return num_frames;
 	}
-	Shape_frame *get_frame(int framenum) {
+	Shape_frame *get_frame(int framenum) const {
 		return 0 <= framenum && size_t(framenum) < frames.size()
 		       ? frames[framenum].get()
 		       : nullptr;
@@ -335,13 +342,13 @@ public:
 
 	Shape *extract_shape(int shapenum) {
 		imported_map data;
-		bool is_imported = get_imported_shape_data(shapenum, data);
+		const bool is_imported = get_imported_shape_data(shapenum, data);
 		if (is_imported)
 			assert(!imported_shapes.empty()); // For safety.
 		else
 			assert(!shapes.empty());
 		// Load all frames into memory
-		int count = get_num_frames(shapenum);
+		const int count = get_num_frames(shapenum);
 		for (int i = 1; i < count; i++)
 			get_shape(shapenum, i);
 		if (is_imported)

@@ -6,7 +6,7 @@
  **/
 
 /*
-Copyright (C) 2005-2013 The Exult Team
+Copyright (C) 2005-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -24,19 +24,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
+#include "exult_constants.h"
+#include "objserial.h"
+#include "servemsg.h"
+#include "shapedraw.h"
+#include "shapefile.h"
+#include "shapevga.h"
 #include "studio.h"
 #include "u7drag.h"
-#include "servemsg.h"
-#include "objserial.h"
-#include "exult_constants.h"
 #include "utils.h"
-#include "shapefile.h"
-#include "shapedraw.h"
-#include "shapevga.h"
-#include "ignore_unused_variable_warning.h"
 
 using std::cout;
 using std::endl;
@@ -88,8 +87,8 @@ C_EXPORT void on_cont_show_gump_clicked(
 	cout << "In on_cont_show_gump_clicked()" << endl;
 	unsigned char data[Exult_server::maxlength];
 	// Get container address.
-	auto addr = reinterpret_cast<uintptr>(gtk_object_get_user_data(
-	                         GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto addr = reinterpret_cast<uintptr>(g_object_get_data(
+	        G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	unsigned char *ptr = &data[0];
 	Serial_out io(ptr);
 	io << addr;
@@ -123,45 +122,6 @@ C_EXPORT gboolean on_cont_window_delete_event(
 }
 
 /*
- *  Draw shape in container shape area.
- */
-C_EXPORT gboolean on_cont_draw_expose_event(
-    GtkWidget *widget,      // The view window.
-    GdkEventExpose *event,
-    gpointer data           // ->Shape_chooser.
-) {
-	ignore_unused_variable_warning(widget, data);
-	ExultStudio::get_instance()->show_cont_shape(
-	    event->area.x, event->area.y, event->area.width,
-	    event->area.height);
-	return TRUE;
-}
-
-/*
- *  Container shape/frame # changed, so update shape displayed.
- */
-C_EXPORT gboolean on_cont_shape_changed(
-    GtkWidget *widget,
-    GdkEventFocus *event,
-    gpointer user_data
-) {
-	ignore_unused_variable_warning(widget, event, user_data);
-	ExultStudio *studio = ExultStudio::get_instance();
-	int shnum = studio->get_num_entry("cont_shape");
-	int frnum = studio->get_num_entry("cont_frame");
-	int nframes =
-	    studio->get_vgafile()->get_ifile()->get_num_frames(shnum);
-	int xfrnum = frnum & 31;    // Look at unrotated value.
-	int newfrnum = xfrnum >= nframes ? 0 : frnum;
-	if (newfrnum != frnum) {
-		studio->set_spin("cont_frame", newfrnum);
-		return TRUE;
-	}
-	studio->show_cont_shape();
-	return TRUE;
-}
-
-/*
  *  Container shape/frame # changed, so update shape displayed.
  */
 C_EXPORT gboolean on_cont_pos_changed(
@@ -175,32 +135,6 @@ C_EXPORT gboolean on_cont_pos_changed(
 }
 
 /*
- *  Callback for when a shape is dropped on the draw area.
- */
-
-static void cont_shape_dropped(
-    int file,           // U7_SHAPE_SHAPES.
-    int shape,
-    int frame,
-    void *udata
-) {
-	if (file == U7_SHAPE_SHAPES &&
-	        shape >= c_first_obj_shape && shape < c_max_shapes)
-		reinterpret_cast<ExultStudio *>(udata)->set_cont_shape(shape, frame);
-}
-
-#ifdef _WIN32
-
-static void Drop_dragged_shape(int shape, int frame, int x, int y, void *data) {
-	cout << "Dropped a shape: " << shape << "," << frame << " " << data << endl;
-	ignore_unused_variable_warning(x, y);
-	cont_shape_dropped(U7_SHAPE_SHAPES, shape, frame, data);
-}
-
-#endif
-
-
-/*
  *  Open the container-editing window.
  */
 
@@ -208,30 +142,26 @@ void ExultStudio::open_cont_window(
     unsigned char *data,        // Serialized object.
     int datalen
 ) {
-#ifdef _WIN32
-	bool first_time = false;
-#endif
 	if (!contwin) {         // First time?
-#ifdef _WIN32
-		first_time = true;
-#endif
 		contwin = get_widget("cont_window");
 		// Note: vgafile can't be null here.
 		if (palbuf) {
-			cont_draw = new Shape_draw(vgafile->get_ifile(), palbuf.get(),
-			                           get_widget("cont_draw"));
-			cont_draw->enable_drop(cont_shape_dropped, this);
+			cont_single = new Shape_single(
+			    get_widget("cont_shape"), get_widget("cont_name"),
+			    [](int shnum)->bool{ return (shnum >= c_first_obj_shape) &&
+			                                (shnum < c_max_shapes); },
+			    get_widget("cont_frame"),
+			    U7_SHAPE_SHAPES,
+			    vgafile->get_ifile(),
+			    palbuf.get(),
+			    get_widget("cont_draw"));
 		}
 	}
 	// Init. cont address to null.
-	gtk_object_set_user_data(GTK_OBJECT(contwin), nullptr);
+	g_object_set_data(G_OBJECT(contwin), "user_data", nullptr);
 	if (!init_cont_window(data, datalen))
 		return;
 	gtk_widget_show(contwin);
-#ifdef _WIN32
-	if (first_time || !contdnd)
-		Windnd::CreateStudioDropDest(contdnd, conthwnd, Drop_dragged_shape, nullptr, nullptr, this);
-#endif
 }
 
 /*
@@ -242,9 +172,6 @@ void ExultStudio::close_cont_window(
 ) {
 	if (contwin) {
 		gtk_widget_hide(contwin);
-#ifdef _WIN32
-		Windnd::DestroyStudioDropDest(contdnd, conthwnd);
-#endif
 	}
 }
 
@@ -275,7 +202,7 @@ int ExultStudio::init_cont_window(
 		return 0;
 	}
 	// Store address with window.
-	gtk_object_set_user_data(GTK_OBJECT(contwin), reinterpret_cast<gpointer>(addr));
+	g_object_set_data(G_OBJECT(contwin), "user_data", reinterpret_cast<gpointer>(addr));
 	// Store name. (Not allowed to change.)
 	set_entry("cont_name", name.c_str(), false);
 	// Shape/frame, quality.
@@ -294,9 +221,9 @@ int ExultStudio::init_cont_window(
 	if (btn) {
 		GtkAdjustment *adj = gtk_spin_button_get_adjustment(
 		                         GTK_SPIN_BUTTON(btn));
-		int nframes = vgafile->get_ifile()->get_num_frames(shape);
-		adj->upper = (nframes - 1) | 32; // So we can rotate.
-		gtk_signal_emit_by_name(GTK_OBJECT(adj), "changed");
+		const int nframes = vgafile->get_ifile()->get_num_frames(shape);
+		gtk_adjustment_set_upper(adj, (nframes - 1) | 32); // So we can rotate.
+		g_signal_emit_by_name(G_OBJECT(adj), "changed");
 	}
 	return 1;
 }
@@ -311,17 +238,18 @@ int ExultStudio::save_cont_window(
 ) {
 	cout << "In save_cont_window()" << endl;
 	// Get container address.
-	auto *addr = static_cast<Container_game_object*>(gtk_object_get_user_data(GTK_OBJECT(contwin)));
-	int tx = get_spin("cont_x");
-	int ty = get_spin("cont_y");
-	int tz = get_spin("cont_z");
-	std::string name(get_text_entry("cont_name"));
-	int shape = get_spin("cont_shape");
-	int frame = get_spin("cont_frame");
-	int quality = get_spin("cont_quality");
-	unsigned char res = get_spin("cont_resistance");
-	bool invis = get_toggle("cont_invisible");
-	bool can_take = get_toggle("cont_okay_to_take");
+	auto *addr = static_cast<Container_game_object *>(
+	                 g_object_get_data(G_OBJECT(contwin), "user_data"));
+	const int tx = get_spin("cont_x");
+	const int ty = get_spin("cont_y");
+	const int tz = get_spin("cont_z");
+	const std::string name(get_text_entry("cont_name"));
+	const int shape = get_spin("cont_shape");
+	const int frame = get_spin("cont_frame");
+	const int quality = get_spin("cont_quality");
+	const unsigned char res = get_spin("cont_resistance");
+	const bool invis = get_toggle("cont_invisible");
+	const bool can_take = get_toggle("cont_okay_to_take");
 
 	if (Container_out(server_socket, addr, tx, ty, tz,
 	                  shape, frame, quality, name, res, invis, can_take) == -1) {
@@ -338,54 +266,16 @@ int ExultStudio::save_cont_window(
 
 void ExultStudio::rotate_cont(
 ) {
-	int shnum = get_num_entry("cont_shape");
-	int frnum = get_num_entry("cont_frame");
+	const int shnum = get_num_entry("cont_shape");
 	if (shnum <= 0)
 		return;
 	auto *shfile = static_cast<Shapes_vga_file *>(vgafile->get_ifile());
 	// Make sure data's been read in.
-	shfile->read_info(game_type, true);
+	if (shfile->read_info(game_type, true))
+		set_shapeinfo_modified();
 	const Shape_info &info = shfile->get_info(shnum);
+	int frnum = get_num_entry("cont_frame");
 	frnum = info.get_rotated_frame(frnum, 1);
 	set_spin("cont_frame", frnum);
-	show_cont_shape();
+	cont_single->render();
 }
-
-/*
- *  Paint the shape in the draw area.
- */
-
-void ExultStudio::show_cont_shape(
-    int x, int y, int w, int h  // Rectangle. w=-1 to show all.
-) {
-	if (!cont_draw)
-		return;
-	cont_draw->configure();
-	// Yes, this is kind of redundant...
-	int shnum = get_num_entry("cont_shape");
-	int frnum = get_num_entry("cont_frame");
-	if (!shnum)         // Don't draw shape 0.
-		shnum = -1;
-	cont_draw->draw_shape_centered(shnum, frnum);
-	if (w != -1)
-		cont_draw->show(x, y, w, h);
-	else
-		cont_draw->show();
-}
-
-/*
- *  Set container shape.
- */
-
-void ExultStudio::set_cont_shape(
-    int shape,
-    int frame
-) {
-	set_spin("cont_shape", shape);
-	set_spin("cont_frame", frame);
-	const char *nm = get_shape_name(shape);
-	set_entry("cont_name", nm ? nm : "", false);
-	show_cont_shape();
-}
-
-

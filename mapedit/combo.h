@@ -8,7 +8,7 @@
 #define INCL_COMBO_H    1
 
 /*
-Copyright (C) 2002-2013 The Exult Team
+Copyright (C) 2002-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,12 +25,13 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
+#include "objbrowse.h"
+#include "rect.h"
+#include "shapedraw.h"
+
 #include <memory>
 #include <string>
 #include <vector>
-#include "objbrowse.h"
-#include "shapedraw.h"
-#include "rect.h"
 
 class Shapes_vga_file;
 class Flex_file_info;
@@ -62,9 +63,9 @@ class Combo {
 	//   use.
 	short starttx, startty;     // Offset represented by top-left.
 	std::string name;       // Name given by user.
-	Rectangle tilefoot;     // Footprint in tiles.
+	TileRect tilefoot;     // Footprint in tiles.
 	// Get footprint of given member.
-	Rectangle get_member_footprint(int i);
+	TileRect get_member_footprint(int i);
 public:
 	friend class Combo_editor;
 	friend class Combo_chooser;
@@ -72,7 +73,8 @@ public:
 	Combo(const Combo &c2);     // Copy.
 	~Combo();
 	Combo_member *get(int i) {
-		return i >= 0 && static_cast<unsigned>(i) < members.size() ? members[i] : nullptr;
+		return i >= 0 && static_cast<unsigned>(i) < members.size() ?
+		       members[i] : nullptr;
 	}
 	// Add a new object.
 	void add(int tx, int ty, int tz, int shnum, int frnum, bool toggle);
@@ -102,6 +104,8 @@ public:
 	friend class Combo_chooser;
 	Combo_editor(Shapes_vga_file *svga, unsigned char *palbuf);
 	~Combo_editor() override;
+	static gboolean on_combo_draw_expose_event(
+	    GtkWidget *widget, cairo_t *cairo, gpointer data);
 	void show(bool tf);     // Show/hide.
 	void render_area(GdkRectangle *area);
 	void render() override {
@@ -117,7 +121,7 @@ public:
 	void remove();          // Remove selected.
 	void save();            // Save it.
 	bool is_visible() {
-		return GTK_WIDGET_VISIBLE(win);
+		return gtk_widget_get_visible(GTK_WIDGET(win));
 	}
 };
 
@@ -131,10 +135,10 @@ public:
 class Combo_info {
 	friend class Combo_chooser;
 	int num;
-	Rectangle box;          // Box where drawn.
+	TileRect box;          // Box where drawn.
 	void set(int n, int rx, int ry, int rw, int rh) {
 		num = n;
-		box = Rectangle(rx, ry, rw, rh);
+		box = TileRect(rx, ry, rw, rh);
 	}
 };
 
@@ -152,13 +156,15 @@ class Combo_chooser: public Object_browser, public Shape_draw {
 	int info_cnt;           // # entries in info.
 	void (*sel_changed)();      // Called when selection changes.
 	// Blit onto screen.
+	int voffset;
+	int per_row;
 	void show(int x, int y, int w, int h) override;
-	void show() override {
-		Combo_chooser::show(0, 0,
-		                    draw->allocation.width, draw->allocation.height);
-	}
 	void select(int new_sel);   // Show new selection.
-	void load() override;        // Load from file data.
+	void load() override {
+		load_internal();
+	}
+	void load_internal();        // Load from file data.
+	void setup_info(bool savepos = true) override;
 	void render() override;      // Draw list.
 	void set_background_color(guint32 c) override {
 		Shape_draw::set_background_color(c);
@@ -166,7 +172,7 @@ class Combo_chooser: public Object_browser, public Shape_draw {
 	int get_selected_id() override {
 		return selected < 0 ? -1 : info[selected].num;
 	}
-	void scroll(int newindex);  // Scroll.
+	void scroll(int newpixel);  // Scroll.
 	void scroll(bool upwards);
 	void enable_controls();     // Enable/disable controls after sel.
 	//   has changed.
@@ -191,30 +197,23 @@ public:
 	static gint configure(GtkWidget *widget, GdkEventConfigure *event,
 	                      gpointer data);
 	// Blit to screen.
-	static gint expose(GtkWidget *widget, GdkEventExpose *event,
-	                   gpointer data);
+	static gint expose(
+	    GtkWidget *widget, cairo_t *cairo, gpointer data);
 	// Handle mouse press.
 	static gint mouse_press(GtkWidget *widget, GdkEventButton *event,
 	                        gpointer data);
 	// Give dragged combo.
 	static void drag_data_get(GtkWidget *widget, GdkDragContext *context,
-	                          GtkSelectionData *seldata, guint info, guint time, gpointer data);
-	// Someone else selected.
-	static gint selection_clear(GtkWidget *widget,
-	                            GdkEventSelection *event, gpointer data);
+	                          GtkSelectionData *seldata,
+	                          guint info, guint time, gpointer data);
 	static gint drag_begin(GtkWidget *widget, GdkDragContext *context,
 	                       gpointer data);
 	// Handle scrollbar.
 	static void scrolled(GtkAdjustment *adj, gpointer data);
 	void move(bool upwards) override;// Move current selected combo.
 	void search(const char *srch, int dir) override;
-#ifdef _WIN32
-	static gint win32_drag_motion(GtkWidget *widget, GdkEventMotion *event,
-	                              gpointer data);
-#else
 	static gint drag_motion(GtkWidget *widget, GdkEventMotion *event,
 	                        gpointer data);
-#endif
 };
 
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <SDL_keycode.h>
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -33,8 +34,8 @@
 MenuEntry::MenuEntry(Shape_frame *on, Shape_frame *off, int xpos, int ypos) {
 	frame_on = on;
 	frame_off = off;
-	int max_width = on->get_width() > off->get_width() ? on->get_width() : off->get_width();
-	int max_height = on->get_height() > off->get_height() ? on->get_height() : off->get_height();
+	const int max_width = on->get_width() > off->get_width() ? on->get_width() : off->get_width();
+	const int max_height = on->get_height() > off->get_height() ? on->get_height() : off->get_height();
 	x = xpos;
 	y1 = y = ypos;
 	x1 = xpos - max_width / 2;
@@ -60,7 +61,7 @@ void MenuEntry::paint(Game_window *gwin) {
 }
 
 bool MenuEntry::handle_event(SDL_Event &event) {
-	SDL_Keysym &key = event.key.keysym;
+	const SDL_Keysym &key = event.key.keysym;
 	return (event.type == SDL_KEYDOWN &&
 	        (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
 	       event.type == SDL_MOUSEBUTTONUP;
@@ -69,8 +70,8 @@ bool MenuEntry::handle_event(SDL_Event &event) {
 // MenuTextEntry: a selectable menu entry (a button)
 MenuTextEntry::MenuTextEntry(Font *fnton, Font *fnt, const char *txt, int xpos, int ypos)
 	: MenuTextObject(fnt, fnton, txt), enabled(true) {
-	int max_width = font->get_text_width(text.c_str());
-	int max_height = font->get_text_height();
+	const int max_width = font->get_text_width(text.c_str());
+	const int max_height = font->get_text_height();
 	x = xpos;
 	y1 = y = ypos;
 	x1 = xpos - max_width / 2 + 1;
@@ -96,7 +97,7 @@ void MenuTextEntry::paint(Game_window *gwin) {
 }
 
 bool MenuTextEntry::handle_event(SDL_Event &event) {
-	SDL_Keysym &key = event.key.keysym;
+	const SDL_Keysym &key = event.key.keysym;
 	return (((event.type == SDL_KEYDOWN &&
 	          (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
 	         event.type == SDL_MOUSEBUTTONUP)) && enabled;
@@ -166,7 +167,7 @@ void MenuGameEntry::paint(Game_window *gwin) {
 }
 
 bool MenuGameEntry::handle_event(SDL_Event &event) {
-	SDL_Keysym &key = event.key.keysym;
+	const SDL_Keysym &key = event.key.keysym;
 	return (((event.type == SDL_KEYDOWN &&
 	          (key.sym == SDLK_RETURN || key.sym == SDLK_KP_ENTER)) ||
 	         event.type == SDL_MOUSEBUTTONUP)) && is_enabled();
@@ -175,8 +176,8 @@ bool MenuGameEntry::handle_event(SDL_Event &event) {
 // MenuTextChoice: a multiple-choice menu entry
 MenuTextChoice::MenuTextChoice(Font *fnton, Font *fnt, const char *txt, int xpos, int ypos)
 	: MenuTextObject(fnt, fnton, txt) {
-	int max_width = font->get_text_width(text.c_str());
-	int max_height = font->get_text_height();
+	const int max_width = font->get_text_width(text.c_str());
+	const int max_height = font->get_text_height();
 	x = xpos;
 	x1 = x - max_width;
 	y1 = y = ypos;
@@ -189,7 +190,7 @@ MenuTextChoice::MenuTextChoice(Font *fnton, Font *fnt, const char *txt, int xpos
 
 void MenuTextChoice::add_choice(const char *s) {
 	choices.emplace_back(s);
-	int len = font->get_text_width(s);
+	const int len = font->get_text_width(s);
 	max_choice_width = (len > max_choice_width) ? len : max_choice_width;
 	x2 = x + 32 + max_choice_width;
 }
@@ -280,8 +281,13 @@ void MenuList::set_selection(int x, int y) {
 	selected = false;
 }
 
+void MenuList::set_cancel(int val) {
+	cancel_id = val;
+	has_cancel = true;
+}
+
 int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
-	int count = entries.size();
+	const int count = entries.size();
 	for (int i = 0; i < count; i++)
 		entries[i]->dirty = true;
 
@@ -291,7 +297,7 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 	bool exit_loop = false;
 	do {
 		Delay();
-		bool mouse_visible = mouse->is_onscreen();
+		const bool mouse_visible = mouse->is_onscreen();
 		if (mouse_visible)
 			mouse->hide();
 		// redraw items if they're dirty
@@ -309,6 +315,8 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 			int gx;
 			int gy;
 			if (event.type == SDL_MOUSEMOTION) {
+				if (Mouse::use_touch_input && event.motion.which != EXSDL_TOUCH_MOUSEID)
+					Mouse::use_touch_input = false;
 				gwin->get_win()->screen_to_game(event.motion.x, event.motion.y, gwin->get_fastmouse(), gx, gy);
 				if (!mouse_updated) mouse->hide();
 				mouse_updated = true;
@@ -337,6 +345,11 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 				mouse->hide();
 				mouse->blit_dirty();
 				switch (event.key.keysym.sym) {
+				case SDLK_ESCAPE:
+					if (has_cancel) {
+						return cancel_id;
+					}
+					break;
 				case SDLK_q:
 				case SDLK_x:
 					if (event.key.keysym.mod & KMOD_ALT
@@ -381,12 +394,16 @@ int MenuList::handle_events(Game_window *gwin, Mouse *mouse) {
 				}
 			} else if (event.type == SDL_QUIT) {
 				return -1;
+			} else if (event.type == SDL_FINGERDOWN) {
+				if ((!Mouse::use_touch_input) && (event.tfinger.fingerId != 0)) {
+					Mouse::use_touch_input = true;
+					gwin->set_painted();
+				}
 			}
 		}
 		if (mouse_updated) {
 			mouse->show();
 			mouse->blit_dirty();
-			mouse_updated = false;
 		}
 	} while (!exit_loop);
 	mouse->hide();

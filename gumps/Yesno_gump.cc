@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,7 +20,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <config.h>
 #endif
 
-#include <SDL_events.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 #include "Yesno_gump.h"
 #include "gamewin.h"
@@ -81,7 +89,7 @@ bool Yesno_button::activate(
 Yesno_gump::Yesno_gump(
     const std::string &txt, const char *font
 ) : Modal_gump(nullptr, game->get_shape("gumps/yesnobox")), text(txt), fontname(font), answer(-1) {
-	set_object_area(Rectangle(6, 5, 116, 32));
+	set_object_area(TileRect(6, 5, 116, 32));
 	add_elem(new Yesno_button(this, yesx, yesnoy, 1));
 	add_elem(new Yesno_button(this, nox, yesnoy, 0));
 }
@@ -177,8 +185,8 @@ Countdown_gump::Countdown_gump(const std::string &txt, int timeout, const char *
 }
 
 bool Countdown_gump::run() {
-	int elapsed = SDL_GetTicks() - start_time;
-	int remaining = timer * 1000 - elapsed;
+	const int elapsed = SDL_GetTicks() - start_time;
+	const int remaining = timer * 1000 - elapsed;
 
 	if (remaining <= 0)  set_answer(0);
 

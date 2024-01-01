@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <map>
 #include <list>
+#include <memory>
 #include "tiles.h"
 
 class Game_object;
@@ -61,7 +62,7 @@ public:
 };
 
 // Sigh, this is needed to prevent compiler error with MSVC
-using Map_patch_list = std::list<Map_patch *>;
+using Map_patch_list = std::list<std::unique_ptr<Map_patch>>;
 using Map_patch_map = std::map<int, Map_patch_list>;
 
 /*
@@ -92,8 +93,7 @@ public:
 class Map_patch_collection {
 	Map_patch_map patches;
 public:
-	~Map_patch_collection();
-	void add(Map_patch *p);     // Add a patch.
+	void add(std::unique_ptr<Map_patch> p);     // Add a patch.
 	void apply(int schunk);     // Apply for given superchunk.
 };
 

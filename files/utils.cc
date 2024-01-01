@@ -2,7 +2,7 @@
  *  utils.cc - Common utility routines.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@
 #include <string>
 #include <fstream>
 #include <map>
+#include <vector>
 #include <list>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -56,7 +57,6 @@
 #  include <sys/param.h> // for MAXPATHLEN
 #endif
 
-using std::cerr;
 using std::string;
 using std::ios;
 
@@ -65,11 +65,14 @@ using std::ios;
 static void switch_slashes(string &name);
 static bool base_to_uppercase(string &str, int count);
 
+// Global factories for instantiating file streams
+static U7IstreamFactory istream_factory = [](const char* s, std::ios_base::openmode mode) {
+	return std::make_unique<std::ifstream>(s, mode);
+};
 
-// Wrap a few functions
-inline int stat(const std::string &file_name, struct stat *buf) {
-	return stat(file_name.c_str(), buf);
-}
+static U7OstreamFactory ostream_factory = [](const char* s, std::ios_base::openmode mode) {
+	return std::make_unique<std::ofstream>(s, mode);
+};
 
 // Ugly hack for supporting different paths
 
@@ -84,13 +87,17 @@ void reset_system_paths() {
 	path_map = stored_path_map;
 }
 
+static bool is_path_separator(char cc) {
+#ifdef _WIN32
+	return cc == '/' || cc == '\\';
+#else
+	return cc == '/';
+#endif
+}
+
 static string remove_trailing_slash(const string &value) {
 	string new_path = value;
-	if (*(new_path.end() - 1) == '/'
-#ifdef _WIN32
-	        || *(new_path.end() - 1) == '\\'
-#endif
-	   ) {
+	if (is_path_separator(new_path.back())) {
 		std::cerr << "Warning, trailing slash in path: \"" << new_path << "\"" << std::endl;
 		new_path.resize(new_path.size() - 1);
 	}
@@ -149,7 +156,7 @@ string get_system_path(const string &path) {
 	while (pos != string::npos && pos2 == 0 && cnt-- > 0) {
 		pos += 1;
 		// See if we can translate this prefix
-		string syspath = new_path.substr(0, pos);
+		const string syspath = new_path.substr(0, pos);
 		if (is_system_path_defined(syspath)) {
 			string new_prefix = path_map[syspath];
 			new_prefix += new_path.substr(pos);
@@ -173,7 +180,7 @@ string get_system_path(const string &path) {
 
 	switch_slashes(new_path);
 #ifdef _WIN32
-	if (*(new_path.end() - 1) == '/' || *(new_path.end() - 1) == '\\') {
+	if (new_path.back() == '/' || new_path.back() == '\\') {
 		//std::cerr << "Trailing slash in path: \"" << new_path << "\"" << std::endl << "...compensating, but go complain to Colourless anyway" << std::endl;
 		std::cerr << "Warning, trailing slash in path: \"" << new_path << "\"" << std::endl;
 		new_path += '.';
@@ -188,10 +195,9 @@ string get_system_path(const string &path) {
 	if (pos == pos2 && pos3 != string::npos) {
 		int num_chars = GetShortPathName(new_path.c_str(), nullptr, 0);
 		if (num_chars > 0) {
-			char *short_path = new char [num_chars + 1];
-			GetShortPathName(new_path.c_str(), short_path, num_chars + 1);
-			new_path = short_path;
-			delete [] short_path;
+			std::string short_path(num_chars + 1);
+			GetShortPathName(new_path.c_str(), &short_path[0], num_chars + 1);
+			new_path = std::move(short_path);
 		}
 		//else std::cerr << "Warning unable to get short path for: " << new_path << std::endl;
 	}
@@ -252,14 +258,22 @@ static void switch_slashes(
     string &name
 ) {
 #ifdef _WIN32
-	for (string::iterator X = name.begin(); X != name.end(); ++X) {
-		if (*X == '/')
-			*X = '\\';
+	for (char& X : name) {
+		if (X == '/')
+			X = '\\';
 	}
 #else
 	ignore_unused_variable_warning(name);
 	// do nothing
 #endif
+}
+
+void U7set_istream_factory(U7IstreamFactory factory) {
+	istream_factory = std::move(factory);
+}
+
+void U7set_ostream_factory(U7OstreamFactory factory) {
+	ostream_factory = std::move(factory);
 }
 
 /*
@@ -270,8 +284,7 @@ static void switch_slashes(
  *  Output: 0 if couldn't open.
  */
 
-bool U7open(
-    std::ifstream &in,          // Input stream to open.
+std::unique_ptr<std::istream> U7open_in(
     const char *fname,          // May be converted to upper-case.
     bool is_text                // Should the file be opened in text mode
 ) {
@@ -279,24 +292,22 @@ bool U7open(
 	if (!is_text) mode |= std::ios::binary;
 	string name = get_system_path(fname);
 	int uppercasecount = 0;
+	std::unique_ptr<std::istream> in;
 	do {
-		// We first "clear" the stream object. This is done to prevent
-		// problems when re-using stream objects
-		in.clear();
 		try {
 			//std::cout << "trying: " << name << std::endl;
-			in.open(name.c_str(), mode);        // Try to open
-		} catch (std::exception &)
-		{}
-		if (in.good() && !in.fail()) {
+			in = istream_factory(name.c_str(), mode);
+		} catch (std::exception &) {
+		}
+		if (in && in->good() && !in->fail()) {
 			//std::cout << "got it!" << std::endl;
-			return true; // found it!
+			return in; // found it!
 		}
 	} while (base_to_uppercase(name, ++uppercasecount));
 
 	// file not found.
 	throw file_open_exception(get_system_path(fname));
-	return false;
+	return nullptr;
 }
 
 /*
@@ -307,8 +318,7 @@ bool U7open(
  *  Output: 0 if couldn't open.
  */
 
-bool U7open(
-    std::ofstream &out,         // Output stream to open.
+std::unique_ptr<std::ostream> U7open_out(
     const char *fname,          // May be converted to upper-case.
     bool is_text                // Should the file be opened in text mode
 ) {
@@ -316,21 +326,18 @@ bool U7open(
 	if (!is_text) mode |= std::ios::binary;
 	string name = get_system_path(fname);
 
-	// We first "clear" the stream object. This is done to prevent
-	// problems when re-using stream objects
-	out.clear();
+	std::unique_ptr<std::ostream> out;
 
 	int uppercasecount = 0;
 	do {
-		out.open(name.c_str(), mode);       // Try to open
-		if (out.good())
-			return true; // found it!
-		out.clear();    // Forget ye not
+		out = ostream_factory(name.c_str(), mode);
+		if (out && out->good())
+			return out; // found it!
 	} while (base_to_uppercase(name, ++uppercasecount));
 
 	// file not found.
 	throw file_open_exception(get_system_path(fname));
-	return false;
+	return nullptr;
 }
 
 DIR *U7opendir(
@@ -365,12 +372,19 @@ void U7remove(
 	DeleteFile(lpszT);
 #else
 
-	struct stat sbuf;
-
 	int uppercasecount = 0;
 	do {
-		bool exists = (stat(name, &sbuf) == 0);
-		if (exists) {
+		std::unique_ptr<std::istream> in;
+		try {
+			if (istream_factory) {
+				in = istream_factory(name.c_str(), std::ios_base::in);
+			} else {
+				in = std::make_unique<std::ifstream>(name.c_str(), std::ios_base::in);
+			}
+		} catch (std::exception &) {
+		}
+		if (in && in->good() && !in->fail()) {
+			in.reset();
 			std::remove(name.c_str());
 		}
 	} while (base_to_uppercase(name, ++uppercasecount));
@@ -384,8 +398,7 @@ void U7remove(
  *  Output: 0 if couldn't open. We do NOT throw exceptions.
  */
 
-bool U7open_static(
-    std::ifstream &in,      // Input stream to open.
+std::unique_ptr<std::istream> U7open_static(
     const char *fname,      // May be converted to upper-case.
     bool is_text            // Should file be opened in text mode
 ) {
@@ -393,17 +406,19 @@ bool U7open_static(
 
 	name = string("<PATCH>/") + fname;
 	try {
-		if (U7open(in, name.c_str(), is_text))
-			return true;
-	} catch (std::exception &)
-	{}
+		auto in = U7open_in(name.c_str(), is_text);
+		if (in)
+			return in;
+	} catch (std::exception &) {
+	}
 	name = string("<STATIC>/") + fname;
 	try {
-		if (U7open(in, name.c_str(), is_text))
-			return true;
-	} catch (std::exception &)
-	{}
-	return false;
+		auto in = U7open_in(name.c_str(), is_text);
+		if (in)
+			return in;
+	} catch (std::exception &) {
+	}
+	return nullptr;
 }
 
 /*
@@ -413,17 +428,22 @@ bool U7open_static(
 bool U7exists(
     const char *fname         // May be converted to upper-case.
 ) {
-	string name = get_system_path(fname);
-	struct stat sbuf;
-
-	int uppercasecount = 0;
-	do {
-		bool exists = (stat(name, &sbuf) == 0);
-		if (exists)
-			return true; // found it!
-	} while (base_to_uppercase(name, ++uppercasecount));
-
-	// file not found
+	try {
+		// First check if we can open it as a file.
+		if (U7open_in(fname)) {
+			return true;
+		}
+	} catch (std::exception &) {
+	}
+	try {
+		// If not, try to open it as a directory.
+		auto* dir = U7opendir(fname);
+		if (dir) {
+			closedir(dir);
+			return true;
+		}
+	} catch (std::exception &) {
+	}
 	return false;
 }
 
@@ -437,7 +457,7 @@ int U7mkdir(
 ) {
 	string name = get_system_path(dirname);
 	// remove any trailing slashes
-	string::size_type pos = name.find_last_not_of('/');
+	const string::size_type pos = name.find_last_not_of('/');
 	if (pos != string::npos)
 		name.resize(pos + 1);
 #if defined(_WIN32) && defined(UNICODE)
@@ -459,7 +479,7 @@ int U7mkdir(
 class shell32_wrapper {
 protected:
 	HMODULE hLib;
-	using SHGetFolderPathFunc = HRESULT (*)(
+	using SHGetFolderPathFunc = HRESULT (WINAPI*)(
 	    HWND hwndOwner,
 	    int nFolder,
 	    HANDLE hToken,
@@ -469,20 +489,20 @@ protected:
 	SHGetFolderPathFunc      SHGetFolderPath;
 	/*
 	// Will leave this for someone with Vista/W7 to implement.
-	using SHGetKnownFolderPathFunc = HRESULT (*) (
+	using SHGetKnownFolderPathFunc = HRESULT (WINAPI*) (
 	    REFKNOWNFOLDERID rfid,
 	    DWORD dwFlags,
 	    HANDLE hToken,
 	    PWSTR *ppszPath
-    );
+	);
 	SHGetKnownFolderPathFunc SHGetKnownFolderPath;
 	*/
 
 	template <typename Dest>
 	Dest get_function(const char *func) {
-		static_assert(sizeof(Dest) == sizeof(decltype(GetProcAddress(hLib, func))), "sizeof(void*) is not equal to sizeof(Dest)!");
+		static_assert(sizeof(Dest) == sizeof(decltype(GetProcAddress(hLib, func))), "sizeof(FARPROC) is not equal to sizeof(Dest)!");
 		Dest fptr;
-		auto *optr = GetProcAddress(hLib, func);
+		FARPROC optr = GetProcAddress(hLib, func);
 		std::memcpy(&fptr, &optr, sizeof(optr));
 		return fptr;
 	}
@@ -541,105 +561,182 @@ void cleanup_output(const char *prefix) {
 	ignore_unused_variable_warning(prefix);
 }
 #else
-std::string Get_home();
+static std::string Get_home();
+
+struct unsynch_from_stdio {
+	const bool old_synch_status = std::ostream::sync_with_stdio(false);
+	~unsynch_from_stdio() noexcept {
+		std::ostream::sync_with_stdio(old_synch_status);
+	}
+};
 
 // Pulled from exult_studio.cc.
 void redirect_output(const char *prefix) {
-	if (GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_PIPE) {
-		// If we are at a msys/msys2 shell, do not redirect the output, and
-		// print it to console instead.
+	HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	HANDLE stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+	DWORD stdout_type = GetFileType(stdout_handle);
+	DWORD stderr_type = GetFileType(stderr_handle);
+	if (stdout_type != FILE_TYPE_UNKNOWN && stderr_type != FILE_TYPE_UNKNOWN) {
+		// If we already have valid destinations for both stdout and stderr,
+		// we don't need to do anything. This happens, for example, on MSYS2
+		// in MinTTY.
 		return;
 	}
+	auto attach_console = [](){
+		// If we already have a console, quit.
+		if (GetConsoleWindow() != nullptr) {
+			return true;
+		}
+		// Attach to the parent process console.
+		if (AttachConsole(ATTACH_PARENT_PROCESS) != 0) {
+			return true;
+		}
+#ifdef DEBUG
+		return AllocConsole() != 0;
+#else
+		return false;
+#endif
+	};
+	auto redirect_stream = [](FILE* stream, const char* device, HANDLE handle,
+							  DWORD& type, int mode, size_t size) {
+		// Only redirect if the stream is not already being redirected.
+		if (handle != INVALID_HANDLE_VALUE && type == FILE_TYPE_UNKNOWN) {
+			// Flush the output in case anything is queued
+			fflush(stream);
+			FILE* new_stream = freopen(device, "w", stream);
+			if (new_stream != nullptr) {
+				setvbuf(stream, nullptr, mode, size);
+				return true;
+			}
+			type = GetFileType(handle);
+		}
+		return false;
+	};
+	auto redirect_stdout = [&](const char* device) {
+		// Line buffered
+		return redirect_stream(stdout, device, stdout_handle, stdout_type, _IOLBF, BUFSIZ);
+	};
+	auto redirect_stderr = [&](const char* device) {
+		// No buffering
+		return redirect_stream(stderr, device, stderr_handle, stderr_type, _IONBF, 0);
+	};
+	const unsynch_from_stdio resyncher;
+	if (attach_console()) {
+		// If we are in something like Windows Terminal, we need to connect to
+		// the parent terminal and manually redirect stdout/stderr to the
+		// console. Note: in powershell or cmd.exe, this will give the
+		// impression of being stuck when exult/ES exits because they return to
+		// prompt immediately after exult/ES start, and this gets lost in the
+		// stdout/stderr output.
+		// Another possibility is to compile as a console application. We will
+		// always have an attached terminal in this case, even when starting
+		// from Windows Explorer. This console can be destroyed, but it will
+		// cause it to flash into view, then disappear right away.
+		// TODO: Figure out a way to make Exult/ES "return" the terminal.
+		// If both calls succeeded in redirecting output to the terminal, we can
+		// bail out early.
+		if (redirect_stdout("CONOUT$") && redirect_stderr("CONOUT$")) {
+			return;
+		}
+		// Otherwise, fall through to redirect whichever ones failed to a file.
+	}
+
 	// Starting from GUI, or from cmd.exe, we will need to redirect the output.
-	// It is possible to connect to the parent cmd.exe console using WinAPI
-	// (namely, AttachConsole(ATTACH_PARENT_PROCESS)). However, cmd.exe detaches
-	// the program since it (correctly) thinks we are a GUI application, and
-	// returns to the prompt. Thus, when we exit, it seems like we are stuck.
-	// Another possibility is to compile as a console application. We will
-	// always have an attached terminal in this case, even when starting from
-	// Windows Explorer. This console can be destroyed, but it will cause it
-	// to flash into view, then disappear right away.
-
-	// Flush the output in case anything is queued
-	fclose(stdout);
-	fclose(stderr);
-
-	string folderPath = Get_home() + "/";
-
-	string stdoutPath = folderPath + prefix + "out.txt";
-	const char *stdoutfile = stdoutPath.c_str();
-
-	// Redirect standard input and standard output
-	FILE *newfp = freopen(stdoutfile, "w", stdout);
-	if (newfp == nullptr) {
-		// This happens on NT
-#if !defined(stdout)
-		stdout = fopen(stdoutfile, "w");
-#else
-		newfp = fopen(stdoutfile, "w");
-		if (newfp)
-			*stdout = *newfp;
-#endif
-	}
-
-	string stderrPath = folderPath + prefix + "err.txt";
-	const char *stderrfile = stderrPath.c_str();
-
-	newfp = freopen(stderrfile, "w", stderr);
-	if (newfp == nullptr) {
-		// This happens on NT
-#if !defined(stderr)
-		stderr = fopen(stderrfile, "w");
-#else
-		newfp = fopen(stderrfile, "w");
-		if (newfp)
-			*stderr = *newfp;
-#endif
-	}
-	setvbuf(stdout, nullptr, _IOLBF, BUFSIZ);  // Line buffered
-	setbuf(stderr, nullptr);                   // No buffering
+	// Paths to the output files.
+	const string folderPath = Get_home() + "/" + prefix;
+	const string stdoutPath = folderPath + "out.txt";
+	redirect_stdout(stdoutPath.c_str());
+	const string stderrPath = folderPath + "err.txt";
+	redirect_stderr(stderrPath.c_str());
 }
 
 void cleanup_output(const char *prefix) {
-	string folderPath = Get_home() + "/";
-	if (!ftell(stdout)) {
-		fclose(stdout);
-		string stdoutPath = folderPath + prefix + "out.txt";
-		remove(stdoutPath.c_str());
-	}
-	if (!ftell(stderr)) {
-		fclose(stderr);
-		string stderrPath = folderPath + prefix + "err.txt";
-		remove(stderrPath.c_str());
+	const string folderPath = Get_home() + "/" + prefix;
+	auto clear_empty_redirect = [&](FILE* stream, const char* suffix) {
+		fflush(stream);
+		if (ftell(stream) == 0) {
+			fclose(stream);
+			const string stream_path = folderPath + suffix;
+			remove(stream_path.c_str());
+		}
+	};
+	clear_empty_redirect(stdout, "out.txt");
+	clear_empty_redirect(stderr, "err.txt");
+	if (GetConsoleWindow() != nullptr) {
+		FreeConsole();
 	}
 }
 #endif // USE_CONSOLE
 #endif  // _WIN32
 
+static std::string home_directory;
+
+void U7set_home(std::string home) {
+	home_directory = std::move(home);
+}
+
 string Get_home() {
-	std::string home_dir;
+	if (!home_directory.empty()) {
+		return home_directory;
+	}
 #ifdef _WIN32
 #ifdef PORTABLE_EXULT_WIN32
-	home_dir = ".";
+	home_directory = ".";
 #else
 	if (get_system_path("<HOME>") == ".")
-		home_dir = ".";
+		home_directory = ".";
 	else {
 		shell32_wrapper shell32;
-		home_dir = shell32.Get_local_appdata();
-		if (!home_dir.empty())
-			home_dir += "\\Exult";
+		home_directory = shell32.Get_local_appdata();
+		if (!home_directory.empty())
+			home_directory += "\\Exult";
 		else
-			home_dir = ".";
+			home_directory = ".";
 	}
 #endif // PORTABLE_WIN32_EXULT
 #else
 	const char *home = nullptr;
 	if ((home = getenv("HOME")) != nullptr)
-		home_dir = home;
+		home_directory = home;
 #endif
-	return home_dir;
+	return home_directory;
 }
+
+#if defined(MACOSX) || defined(__IPHONEOS__)
+struct CFDeleter
+{
+	void operator()(CFTypeRef ptr) const
+	{
+		if (ptr) CFRelease(ptr);
+	}
+};
+
+void setup_app_bundle_resource() {
+	// setup the location of the resource folder inside the app bundle
+	std::unique_ptr<std::remove_pointer<CFURLRef>::type, CFDeleter> bundleUrl {std::move(CFBundleCopyBundleURL(CFBundleGetMainBundle()))};
+	if (bundleUrl) {
+		unsigned char bundlebuf[MAXPATHLEN];
+		if (CFURLGetFileSystemRepresentation(bundleUrl.get(), true, bundlebuf, sizeof(bundlebuf))) {
+			string bundlepath(reinterpret_cast<const char *>(bundlebuf));
+#ifdef MACOSX
+			bundlepath += "/Contents/Info.plist";
+#else
+			bundlepath += "/Info.plist";
+#endif
+			if (U7exists(bundlepath)) {
+				std::unique_ptr<std::remove_pointer<CFURLRef>::type, CFDeleter> fileUrl {std::move(CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle()))};
+				if (fileUrl) {
+					unsigned char buf[MAXPATHLEN];
+					if (CFURLGetFileSystemRepresentation(fileUrl.get(), true, buf, sizeof(buf))) {
+						string path(reinterpret_cast<const char *>(buf));
+						add_system_path("<APP_BUNDLE_RES>", path);
+					}
+				}
+			}
+		}
+	}
+}
+#endif
 
 void setup_data_dir(
     const std::string &data_path,
@@ -647,16 +744,13 @@ void setup_data_dir(
 ) {
 #if defined(MACOSX) || defined(__IPHONEOS__)
 	// Can we try from the bundle?
-	CFURLRef fileUrl = CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle());
-	if (fileUrl) {
-		unsigned char buf[MAXPATHLEN];
-		if (CFURLGetFileSystemRepresentation(fileUrl, true, buf, sizeof(buf))) {
-			string path(reinterpret_cast<const char *>(buf));
-			path += "/data";
-			add_system_path("<BUNDLE>", path.c_str());
-			if (!U7exists(BUNDLE_EXULT_FLX))
-				clear_system_path("<BUNDLE>");
-		}
+	setup_app_bundle_resource();
+	if (is_system_path_defined("<APP_BUNDLE_RES>")) {
+		std::string path = get_system_path("<APP_BUNDLE_RES>");
+		path += "/data";
+		add_system_path("<BUNDLE>", path);
+		if (!U7exists(BUNDLE_EXULT_FLX))
+			clear_system_path("<BUNDLE>");
 	}
 #endif
 #ifdef __IPHONEOS__
@@ -665,7 +759,7 @@ void setup_data_dir(
 		// But lets use <DATA> in the iTunes file sharing.
 		string path(ios_get_documents_dir());
 		path += "/data";
-		add_system_path("<DATA>", path.c_str());
+		add_system_path("<DATA>", path);
 		return;
 	}
 #endif
@@ -682,22 +776,24 @@ void setup_data_dir(
 			return;
 	}
 
-	// Try "data" subdirectory for current working directory:
-	add_system_path("<DATA>", "data");
-	if (U7exists(EXULT_FLX))
-		return;
+	// Due to SDL_RWops internally using SDL_OpenFPFromBundleOrFallback in OSX
+	// (which looks for the file inside the bundle before looking in CWD), there
+	// is no reason ever to check CWD if we found the bundle path above.
+	if (!is_system_path_defined("<BUNDLE>")) {
+		// Try "data" subdirectory for current working directory:
+		add_system_path("<DATA>", "data");
+		if (U7exists(EXULT_FLX))
+			return;
+	}
 
 	// Try "data" subdirectory for exe directory:
 	const char *sep = std::strrchr(runpath, '/');
 	if (!sep) sep = std::strrchr(runpath, '\\');
 	if (sep) {
-		int plen = sep - runpath;
-		char *dpath = new char[plen + 10];
-		std::strncpy(dpath, runpath, plen + 1);
-		dpath[plen + 1] = 0;
-		std::strcat(dpath, "data");
+		const int plen = sep - runpath;
+		std::string dpath(runpath, plen + 1);
+		dpath += "data";
 		add_system_path("<DATA>", dpath);
-		delete [] dpath;
 	} else
 		add_system_path("<DATA>", "data");
 	if (U7exists(EXULT_FLX))
@@ -726,6 +822,10 @@ static string Get_config_dir(const string& home_dir) {
 	string config_dir(home_dir);
 	config_dir += "/Library/Preferences";
 	return config_dir;
+#elif defined(__HAIKU__)
+	string config_dir(home_dir);
+	config_dir += "/config/settings/exult";
+	return config_dir;
 #else
 	return home_dir;
 #endif
@@ -741,6 +841,11 @@ static string Get_savehome_dir(const string& home_dir, const string& config_dir)
 	ignore_unused_variable_warning(config_dir);
 	string savehome_dir(home_dir);
 	savehome_dir += "/Library/Application Support/Exult";
+	return savehome_dir;
+#elif defined(__HAIKU__)
+	ignore_unused_variable_warning(config_dir);
+	string savehome_dir(home_dir);
+	savehome_dir += "/config/settings/exult";
 	return savehome_dir;
 #elif defined(XWIN)
 	ignore_unused_variable_warning(config_dir);
@@ -762,6 +867,11 @@ static string Get_gamehome_dir(const string& home_dir, const string& config_dir)
 #elif defined(MACOSX)
 	ignore_unused_variable_warning(home_dir, config_dir);
 	return "/Library/Application Support/Exult";
+#elif defined(__HAIKU__)
+	ignore_unused_variable_warning(config_dir);
+	string gamehome_dir(home_dir);
+	gamehome_dir += "/config/non-packaged/data/exult";
+	return gamehome_dir;
 #elif defined(XWIN)
 	ignore_unused_variable_warning(home_dir, config_dir);
 	return EXULT_DATADIR;
@@ -772,10 +882,10 @@ static string Get_gamehome_dir(const string& home_dir, const string& config_dir)
 }
 
 void setup_program_paths() {
-	string home_dir(Get_home());
-	string config_dir(Get_config_dir(home_dir));
-	string savehome_dir(Get_savehome_dir(home_dir, config_dir));
-	string gamehome_dir(Get_gamehome_dir(home_dir, config_dir));
+	const string home_dir(Get_home());
+	const string config_dir(Get_config_dir(home_dir));
+	const string savehome_dir(Get_savehome_dir(home_dir, config_dir));
+	const string gamehome_dir(Get_gamehome_dir(home_dir, config_dir));
 
 	if (get_system_path("<HOME>") != ".")
 		add_system_path("<HOME>", home_dir);
@@ -804,33 +914,26 @@ void U7copy(
     const char *src,
     const char *dest
 ) {
-	std::ifstream in;
-	std::ofstream out;
+	std::unique_ptr<std::istream> pIn;
+	std::unique_ptr<std::ostream> pOut;
 	try {
-		U7open(in, src);
-		U7open(out, dest);
-	} catch (exult_exception &e) {
-		in.close();
-		out.close();
-		throw e;
+		pIn = U7open_in(src);
+		pOut = U7open_out(dest);
+	} catch (exult_exception&) {
+		throw;
 	}
-	size_t bufsize = 0x8000;
-	char *buf = new char[0x8000];
-	in.seekg(0, ios::end);      // Get filesize.
-	size_t filesize = in.tellg();
-	in.seekg(0, ios::beg);
-	while (filesize > 0) {      // Copy.
-		size_t toread = bufsize < filesize ? bufsize : filesize;
-		in.read(buf, toread);
-		out.write(buf, toread);
-		filesize -= toread;
+	if (!pIn) {
+		throw file_open_exception(src);
 	}
+	if (!pOut) {
+		throw file_open_exception(dest);
+	}
+	auto& in = *pIn;
+	auto& out = *pOut;
+	out << in.rdbuf();
 	out.flush();
-	delete [] buf;
-	bool inok = in.good();
-	bool outok = out.good();
-	in.close();
-	out.close();
+	const bool inok = in.good();
+	const bool outok = out.good();
 	if (!inok)
 		throw file_read_exception(src);
 	if (!outok)
@@ -875,7 +978,7 @@ uint32 msb32(uint32 x) {
  */
 
 int fgepow2(uint32 n) {
-	uint32 l = msb32(n);
+	const uint32 l = msb32(n);
 	return l < n ? (l << 1) : l;
 }
 

@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2003  The Pentagram Team
+Copyright (C) 2007-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -203,7 +204,7 @@ uint32 XMidiEventList::convertListToMTrk (ODataSource *dest)
 
 	if (dest)
 	{
-		int cur_pos = dest->getPos();
+		const int cur_pos = dest->getPos();
 		dest->seek (size_pos);
 		dest->write4high (i-8);
 		dest->seek (cur_pos);

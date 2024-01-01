@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013  The Exult Team
+Copyright (C) 2000-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -81,7 +81,7 @@ void read_params(const int argc, char *argv[]) {
 
 	// "I'd appreciate your input"...
 	for (int i = 2; i < argc; i++) {
-		string s(argv[i]);
+		const string s(argv[i]);
 
 		/* Adds the value (argv[i+2]) to the key (argv[i+1]) in the conf file. */
 		if ((s == "add") || (s == "create") || (s == "mk") || (s == "new") || (s == "-a") || (s == "modify")) {
@@ -198,10 +198,10 @@ int main(int argc, char *argv[]) {
 
 	if (verbose) {
 		cerr << "Operations:" << endl;
-		for (auto i = dolist.begin(); i != dolist.end(); i++) {
-			cerr << '\t' << ((i->first == DoAdd) ? "add" : ((i->first == DoRem) ? "rem" : ((i->first == DoGet) ? "get" : "unknown"))) << '\t';
-			for (auto j = i->second.begin(); j != i->second.end(); j++)
-				cerr << *j << '\t';
+		for (auto& i : dolist) {
+			cerr << '\t' << ((i.first == DoAdd) ? "add" : ((i.first == DoRem) ? "rem" : ((i.first == DoGet) ? "get" : "unknown"))) << '\t';
+			for (auto& j : i.second)
+				cerr << j << '\t';
 			cerr << endl;
 		}
 	}

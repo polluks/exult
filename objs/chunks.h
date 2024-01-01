@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,14 +25,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef CHUNKS_H
 #define CHUNKS_H
 
-#include "objlist.h"
-#include <set>
 
+#include "chunkter.h"
 #include "exult_constants.h"
+#include "objlist.h"
 #include "rect.h"
 #include "shapeid.h"
 #include "tiles.h"
-#include "chunkter.h"
+
+#include <memory>
+#include <set>
 
 class Map_chunk;
 class Egg_object;
@@ -43,32 +45,39 @@ class Npc_actor;
 class Image_buffer8;
 class Chunk_terrain;
 class ODataSource;
+class Ordering_info;
 
 /*
  *  Data cached for a chunk to speed up processing, but which doesn't need
  *  to be saved to disk:
  */
-class Chunk_cache : public Game_singletons {
+class Chunk_cache : public Game_singletons,
+					public std::enable_shared_from_this<Chunk_cache> {
+public:
+	// For each tile, 2 bits for each lift
+	// level for #objs blocking there, so
+	// 8 lifts are represented.
+	using blocked8z = std::unique_ptr<uint16[]>;
+
+private:
 	Map_chunk *obj_list;
-	using blocked8z = uint16 *;  // For each tile, 2 bits for each lift
-	//   level for #objs blocking there, so
-	//   8 lifts are represented.
-	std::vector<blocked8z> blocked;  // One for each 8 lifts.
-	std::vector<Egg_object *> egg_objects; // ->eggs which influence this chunk.
-	unsigned short eggs[256];   // Bit #i (0-14) set means that the
-	//   tile is within egg_object[i]'s
-	//   influence.  Bit 15 means it's 1 or
-	//   more of
-	//   egg_objects[15-(num_eggs-1)].
-	std::set<Game_object *> doors;  // Keep special list of doors.
-	friend class Map_chunk;
-	Chunk_cache();
-	~Chunk_cache();
+	// One for each 8 lifts.
+	std::vector<blocked8z> blocked;
+	// ->eggs which influence this chunk.
+	std::vector<Egg_object *> egg_objects;
+	// Bit #i (0-14) set means that the
+	// tile is within egg_object[i]'s
+	// influence.  Bit 15 means it's 1 or
+	// more of egg_objects[15-(num_eggs-1)].
+	unsigned short eggs[256];
+	// Keep special list of doors.
+	std::set<Game_object *> doors;
+
 	int get_num_eggs() {
 		return egg_objects.size();
 	}
-	blocked8z new_blocked_level(int zlevel);
-	blocked8z need_blocked_level(int zlevel) {
+	blocked8z &new_blocked_level(int zlevel);
+	blocked8z &need_blocked_level(int zlevel) {
 		return (static_cast<unsigned>(zlevel) >= blocked.size() || !blocked[zlevel])
 		       ? new_blocked_level(zlevel) : blocked[zlevel];
 	}
@@ -81,7 +90,7 @@ class Chunk_cache : public Game_singletons {
 	void update_object(Map_chunk *chunk,
 	                   Game_object *obj, bool add);
 	// Set area within egg's influence.
-	void set_egged(Egg_object *egg, Rectangle &tiles, bool add);
+	void set_egged(Egg_object *egg, TileRect &tiles, bool add);
 	// Add egg.
 	void update_egg(Map_chunk *chunk, Egg_object *egg, bool add);
 	// Set up with chunk's data.
@@ -103,7 +112,7 @@ class Chunk_cache : public Game_singletons {
 	                   unsigned short eggbits, bool now);
 	void activate_eggs(Game_object *obj, Map_chunk *chunk,
 	                   int tx, int ty, int tz, int from_tx, int from_ty, bool now) {
-		unsigned short eggbits = eggs[
+		const unsigned short eggbits = eggs[
 		                             (ty % c_tiles_per_chunk) * c_tiles_per_chunk +
 		                             (tx % c_tiles_per_chunk)];
 		if (eggbits)
@@ -112,10 +121,14 @@ class Chunk_cache : public Game_singletons {
 	}
 	// Find door blocking given tile.
 	Game_object *find_door(const Tile_coord& t);
+
 public:
+	friend class Map_chunk;
+	Chunk_cache();
+
 	// Is there something on this tile?
 	inline bool is_tile_occupied(int tx, int ty, int tz) {
-		blocked8z b8 = static_cast<unsigned>(tz / 8) < blocked.size() ? blocked[tz / 8] : nullptr;
+		const auto *b8 = static_cast<unsigned>(tz / 8) < blocked.size() ? blocked[tz / 8].get() : nullptr;
 		return b8 && (b8[ty * c_tiles_per_chunk + tx] & (3 << (2 * (tz % 8))));
 	}
 };
@@ -127,30 +140,33 @@ public:
 class Map_chunk : public Game_singletons {
 	Game_map *map;          // Map we're a part of.
 	Chunk_terrain *terrain;     // Flat landscape tiles.
-	Object_list objects;        // ->first in list of all objs.  'Flat'
-	//   obs. (lift=0,ht=0) stored 1st.
-	Game_object *first_nonflat; // ->first nonflat in 'objects'.
+	// ->first in list of all objs.  'Flat'
+	// obs. (lift=0,ht=0) stored 1st.
+	Object_list objects;
+	// ->first nonflat in 'objects'.
 	// Counts of overlapping objects from
-	//    chunks below, to right.
+	// chunks below, to right.
+	Game_object *first_nonflat;
 	unsigned char from_below, from_right, from_below_right;
 	unsigned char ice_dungeon;  // For SI, chunk split into 4 quadrants
-	unsigned char *dungeon_levels;  // A 'dungeon' level value for each tile (4 bit).
-	Chunk_cache *cache;     // Data for chunks near player.
+	std::unique_ptr<unsigned char[]> dungeon_levels;  // A 'dungeon' level value for each tile.
+	std::shared_ptr<Chunk_cache> cache;  // Data for chunks near player.
 	unsigned char roof;     // 1 if a roof present.
 	// # light sources in chunk.
-	std::set<Game_object*> dungeon_lights, non_dungeon_lights;
+	std::set<Game_object*> dungeon_lights;
+	std::set<Game_object*> non_dungeon_lights;
 	unsigned char cx, cy;       // Absolute chunk coords. of this.
 	bool selected;          // For 'select_chunks' mode.
-	void add_dungeon_levels(Rectangle &tiles, unsigned int lift);
+	void add_dungeon_levels(TileRect &tiles, unsigned int lift);
 	void add_dependencies(Game_object *newobj,
-	                      class Ordering_info &newinfo);
+	                      Ordering_info &newinfo);
 	static Map_chunk *add_outside_dependencies(int cx,
-	        int cy, Game_object *newobj, class Ordering_info &newinfo);
+	        int cy, Game_object *newobj, Ordering_info &newinfo);
+
 public:
 	friend class Npc_actor;
 	friend class Game_object;
 	Map_chunk(Game_map *m, int chunkx, int chunky);
-	~Map_chunk();           // Delete everything in chunk.
 	Game_map *get_map() const {
 		return map;
 	}
@@ -163,7 +179,7 @@ public:
 	void remove_egg(Egg_object *egg);
 	void remove(Game_object *remove);  // Remove an object.
 	// Apply gravity over given area.
-	static void gravity(Rectangle const &area, int lift);
+	static void gravity(TileRect const &area, int lift);
 	// Is there a roof? Returns height
 	int is_roof(int tx, int ty, int lift);
 
@@ -201,17 +217,17 @@ public:
 	}
 	// Get/create/setup cache.
 	Chunk_cache *get_cache() const {
-		return cache;
+		return cache.get();
 	}
 	Chunk_cache *need_cache() {
-		if (!cache) {
-			cache = new Chunk_cache();
-			cache->setup(this);
-		}
-		return cache;
+		setup_cache();
+		return get_cache();
 	}
 	void setup_cache() {
-		(void) need_cache();
+		if (!cache) {
+			cache = std::make_shared<Chunk_cache>();
+			cache->setup(this);
+		}
 	}
 	// Set/unset blocked region.
 	void set_blocked(int startx, int starty, int endx, int endy,
@@ -267,7 +283,7 @@ public:
 	                            Game_object *obj, int max_drop = 0,
 	                            Find_spot_where where = anywhere);
 	// Set area within egg's influence.
-	void set_egged(Egg_object *egg, Rectangle &tiles, bool add) {
+	void set_egged(Egg_object *egg, TileRect &tiles, bool add) {
 		need_cache()->set_egged(egg, tiles, add);
 	}
 	void activate_eggs(Game_object *obj, int tx, int ty, int tz,
@@ -279,7 +295,7 @@ public:
 	Game_object *find_door(Tile_coord const &t) {
 		return need_cache()->find_door(t);
 	}
-	static int find_in_area(std::vector<Game_object *> &vec, Rectangle const &area,
+	static int find_in_area(std::vector<Game_object *> &vec, TileRect const &area,
 	                        int shapenum, int framenum);
 	// Use this when teleported in.
 	static void try_all_eggs(Game_object *obj, int tx, int ty, int tz,
@@ -291,9 +307,9 @@ public:
 
 	// NOTE:  The following should only be
 	//   called if has_dungeon()==1.
-	inline int is_dungeon(int tx, int ty) { // Is object within dungeon? (returns height)
-		int tnum = ty * c_tiles_per_chunk + tx;
-		return (tnum % 2) ? dungeon_levels[tnum / 2] >> 4 : dungeon_levels[tnum / 2] & 0xF;
+	inline int is_dungeon(int tx, int ty) {
+		// Is object within dungeon? (returns height)
+		return dungeon_levels[ty * c_tiles_per_chunk + tx];
 	}
 	// Is the dungeon an ICE dungeon.NOTE: This is a
 	// Hack and splits the chunk into 4 parts. Only if

@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ public:
  *  circumstances.
  */
 class Egg_object : public Egglike_game_object {
-	static Egg_object *editing; // Egg being edited by ExultStudio.
+	static Game_object_shared editing; // Egg being edited by ExultStudio.
 protected:
 	unsigned char type;     // One of the below types.
 	unsigned char probability;  // 1-100, chance of egg activating.
@@ -60,7 +60,7 @@ protected:
 	unsigned distance: 6;       // Distance for activation (0-31).
 	unsigned flags: 4;      // Formed from below flags.
 	unsigned short data1, data2, data3; // More data, dep. on type.
-	Rectangle area;         // Active area.
+	TileRect area;         // Active area.
 	unsigned char solid_area;   // 1 if area is solid, 0 if outline.
 	Animator *animator;     // Controls animation.
 	void init_field(unsigned char ty);
@@ -145,7 +145,7 @@ public:
 	virtual bool is_active(Game_object *obj,
 	                      int tx, int ty, int tz, int from_tx, int from_ty);
 
-	Rectangle get_area() const { // Get active area.
+	TileRect get_area() const { // Get active area.
 		return area;
 	}
 	int is_solid_area() const {
@@ -178,8 +178,9 @@ public:
 	// Get size of IREG. Returns -1 if can't write to buffer
 	int get_ireg_size() override;
 
-	virtual void reset() {
+	virtual bool reset() {
 		flags &= ~(1 << hatched);
+		return true;
 	}
 
 	Egg_object *as_egg() override {
@@ -205,6 +206,9 @@ public:
 	void write_ireg(ODataSource *out) override;
 	// Get size of IREG. Returns -1 if can't write to buffer
 	int get_ireg_size() override;
+	bool reset() override {
+		return false;
+	}
 	bool is_findable() override {
 		return Ireg_game_object::is_findable();
 	}
@@ -245,6 +249,9 @@ public:
 	void write_ireg(ODataSource *out) override;
 	// Get size of IREG. Returns -1 if can't write to buffer
 	int get_ireg_size() override;
+	bool reset() override {
+		return false;
+	}
 	bool edit() override {
 		return Ireg_game_object::edit();
 	}

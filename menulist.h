@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,7 +22,17 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "SDL_events.h"
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+static const Uint32 EXSDL_TOUCH_MOUSEID=SDL_TOUCH_MOUSEID;
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 class Game_window;
 class Shape_frame;
@@ -147,6 +157,8 @@ private:
 	std::vector<std::unique_ptr<MenuObject>> entries;
 	bool selected = false;
 	int selection = 0;
+	bool has_cancel = false;
+	int cancel_id = 0;
 public:
 	int add_entry(MenuObject *entry) {
 		entries.emplace_back(entry);
@@ -159,6 +171,7 @@ public:
 	}
 	void set_selection(int sel);
 	void set_selection(int x, int y);
+	void set_cancel(int val);
 };
 
 #endif

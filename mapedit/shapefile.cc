@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2002-2013 The Exult Team
+Copyright (C) 2002-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,29 +23,32 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
 #include "shapefile.h"
-#include "u7drag.h"
-#include "shapegroup.h"
-#include "shapevga.h"
-#include "shapelst.h"
+
+#include "Flex.h"
 #include "chunklst.h"
+#include "combo.h"
+#include "exceptions.h"
 #include "npclst.h"
 #include "paledit.h"
-#include "utils.h"
-#include "Flex.h"
-#include "exceptions.h"
-#include "combo.h"
+#include "shapegroup.h"
+#include "shapelst.h"
+#include "shapevga.h"
 #include "studio.h"
+#include "u7drag.h"
+#include "utils.h"
 
-using std::vector;
-using std::string;
+#include <algorithm>
+
 using std::cerr;
 using std::endl;
 using std::ofstream;
+using std::string;
 using std::unique_ptr;
+using std::vector;
 
 /*
  *  Delete file and groups.
@@ -71,7 +74,7 @@ Object_browser *Shape_file_info::get_browser(
 		return browser;     // Okay.
 	browser = create_browser(vgafile, palbuf, nullptr);
 	// Add a reference (us).
-	gtk_widget_ref(browser->get_widget());
+	(g_object_ref)(browser->get_widget());
 	return browser;
 }
 
@@ -94,7 +97,7 @@ Object_browser *Image_file_info::create_browser(
     Shape_group *g          // Group, or 0.
 ) {
 	auto *chooser = new Shape_chooser(ifile, palbuf, 400, 64,
-	        g, this);
+	                                  g, this);
 	// Fonts?  Show 'A' as the default.
 	if (strcasecmp(basename.c_str(), "fonts.vga") == 0)
 		chooser->set_framenum0('A');
@@ -114,9 +117,9 @@ void Image_file_info::flush(
 	if (!modified)
 		return;
 	modified = false;
-	int nshapes = ifile->get_num_shapes();
+	const int nshapes = ifile->get_num_shapes();
 	int shnum;          // First read all entries.
-	vector<Shape*> shapes(nshapes);
+	vector<Shape *> shapes(nshapes);
 	for (shnum = 0; shnum < nshapes; shnum++)
 		shapes[shnum] = ifile->extract_shape(shnum);
 	string filestr("<PATCH>/"); // Always write to 'patch'.
@@ -185,7 +188,6 @@ void Image_file_info::write_file(
 
 Chunks_file_info::~Chunks_file_info(
 ) {
-	delete file;
 }
 
 /*
@@ -237,15 +239,14 @@ bool Npcs_file_info::read_npc(unsigned num) {
 	int server_socket = studio->get_server_socket();
 	unsigned char buf[Exult_server::maxlength];
 	Exult_server::Msg_type id;
-	int datalen;
 	unsigned char *ptr;
 	const unsigned char *newptr;
 	newptr = ptr = &buf[0];
 	Write2(ptr, num);
 	if (!studio->send_to_server(Exult_server::npc_info, buf, ptr - buf) ||
 	        !Exult_server::wait_for_response(server_socket, 100) ||
-	        (datalen = Exult_server::Receive_data(server_socket,
-	                   id, buf, sizeof(buf))) == -1 ||
+	        Exult_server::Receive_data(server_socket,
+	                   id, buf, sizeof(buf)) == -1 ||
 	        id != Exult_server::npc_info ||
 	        Read2(newptr) != num)
 		return false;
@@ -253,7 +254,7 @@ bool Npcs_file_info::read_npc(unsigned num) {
 	npcs[num].shapenum = Read2(newptr); // -1 if unused.
 	if (npcs[num].shapenum >= 0) {
 		npcs[num].unused = (*newptr++ != 0);
-		utf8Str utf8name(reinterpret_cast<const char *>(newptr));
+		const string utf8name(convertToUTF8(reinterpret_cast<const char *>(newptr)));
 		npcs[num].name = utf8name;
 	} else {
 		npcs[num].unused = true;
@@ -276,11 +277,10 @@ void Npcs_file_info::setup(
 	unsigned char buf[Exult_server::maxlength];
 	Exult_server::Msg_type id;
 	int num_npcs;
-	int datalen;
 	if (Send_data(server_socket, Exult_server::npc_unused) == -1 ||
 	        !Exult_server::wait_for_response(server_socket, 100) ||
-	        (datalen = Exult_server::Receive_data(server_socket,
-	                   id, buf, sizeof(buf))) == -1 ||
+	        Exult_server::Receive_data(server_socket,
+	                   id, buf, sizeof(buf)) == -1 ||
 	        id != Exult_server::npc_unused) {
 		cerr << "Error sending data to server." << endl;
 		return;
@@ -295,8 +295,8 @@ void Npcs_file_info::setup(
 		if (!studio->send_to_server(Exult_server::npc_info,
 		                            buf, ptr - buf) ||
 		        !Exult_server::wait_for_response(server_socket, 100) ||
-		        (datalen = Exult_server::Receive_data(server_socket,
-		                   id, buf, sizeof(buf))) == -1 ||
+		        Exult_server::Receive_data(server_socket,
+		                   id, buf, sizeof(buf)) == -1 ||
 		        id != Exult_server::npc_info ||
 		        Read2(newptr) != i) {
 			npcs.resize(0);
@@ -306,7 +306,7 @@ void Npcs_file_info::setup(
 		npcs[i].shapenum = Read2(newptr);   // -1 if unused.
 		if (npcs[i].shapenum >= 0) {
 			npcs[i].unused = (*newptr++ != 0);
-			utf8Str utf8name(reinterpret_cast<const char *>(newptr));
+			const string utf8name(convertToUTF8(reinterpret_cast<const char *>(newptr)));
 			npcs[i].name = utf8name;
 		} else {
 			npcs[i].unused = true;
@@ -338,7 +338,7 @@ Flex_file_info::Flex_file_info(
     const char *pnm,        // Full pathname,
     unsigned size           // File size.
 ) : Shape_file_info(bnm, pnm, nullptr), flex(nullptr), write_flat(true) {
-	entries.resize(size > 0);
+	entries.resize(static_cast<size_t>(size > 0));
 	lengths.resize(entries.size());
 	if (size > 0) {         // Read in whole thing.
 		IFileDataSource in(pnm);
@@ -445,7 +445,7 @@ void Flex_file_info::flush(
 	if (!modified)
 		return;
 	modified = false;
-	int cnt = entries.size();
+	const int cnt = entries.size();
 	size_t len;
 	int i;
 	for (i = 0; i < cnt; i++) { // Make sure all are read.
@@ -454,7 +454,7 @@ void Flex_file_info::flush(
 	}
 	string filestr("<PATCH>/"); // Always write to 'patch'.
 	filestr += basename;
-	OFileDataSource ds(filestr.c_str());	// Throws exception on failure
+	OFileDataSource ds(filestr.c_str());    // Throws exception on failure
 	if (cnt <= 1 && write_flat) { // Write flat file.
 		if (cnt)
 			ds.write(entries[0].get(), lengths[0]);
@@ -489,7 +489,7 @@ bool Flex_file_info::revert(
 		lengths.resize(entries.size());
 	} else {            // Single palette.
 		IFileDataSource in(pathname);
-		int sz = in.getSize();
+		const int sz = in.getSize();
 		cnt = sz > 0 ? 1 : 0;
 		entries.resize(cnt);
 		lengths.resize(entries.size());
@@ -507,9 +507,8 @@ bool Flex_file_info::revert(
 
 Shape_file_set::~Shape_file_set(
 ) {
-	for (auto it = files.begin();
-	        it != files.end(); ++it)
-		delete(*it);
+	for (auto *file : files)
+		delete file;
 }
 
 /*
@@ -523,17 +522,15 @@ static bool Create_file(
     const string &pathname      // Full name.
 ) {
 	try {
-		int namelen = strlen(basename);
+		const int namelen = strlen(basename);
 		if (strcasecmp(".flx", basename + namelen - 4) == 0) {
 			// We can create an empty flx.
 			OFileDataSource out(pathname.c_str());  // May throw exception.
-			Flex_writer writer(out, "Written by ExultStudio", 0);
+			const Flex_writer writer(out, "Written by ExultStudio", 0);
 			return true;
 		} else if (strcasecmp(".pal", basename + namelen - 4) == 0) {
 			// Empty 1-palette file.
-			ofstream out;
-			U7open(out, pathname.c_str());  // May throw exception.
-			out.close();        // Empty file.
+			U7open_out(pathname.c_str());  // May throw exception.
 			return true;
 		} else if (strcasecmp("npcs", basename) == 0)
 			return true;        // Don't need file.
@@ -553,16 +550,15 @@ Shape_file_info *Shape_file_set::create(
     const char *basename        // Like 'shapes.vga'.
 ) {
 	// Already have it open?
-	for (auto it = files.begin();
-	        it != files.end(); ++it)
-		if (strcasecmp((*it)->basename.c_str(), basename) == 0)
-			return *it; // Found it.
+	for (auto *file : files)
+		if (strcasecmp(file->basename.c_str(), basename) == 0)
+			return file; // Found it.
 	// Look in 'static', 'patch'.
-	string sstr = string("<STATIC>/") + basename;
-	string pstr = string("<PATCH>/") + basename;
+	const string sstr = string("<STATIC>/") + basename;
+	const string pstr = string("<PATCH>/") + basename;
 	const char *spath = sstr.c_str();
 	const char *ppath = pstr.c_str();
-	bool sexists = U7exists(spath);
+	const bool sexists = U7exists(spath);
 	bool pexists = U7exists(ppath);
 	if (!sexists && !pexists)   // Neither place.  Try to create.
 		if (!(pexists = Create_file(basename, ppath)))
@@ -592,10 +588,9 @@ Shape_file_info *Shape_file_set::create(
 		return append(new Image_file_info(basename, fullname,
 		                                  new Vga_file(spath, U7_SHAPE_FONTS, ppath), groups));
 	else if (strcasecmp(basename, "u7chunks") == 0) {
-		auto *file = new std::ifstream;
-		U7open(*file, fullname);
+		auto file = U7open_in(fullname);
 		return append(new Chunks_file_info(basename, fullname,
-		                                   file, groups));
+						   std::move(file), groups));
 	} else if (strcasecmp(basename, "npcs") == 0)
 		return append(new Npcs_file_info(basename, fullname, groups));
 	else if (strcasecmp(basename, "combos.flx") == 0 ||
@@ -604,10 +599,14 @@ Shape_file_info *Shape_file_set::create(
 		                                 new FlexFile(fullname), groups));
 	else if (strcasecmp(".pal", basename + strlen(basename) - 4) == 0) {
 		// Single palette?
-		std::ifstream in;
-		U7open(in, fullname);
+		auto pIn = U7open_in(fullname);
+		if (!pIn) {
+			cerr << "Error opening palette file '" << fullname << "'.\n";
+			return nullptr;
+		}
+		auto& in = *pIn;
 		in.seekg(0, std::ios::end); // Figure size.
-		int sz = in.tellg();
+		const int sz = in.tellg();
 		delete groups;
 		return append(new Flex_file_info(basename, fullname, sz));
 	} else {            // Not handled above?
@@ -632,10 +631,9 @@ Shape_file_info *Shape_file_set::create(
 
 Shape_file_info *Shape_file_set::get_npc_browser(
 ) {
-	for (auto it = files.begin();
-	        it != files.end(); ++it)
-		if (strcasecmp((*it)->basename.c_str(), "npcs") == 0)
-			return *it; // Found it.
+	for (auto *file : files)
+		if (strcasecmp(file->basename.c_str(), "npcs") == 0)
+			return file; // Found it.
 	return nullptr;   // Doesn't exist yet.
 }
 
@@ -645,9 +643,8 @@ Shape_file_info *Shape_file_set::get_npc_browser(
 
 void Shape_file_set::flush(
 ) {
-	for (auto it = files.begin();
-	        it != files.end(); ++it)
-		(*it)->flush();
+	for (auto *file : files)
+		file->flush();
 }
 
 /*
@@ -656,9 +653,7 @@ void Shape_file_set::flush(
 
 bool Shape_file_set::is_modified(
 ) {
-	for (auto it = files.begin();
-	        it != files.end(); ++it)
-		if ((*it)->modified)
-			return true;
-	return false;
+	return std::any_of(files.cbegin(), files.cend(), [](auto* file) {
+		return file->modified;
+	});
 }

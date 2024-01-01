@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013 The Exult Team
+ *  Copyright (C) 2001-2022 The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,15 @@
 #  include <config.h>
 #endif
 
-#include "SDL_keyboard.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 #include "actors.h"
 #include "keys.h"
@@ -44,7 +52,6 @@ using std::isspace;
 using std::strchr;
 using std::string;
 using std::strlen;
-using std::vector;
 
 static  class Chardata { // ctype-like character lists
 public:
@@ -475,10 +482,8 @@ void KeyBinder::ShowHelp() const {
 	Scroll_gump *scroll;
 	scroll = new Scroll_gump();
 
-	std::vector<string>::const_iterator iter;
-
-	for (iter = keyhelp.begin(); iter != keyhelp.end(); ++iter)
-		scroll->add_text(iter->c_str());
+	for (const auto& iter : keyhelp)
+		scroll->add_text(iter.c_str());
 
 	scroll->paint();
 	do {
@@ -494,10 +499,8 @@ void KeyBinder::ShowCheatHelp() const {
 	Scroll_gump *scroll;
 	scroll = new Scroll_gump();
 
-	std::vector<string>::const_iterator iter;
-
-	for (iter = cheathelp.begin(); iter != cheathelp.end(); ++iter)
-		scroll->add_text(iter->c_str());
+	for (const auto& iter : cheathelp)
+		scroll->add_text(iter.c_str());
 
 	scroll->paint();
 	do {
@@ -513,10 +516,8 @@ void KeyBinder::ShowMapeditHelp() const {
 	Scroll_gump *scroll;
 	scroll = new Scroll_gump();
 
-	std::vector<string>::const_iterator iter;
-
-	for (iter = mapedithelp.begin(); iter != mapedithelp.end(); ++iter)
-		scroll->add_text(iter->c_str());
+	for (const auto& iter : mapedithelp)
+		scroll->add_text(iter.c_str());
 
 	scroll->paint();
 	do {
@@ -554,15 +555,13 @@ void KeyBinder::ShowBrowserKeys() const {
 		strcpy(returned_key, "Error: No key assigned");
 	else {
 		strcpy(returned_key, "");   // prevent garbage text
-		std::vector<string>::const_iterator iter;
 		int extra_keys = 0;
-		for (iter = last_created_key.begin();
-		        iter != last_created_key.end(); ++iter) {
+		for (const auto& iter : last_created_key) {
 			if (extra_keys >= 5)
 				continue;
 			else if (extra_keys > 0)
 				strcat(returned_key, " or ");
-			strcat(returned_key, iter->c_str());
+			strcat(returned_key, iter.c_str());
 			extra_keys += 1;
 		}
 	}
@@ -594,7 +593,7 @@ void KeyBinder::ParseText(char *text, int len) {
 }
 
 static void skipspace(string &s) {
-	size_t i = s.find_first_not_of(chardata.whitespace);
+	const size_t i = s.find_first_not_of(chardata.whitespace);
 	if (i && i != string::npos)
 		s.erase(0, i);
 }
@@ -608,7 +607,6 @@ void KeyBinder::ParseLine(char *line) {
 	k.mod      = KMOD_NONE;
 	string s = line;
 	string u;
-	string d;
 	string desc;
 	string keycode;
 	bool show;
@@ -662,10 +660,9 @@ void KeyBinder::ParseLine(char *line) {
 				}
 			} else {
 				// lookup in table
-				ParseKeyMap::iterator key_index;
-				key_index = keys.find(t);
+				auto key_index = keys.find(t);
 				if (key_index != keys.end()) {
-					k.sym = (*key_index).second;
+					k.sym = key_index->second;
 				} else {
 					cerr << "Keybinder: unsupported key: " << keycode << endl;
 					return;
@@ -687,10 +684,9 @@ void KeyBinder::ParseLine(char *line) {
 	s.erase(0, i);
 	to_uppercase(t);
 
-	ParseActionMap::iterator action_index;
-	action_index = actions.find(t);
+	auto action_index = actions.find(t);
 	if (action_index != actions.end()) {
-		a.action = (*action_index).second;
+		a.action = action_index->second;
 	} else {
 		cerr << "Keybinder: unsupported action: " << t << endl;
 		return;
@@ -705,7 +701,7 @@ void KeyBinder::ParseLine(char *line) {
 		// Want to allow function name.
 		if (s.length() && s[0] != '#') {
 			i = s.find_first_of(chardata.whitespace);
-			string t = s.substr(0, i);
+			const string t = s.substr(0, i);
 			s.erase(0, i);
 			skipspace(s);
 
@@ -723,11 +719,11 @@ void KeyBinder::ParseLine(char *line) {
 	}
 	while (s.length() && s[0] != '#' && np < c_maxparams) {
 		i = s.find_first_of(chardata.whitespace);
-		string t = s.substr(0, i);
+		const string t = s.substr(0, i);
 		s.erase(0, i);
 		skipspace(s);
 
-		int p = atoi(t.c_str());
+		const int p = atoi(t.c_str());
 		a.params[np++] = p;
 	}
 
@@ -738,14 +734,13 @@ void KeyBinder::ParseLine(char *line) {
 		} else {
 			s.erase(0, 1);
 			skipspace(s);
-			d = s;
 			// Always show if there is a comment.
 			show = true;
 		}
 	} else {
 		// Action::dont_show doesn't have default display names, so do not
 		// show them if they don't have a comment.
-		d = a.action->desc;
+		s = a.action->desc;
 		show = a.action->key_type != Action::dont_show;
 	}
 
@@ -766,7 +761,7 @@ void KeyBinder::ParseLine(char *line) {
 		if (!strcmp(a.action->s, "CREATE_ITEM") && a.params[0] == -1)
 			last_created_key.push_back(desc);
 
-		desc += " - " + d;
+		desc += " - " + s;
 
 		// add to help list
 		if (a.action->key_type == Action::cheat_keys)
@@ -782,9 +777,10 @@ void KeyBinder::ParseLine(char *line) {
 }
 
 void KeyBinder::LoadFromFileInternal(const char *filename) {
-	ifstream keyfile;
-
-	U7open(keyfile, filename, true);
+	auto pKeyfile = U7open_in(filename, true);
+	if (!pKeyfile)
+		return;
+	auto& keyfile = *pKeyfile;
 	char temp[1024]; // 1024 should be long enough
 	while (!keyfile.eof()) {
 		keyfile.getline(temp, 1024);
@@ -795,7 +791,6 @@ void KeyBinder::LoadFromFileInternal(const char *filename) {
 		}
 		ParseLine(temp);
 	}
-	keyfile.close();
 }
 
 void KeyBinder::LoadFromFile(const char *filename) {
@@ -820,7 +815,7 @@ void KeyBinder::LoadDefaults() {
 
 	const str_int_pair &resource = game->get_resource("config/defaultkeys");
 
-	U7object txtobj(resource.str, resource.num);
+	const U7object txtobj(resource.str, resource.num);
 	size_t len;
 	auto txt = txtobj.retrieve(len);
 	if (txt && len > 0)

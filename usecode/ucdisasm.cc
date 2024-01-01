@@ -2,7 +2,7 @@
  *  ucdisasm.cc - Disassembled usecode trace
  *
  *  Copyright (C) 1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -66,10 +66,10 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
                                        const uint8 *data, const uint8 *externals,
                                        const uint8 *code, const uint8 *ip) {
 	ignore_unused_variable_warning(num_locals);
-	int func_ip = static_cast<int>(ip - code);
-	int opcode = *ip++;
-	const uint8 *param_ip = ip;
-	opcode_desc *pdesc = nullptr;
+	const int func_ip = static_cast<int>(ip - code);
+	const int opcode = *ip++;
+	// const uint8 *param_ip = ip;
+	const opcode_desc *pdesc = nullptr;
 
 	if (opcode >= 0 && static_cast<unsigned>(opcode) < array_size(opcode_table))
 		pdesc = &(opcode_table[opcode]);
@@ -98,7 +98,7 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
 			std::printf("\t%04hXH\t\t; %d", immed, immed);
 			break;
 		case op_immed32: {
-			int immed32 = Read4s(ip);
+			const int immed32 = Read4s(ip);
 			std::printf("\t%08XH\t\t; %d", immed32, immed32);
 			break;
 		}
@@ -171,9 +171,9 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
 			            offset + func_ip + 1 + pdesc->nbytes);
 			break;
 		case op_call: {
-			unsigned short func = Read2(ip);
+			const unsigned short func = Read2(ip);
 			immed = *ip++;
-			const char **func_table = bg_intrinsic_table;
+			const char * const *func_table = bg_intrinsic_table;
 			if (Game::get_game_type() == SERPENT_ISLE) {
 				if (Game::is_si_beta())
 					func_table = sibeta_intrinsic_table;
@@ -206,7 +206,7 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
 				std::printf("unset");
 			break;
 		case op_staticref: {
-			sint16 staticref = Read2(ip);
+			const sint16 staticref = Read2(ip);
 			std::printf("[%04X]\t= ", static_cast<uint16>(staticref));
 			if (staticref < 0) {
 				// global
@@ -227,7 +227,6 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
 			break;
 		}
 	}
-	ip = param_ip; //restore IP back to opcode parameters
 
 	// special cases:
 	switch (opcode & 0x7f) {
@@ -248,7 +247,7 @@ void Usecode_internal::uc_trace_disasm(Usecode_value *locals, int num_locals,
 	/*  maybe predict this?
 	case 0x07:       // CMPS/CMPS32.
 	{
-	    int cnt = Read2(ip);    // # strings.
+	    int cnt = Read2(param_ip);    // # strings.
 	    bool matched = false;
 
 	    // only try to match if we haven't found an answer yet

@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -39,6 +39,7 @@ class Uc_function;
 class Uc_function_symbol;
 class Uc_class;
 class Basic_block;
+class Uc_array_expression;
 
 /*
  *  Base class for expressions.
@@ -86,6 +87,7 @@ public:
 	virtual void set_is_obj_fun(int s) {
 		ignore_unused_variable_warning(s);
 	}
+	virtual void add_to(Uc_array_expression *arr);
 };
 
 /*
@@ -337,6 +339,7 @@ public:
  */
 class Uc_array_expression : public Uc_expression {
 	std::vector<Uc_expression *> exprs;
+
 public:
 	Uc_array_expression() = default;
 	Uc_array_expression(Uc_expression *e0) {
@@ -350,6 +353,9 @@ public:
 	void add(Uc_expression *e) { // Append an expression.
 		exprs.push_back(e);
 	}
+	void add(std::vector<Uc_expression *>& vec) { // Append an expression.
+		exprs.insert(exprs.cend(), vec.begin(), vec.end());
+	}
 	void clear() {          // Remove, but DON'T delete, elems.
 		exprs.clear();
 	}
@@ -361,6 +367,7 @@ public:
 	void gen_value(Basic_block *out) override;
 	// Gen code to push value(s).
 	int gen_values(Basic_block *out) override;
+	void add_to(Uc_array_expression *arr) override;
 };
 
 /*
@@ -487,6 +494,11 @@ inline void Write2(std::vector<char> &out, int pos, unsigned short val) {
 	out[pos] = static_cast<char>(val & 0xff);
 	out[pos + 1] = static_cast<char>((val >> 8) & 0xff);
 }
+inline unsigned short Read2(const std::vector<char> &in, int pos) {
+	unsigned short val = in[pos];
+	val |= in[pos + 1] << 8;
+	return val;
+}
 
 /*
  *  Write a 4-byte value to the end/position of a character stream.
@@ -503,5 +515,12 @@ inline void Write4(std::vector<char> &out, int pos, unsigned int val) {
 	out[pos + 1] = static_cast<char>((val >> 8) & 0xff);
 	out[pos + 3] = static_cast<char>((val >> 16) & 0xff);
 	out[pos + 4] = static_cast<char>((val >> 24) & 0xff);
+}
+inline unsigned int Read4(const std::vector<char> &in, int pos) {
+	unsigned int val = in[pos];
+	val |= in[pos + 1] << 8;
+	val |= in[pos + 3] << 16;
+	val |= in[pos + 4] << 24;
+	return val;
 }
 #endif

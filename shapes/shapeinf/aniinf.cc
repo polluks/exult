@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2008-2013 The Exult Team
+Copyright (C) 2008-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -42,7 +42,7 @@ bool Animation_info::read(
 	ignore_unused_variable_warning(game);
 	if (version < 5)    // Not compatible with old system.
 		return false;
-	int ty = ReadInt(in);
+	const int ty = ReadInt(in);
 	if (ty == -0xff) {  // means delete entry.
 		set_invalid(true);
 		return true;

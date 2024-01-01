@@ -2,7 +2,7 @@
  *  gamewin.h - X-windows Ultima7 map browser.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,14 +32,6 @@
 #include <memory>
 #include <string>   // STL string
 #include <vector>
-
-#define RED_PLASMA  1
-
-#ifdef RED_PLASMA
-#define CYCLE_RED_PLASMA()  cycle_load_palette()
-#else
-#define CYCLE_RED_PLASMA()
-#endif
 
 #ifndef ATTR_PRINTF
 #ifdef __GNUC__
@@ -135,8 +127,8 @@ class Game_window {
 	std::vector<Dead_body *> bodies; // Corresponding Dead_body's.
 	// Rendering info:
 	int scrolltx, scrollty;     // Top-left tile of screen.
-	Rectangle scroll_bounds;    // Walking outside this scrolls.
-	Rectangle dirty;        // Dirty rectangle.
+	TileRect scroll_bounds;    // Walking outside this scrolls.
+	TileRect dirty;        // Dirty rectangle.
 	// Savegames:
 	char *save_names[10];       // Names of saved games.
 	// Options:
@@ -153,6 +145,7 @@ class Game_window {
 	uint8 use_shortcutbar; // 0 = no, 1 = trans, 2 = yes
 	Pixel_colors outline_color;
 	bool sb_hide_missing;
+	bool extended_intro;
 
 	// Touch Options
 	bool item_menu;
@@ -165,11 +158,9 @@ class Game_window {
 	void read_save_names();     // Read in saved-game names.
 	long check_time_stopped();
 
-#ifdef RED_PLASMA
 	// Red plasma animation during game load
 	uint32 load_palette_timer;
 	int plasma_start_color, plasma_cycle_range;
-#endif
 
 public:
 	friend class Game_render;
@@ -222,26 +213,25 @@ public:
 	inline int get_scrollty() const {
 		return scrollty;
 	}
-	inline Rectangle get_game_rect() const  // Get window's rectangle.
-//		{ return Rectangle(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());}
+	inline TileRect get_game_rect() const  // Get window's rectangle.
 	{
-		return Rectangle(0, 0, win->get_game_width(), win->get_game_height());
+		return TileRect(0, 0, win->get_game_width(), win->get_game_height());
 	}
-	inline Rectangle get_full_rect() const { // Get window's rectangle.
-		return Rectangle(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());
+	inline TileRect get_full_rect() const { // Get window's rectangle.
+		return TileRect(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());
 	}
-	Rectangle get_win_tile_rect() const { // Get it in tiles, rounding up.
-		return Rectangle(get_scrolltx(), get_scrollty(),
-		                 (win->get_game_width() + c_tilesize - 1) / c_tilesize,
-		                 (win->get_game_height() + c_tilesize - 1) / c_tilesize);
+	TileRect get_win_tile_rect() const { // Get it in tiles, rounding up.
+		return TileRect(get_scrolltx(), get_scrollty(),
+		                (win->get_game_width() + c_tilesize - 1) / c_tilesize,
+		                (win->get_game_height() + c_tilesize - 1) / c_tilesize);
 	}
 	// Clip rectangle to window's.
-	Rectangle clip_to_game(Rectangle const &r) const {
-		Rectangle wr = get_game_rect();
+	TileRect clip_to_game(TileRect const &r) const {
+		const TileRect wr = get_game_rect();
 		return r.intersect(wr);
 	}
-	Rectangle clip_to_win(Rectangle const &r) const {
-		Rectangle wr = get_full_rect();
+	TileRect clip_to_win(TileRect const &r) const {
+		const TileRect wr = get_full_rect();
 		return r.intersect(wr);
 	}
 	// Resize event occurred.
@@ -326,7 +316,12 @@ public:
 	void set_sb_hide_missing_items(bool s) {
 		sb_hide_missing = s;
 	}
-
+	bool get_extended_intro() const {
+		return extended_intro;
+	}
+	void set_extended_intro(bool i) {
+		extended_intro = i;
+	}
 	/*
 	 * Touch options:
  	*/
@@ -391,7 +386,7 @@ public:
 	/*
 	 *  ExultStudio support:
 	 */
-	Map_patch_collection *get_map_patches();
+	Map_patch_collection& get_map_patches();
 	// Locate shape (for EStudio).
 	bool locate_shape(int shapenum, bool upwards, int frnum, int qual);
 	void send_location();       // Send our location to EStudio.
@@ -528,22 +523,22 @@ public:
 	                       int toptx, int topty, int skip_above = 31);
 	// Paint area of image.
 	void paint(int x, int y, int w, int h);
-	void paint(Rectangle &r) {
+	void paint(TileRect &r) {
 		paint(r.x, r.y, r.w, r.h);
 	}
 	void paint();           // Paint whole image.
 	// Paint 'dirty' rectangle.
 	void paint_dirty();
 	void set_all_dirty() {      // Whole window.
-		dirty = Rectangle(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());
+		dirty = TileRect(win->get_start_x(), win->get_start_y(), win->get_full_width(), win->get_full_height());
 	}
-	void add_dirty(Rectangle const &r) { // Add rectangle to dirty area.
+	void add_dirty(TileRect const &r) { // Add rectangle to dirty area.
 		dirty = dirty.w > 0 ? dirty.add(r) : r;
 	}
 	// Add dirty rect. for obj. Rets. false
 	//   if not on screen.
 	bool add_dirty(const Game_object *obj) {
-		Rectangle rect = get_shape_rect(obj);
+		TileRect rect = get_shape_rect(obj);
 		rect.enlarge(1 + c_tilesize / 2);
 		rect = clip_to_win(rect);
 		if (rect.w > 0 && rect.h > 0) {
@@ -568,12 +563,12 @@ public:
 	// Show abs. location of mouse.
 	void show_game_location(int x, int y);
 	// Get screen area of shape at pt.
-	Rectangle get_shape_rect(const Shape_frame *s, int x, int y) const {
-		return Rectangle(x - s->get_xleft(), y - s->get_yabove(),
+	TileRect get_shape_rect(const Shape_frame *s, int x, int y) const {
+		return TileRect(x - s->get_xleft(), y - s->get_yabove(),
 		                 s->get_width(), s->get_height());
 	}
 	// Get screen area used by object.
-	Rectangle get_shape_rect(const Game_object *obj) const;
+	TileRect get_shape_rect(const Game_object *obj) const;
 	// Get screen loc. of object.
 	void get_shape_location(const Game_object *obj, int &x, int &y);
 	void get_shape_location(Tile_coord const &t, int &x, int &y);
@@ -698,11 +693,8 @@ public:
 	// Swapping a superchunk to disk emulation
 	void emulate_swapout(int scx, int scy);
 
-
-#ifdef RED_PLASMA
 	void setup_load_palette();
 	void cycle_load_palette();
-#endif
 
 private:
 	//

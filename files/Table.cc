@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  Original file by Dancer A.L Vesperman
  *
@@ -41,7 +41,6 @@ void Table::index_file() {
 	if (!is_table(data.get())) {    // Not a table file we recognise
 		throw wrong_file_type_exception(identifier.name, "TABLE");
 	}
-	unsigned int i = 0;
 	while (true) {
 		Reference f;
 		f.size = data->read2();
@@ -51,7 +50,6 @@ void Table::index_file() {
 		}
 		f.offset = data->read4();
 		object_list.push_back(f);
-		i++;
 	}
 }
 
@@ -61,18 +59,18 @@ void Table::index_file() {
  *  @return Whether or not the DataSource is a table file.
  */
 bool Table::is_table(IDataSource *in) {
-	size_t pos = in->getPos();
-	size_t file_size = in->getSize();
+	const size_t pos = in->getPos();
+	const size_t file_size = in->getSize();
 
 	in->seek(0);
 	while (true) {
-		uint16 size = in->read2();
+		const uint16 size = in->read2();
 
 		// End of table marker.
 		if (size == 65535) {
 			break;
 		}
-		uint32 offset = in->read4();
+		const uint32 offset = in->read4();
 		if (size > file_size || offset > file_size) {
 			in->seek(pos);
 			return false;

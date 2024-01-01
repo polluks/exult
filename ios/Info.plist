@@ -21,7 +21,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.7.0</string>
+	<string>1.9.0</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
@@ -45,9 +45,7 @@
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<true/>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Exult would like to use bluetooth for being controlled by BT controllers</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Exult would like to use bluetooth for being controlled by BT controllers</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

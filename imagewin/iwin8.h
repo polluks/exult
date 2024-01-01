@@ -6,6 +6,7 @@
 
 /*
 Copyright (C) 1998 Jeffrey S. Freedman
+Copyright (C) 2000-2022 The Exult Team
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -117,8 +118,8 @@ public:
 		ib8->Image_buffer8::put_pixel8(pix, x, y);
 	}
 
-	static void get_gamma(float &r, float &g, float &b);
-	static void set_gamma(float r, float g, float b);
+	static void get_gamma(double &r, double &g, double &b);
+	static void set_gamma(double r, double g, double b);
 
 	std::unique_ptr<unsigned char[]> mini_screenshot();
 };

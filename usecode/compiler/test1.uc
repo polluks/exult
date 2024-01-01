@@ -4,6 +4,7 @@
 
 extern var adder (a, b);	// Declaration.
 const int const13 = 13;
+const int DOUBLECLICK = 1;
 
 /*
  *	Return sum.
@@ -36,6 +37,11 @@ var adder1 (a, b)
 			say("This is utter nonsense!");
 		}
 	say("Hello, the time is ", 12, "o'clock");
+	converse (0)
+		{
+		case "bye" (remove):
+			break;
+		}
 	// Newer conversation style:
 	converse (["Name", "Bye", "name"])
 		{
@@ -54,7 +60,7 @@ var adder1 (a, b)
 	c = a[7];
 	a[const13] = 46;
 	c = item;
-	event = event + 7;
+	event += 7;
 	c = UI_get_item_flag(item, 10);
 	c = item->get_item_flag(10);
 	c = get_item_flag(10);
@@ -72,7 +78,12 @@ var adder1 (a, b)
 	}
 
 	return adder(a, 3);
-	}
+}
+
+var adder (a, b)
+{
+	return a + b;
+}
 
 class Test
 {
@@ -134,11 +145,11 @@ class<Test> Fun2 (class<Test> a)
 	//mytest = new Test3(a);		// Fails to compile
 	mytest = new Test3(3);
 	bar = new Test(13);
-	
+
 	// Conditions:
 	if (bar)
 		;
-		
+
 	// Deletion:
 	delete bar;
 }
@@ -208,4 +219,383 @@ void try_catch_test()
 		}
 		throw_abrt_test("Game over");
 	}
+}
+
+extern var Predicate (var npc);
+
+void for_nobreak_test(var list) {
+	var npc;
+	for (npc in list)
+	{
+		if (Predicate(npc))
+		{
+			break;
+		}
+	}
+	nobreak
+	{
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void while_nobreak_test(var list) {
+	var count = UI_get_array_size(list);
+	var index = 0;
+	var npc;
+	while (index < count)
+	{
+		npc = list[index];
+		if (Predicate(npc))
+		{
+			break;
+		}
+		index += 1;
+	}
+	nobreak
+	{
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void dowhile_nobreak_test(var list) {
+	var count = UI_get_array_size(list);
+	var index = 0;
+	var npc;
+	do
+	{
+		npc = list[index];
+		if (Predicate(npc))
+		{
+			break;
+		}
+		index += 1;
+	} while (index < count)
+	nobreak
+	{
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void breakable_nobreak_test(var list) {
+	var count = UI_get_array_size(list);
+	var index = 0;
+	var npc;
+	do
+	{
+		npc = list[index];
+		if (Predicate(npc))
+		{
+			break;
+		}
+	} while (false)
+	nobreak
+	{
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void converse_nobreak_test(var list) {
+	var npc;
+	converse (["Iolo", "Shamino", "Dupre"])
+	{
+	case "Iolo" (remove):
+		npc = -1;
+		if (Predicate(npc))
+		{
+			break;
+		}
+	case "Shamino" (remove):
+		npc = -2;
+		if (Predicate(npc))
+		{
+			break;
+		}
+	case "Dupre" (remove):
+		npc = -3;
+		if (Predicate(npc))
+		{
+			break;
+		}
+	}
+	nobreak
+	{
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void infinite_warning_nobreak_test1(var list) {
+	var count = UI_get_array_size(list);
+	var index = 0;
+	var npc;
+	do
+	{
+		npc = list[index];
+		if (Predicate(npc))
+		{
+			break;
+		}
+		else
+		{
+			goto test_nobreak;
+		}
+	} while (true)
+	nobreak
+	{
+test_nobreak:
+		npc = -356;
+	}
+	UI_set_opponent(-71, npc);
+}
+
+void infinite_warning_nobreak_test2(var list) {
+	var count = UI_get_array_size(list);
+	var index = 0;
+	var npc;
+	do
+	{
+		npc = list[index];
+		if (Predicate(npc))
+		{
+			break;
+		}
+		else
+		{
+			goto test_nobreak;
+		}
+	} while (true)
+	nobreak
+	{
+		npc = -356;
+test_nobreak:
+	}
+	UI_set_opponent(-71, npc);
+}
+
+extern void doTraining(var price);
+extern var askYesNo();
+void preamble_test() {
+	var avatarName = UI_get_npc_name(UI_get_avatar_ref());
+	converse : nested (["name", "job", "bye"])
+	{
+		var party = UI_get_party_list();
+		case "name" (remove):
+			say("I am Mi. What is your name?");
+			add(avatarName, "Avatar");
+		case "Avatar" (remove):
+			say("Your name is 'Avatar'? I find that unlikely...");
+		case avatarName (remove):
+			say("Pleased to meet you, ", avatarName, "!");
+			UI_remove_answer("Avatar");
+		case "job" (remove):
+			say("I teach martial arts.");
+			if (!(item in party))
+			{
+				add("join");
+			}
+			add("train");
+		case "train":
+			if (item in party)
+			{
+				say("Since we are traveling together, I will waive my usual fee.");
+				doTraining(0);
+			}
+			else
+			{
+				say("It will cost 50 gold per person. Is this acceptable?");
+				if (askYesNo())
+				{
+					doTraining(50);
+				}
+				else
+				{
+					say("Suit yourself.");
+				}
+			}
+		case "bye":
+			break;
+	}
+	say("Farewell!");
+}
+
+void array_tests()
+{
+	const int AVATAR = -356;
+	const int SHAPE_ANY = -359;
+	var var1 = UI_get_object_position(AVATAR) & (SHAPE_ANY & 0x0003);
+	var var2 = (UI_get_object_position(AVATAR) & SHAPE_ANY) & 0x0003;
+	var var3 = UI_get_object_position(AVATAR) & [SHAPE_ANY, 0x0003];
+}
+
+void fallthrough_always_test() {
+	var avatarName = UI_get_npc_name(UI_get_avatar_ref());
+	converse : nested (["name", "job", "bye"])
+	{
+		var party = UI_get_party_list();
+		var remove_name = false;
+		case "name" (remove):
+			say("I am Mi. What is your name?");
+			add(avatarName, "Avatar");
+			fallthrough;
+		case "Avatar":
+			say("Your name is 'Avatar'? I find that unlikely...");
+			remove_name = true;
+			fallthrough;
+		case avatarName:
+			say("Pleased to meet you, ", avatarName, "!");
+			remove_name = true;
+			fallthrough;
+		always:
+			if (remove_name)
+			{
+				UI_remove_answer(["Avatar", avatarName]);
+			}
+			fallthrough;
+		case "job" (remove):
+			say("I teach martial arts.");
+			if (!(item in party))
+			{
+				add("join");
+			}
+			add("train");
+			fallthrough;
+		case "train":
+			if (item in party)
+			{
+				say("Since we are traveling together, I will waive my usual fee.");
+				doTraining(0);
+			}
+			else
+			{
+				say("It will cost 50 gold per person. Is this acceptable?");
+				if (askYesNo())
+				{
+					doTraining(50);
+				}
+				else
+				{
+					say("Suit yourself.");
+				}
+			}
+			fallthrough;
+		case "bye":
+			break;
+	}
+	say("Farewell!");
+}
+
+void test_always_default()
+{
+	converse (["-I- am the Avatar!", "I -am- the Avatar!", "I am -the- Avatar!", "I am the -Avatar-!"])
+	{
+		default:
+			message("\"No, no, no! That is all wrong! Thou art the 'Avatar'! Thou must feel like the Avatar! Thou must sound like the Avatar! Thou must -be- the Avatar! Try it again.\"");
+			say();
+			fallthrough;
+		always:
+			UI_clear_answers();
+			UI_add_answer(["-I- am the Avatar!", "I -am- the Avatar!", "I am -the- Avatar!", "I am the -Avatar-!"]);
+		default:
+			message("\"Better... better... but I think perhaps thou dost need a prop.\"");
+			say();
+			break;
+	}
+}
+
+void test_intrinsic()
+{
+	(@0x83)();
+}
+
+void test_script_assign()
+{
+	var temp1;
+	temp1 = script item {
+		nohalt;
+		next frame;
+	};
+	var temp2 = script item {
+		nohalt;
+		next frame;
+	};
+}
+
+void test_breakable_continue(var flag)
+{
+	do
+	{
+		if (flag == 1)
+		{
+			say("Continue");
+			continue;
+		}
+		if (flag == 2)
+		{
+			say("Break");
+			break;
+		}
+		if (flag == 3)
+		{
+			say("Fallthrough");
+		}
+	} while (false)
+	nobreak
+	{
+		say("No-break");
+	}
+	say("Past the end");
+	do
+	{
+		if (flag == 1)
+		{
+			say("Continue");
+			continue;
+		}
+		if (flag == 2)
+		{
+			say("Break");
+			break;
+		}
+		if (flag == 3)
+		{
+			say("Fallthrough");
+		}
+	} while (false);
+	say("Past the end");
+}
+
+void test_for_attend(var array)
+{
+	var npc;
+	enum();
+loop:
+	for (npc in array) attend exit;
+	if (!npc->get_item_flag(0xA)) goto loop;
+	npc->clear_item_flag(0xA);
+	npc->set_item_flag(0xB);
+	goto loop;
+exit:
+}
+
+void test_converse_attend(var array)
+{
+loop:
+	converse attend exit;
+	case "name" attend next_case:
+	message("a");
+	say();
+next_case:
+	case array attend default_case:
+	message("b");
+	say();
+default_case:
+	default attend loop:
+	message("c");
+	say();
+	endconv;
+exit:
 }

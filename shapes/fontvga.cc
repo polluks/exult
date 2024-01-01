@@ -3,6 +3,24 @@
  **
  ** Written: 4/29/99 - JSF
  **/
+/*
+Copyright (C) 1999  Jeffrey S. Freedman
+Copyright (C) 2000-2022  The Exult Team
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+*/
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -44,7 +62,7 @@
  *      And the MAINSHP font (36)
  *  However, their values are set elsewhere
  */
-// +++++TAG: This shouldn't be hard-coded.
+// +TODO: This shouldn't be hard-coded.
 static int hlead[] = { -2, -1, 0, -1, 0, 0, -1, -2, -1, -1};
 /*
  *  Initialize.
@@ -52,13 +70,13 @@ static int hlead[] = { -2, -1, 0, -1, 0, 0, -1, -2, -1, -1};
 
 void Fonts_vga_file::init(
 ) {
-	int cnt = array_size(hlead);
+	const int cnt = array_size(hlead);
 
 	FlexFile sfonts(FONTS_VGA);
 	FlexFile pfonts(PATCH_FONTS);
-	int sn = static_cast<int>(sfonts.number_of_objects());
-	int pn = static_cast<int>(pfonts.number_of_objects());
-	int numfonts = pn > sn ? pn : sn;
+	const int sn = static_cast<int>(sfonts.number_of_objects());
+	const int pn = static_cast<int>(pfonts.number_of_objects());
+	const int numfonts = pn > sn ? pn : sn;
 	fonts.resize(numfonts);
 
 	for (int i = 0; i < numfonts; i++)

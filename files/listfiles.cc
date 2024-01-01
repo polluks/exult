@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -24,18 +24,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cctype>
 #include <cstdio>
 
-#include <vector>
 #include <string>
 #include <cstring>
 #include <iostream>
 
-using std::vector;
-using std::cerr;
-using std::endl;
 using std::string;
 
 #include "utils.h"
 #include "listfiles.h"
+
+// TODO: If SDL ever adds directory traversal to rwops, update U7ListFiles() to
+//       use it.
 
 
 // System Specific Code for Windows
@@ -46,7 +45,7 @@ using std::string;
 #include <tchar.h>
 
 int U7ListFiles(const std::string &mask, FileList &files) {
-	string          path(get_system_path(mask));
+	const string    path(get_system_path(mask));
 	const TCHAR     *lpszT;
 	WIN32_FIND_DATA fileinfo;
 	HANDLE          handle;
@@ -141,11 +140,14 @@ int U7ListFiles(const std::string &mask, FileList &files) {
 
 #include <glob.h>
 
-int U7ListFiles(const std::string &mask, FileList &files) {
-	glob_t globres;
-	string path(get_system_path(mask));
-	int err = glob(path.c_str(), GLOB_NOSORT, nullptr, &globres);
+#ifdef ANDROID
+#include <SDL_system.h>
+#endif
 
+
+static int U7ListFilesImp(const std::string &path, FileList &files) {
+	glob_t globres;
+	int err = glob(path.c_str(), GLOB_NOSORT, nullptr, &globres);
 
 	switch (err) {
 	case 0:   //OK
@@ -157,9 +159,23 @@ int U7ListFiles(const std::string &mask, FileList &files) {
 	case 3:   //no matches
 		return 0;
 	default:  //error
-		cerr << "Glob error " << err << endl;
+		std::cerr << "Glob error " << err << std::endl;
 		return err;
 	}
+}
+
+int U7ListFiles(const std::string &mask, FileList &files) {
+    string path(get_system_path(mask));
+    int result = U7ListFilesImp(path, files);
+#ifdef ANDROID
+    // TODO: If SDL ever adds directory traversal to rwops use it instead of
+    // glob() so that we pick up platform-specific paths and behaviors like
+    // this.
+    if (result != 0) {
+        result = U7ListFilesImp(SDL_AndroidGetInternalStoragePath() + ("/" + path), files);
+    }
+#endif
+    return result;
 }
 
 #endif

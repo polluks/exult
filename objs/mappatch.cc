@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -86,35 +86,18 @@ bool Map_patch_modify::apply(
 }
 
 /*
- *  Delete all the patches.
- */
-
-Map_patch_collection::~Map_patch_collection(
-) {
-	for (auto it1 = patches.begin();
-	        it1 != patches.end(); ++it1) {
-		Map_patch_list &lst = (*it1).second;
-		while (!lst.empty()) {
-			Map_patch *patch = lst.front();
-			delete patch;
-			lst.pop_front();
-		}
-	}
-}
-
-/*
  *  Add a new patch.
  */
 
 void Map_patch_collection::add(
-    Map_patch *p
+    std::unique_ptr<Map_patch> p
 ) {
 	// Get superchunk coords.
-	int sx = p->spec.loc.tx / c_tiles_per_schunk;
-	int sy = p->spec.loc.ty / c_tiles_per_schunk;
+	const int sx = p->spec.loc.tx / c_tiles_per_schunk;
+	const int sy = p->spec.loc.ty / c_tiles_per_schunk;
 	// Get superchunk # (0-143).
-	int schunk = sy * c_num_schunks + sx;
-	patches[schunk].push_back(p);
+	const int schunk = sy * c_num_schunks + sx;
+	patches[schunk].push_back(std::move(p));
 }
 
 /*
@@ -126,8 +109,8 @@ void Map_patch_collection::apply(
 ) {
 	auto it1 = patches.find(schunk);
 	if (it1 != patches.end()) { // Found list for superchunk?
-		Map_patch_list &lst = (*it1).second;
-		for (auto it2 = lst.begin(); it2 != lst.end(); ++it2)
-			(*it2)->apply();    // Apply each one in list.
+		Map_patch_list &lst = it1->second;
+		for (auto& it2 : lst)
+			it2->apply();    // Apply each one in list.
 	}
 }

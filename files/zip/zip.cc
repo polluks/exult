@@ -2,7 +2,7 @@
    Version 0.15 beta, Mar 19th, 1998,
 
    Modified by Ryan Nunn. Nov 9th 2001
-
+   Modified by the Exult Team. 2003-2022
    Read zip.h for more info
 */
 
@@ -26,7 +26,6 @@ extern int errno;
 #endif
 using namespace std;
 
-#include "zlib.h"
 #include "zip.h"
 
 /* Added by Ryan Nunn to overcome DEF_MEM_LEVEL being undeclared */
@@ -81,8 +80,20 @@ using namespace std;
 
 #define SIZECENTRALHEADER (0x2e) /* 46 */
 
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif  // __GNUC__
+static int U7deflateInit2(z_stream *stream, int level) {
+	return deflateInit2(stream, level,
+	                    Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, 0);
+}
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif  // __GNUC__
+
 struct linkedlist_datablock_internal {
-	struct linkedlist_datablock_internal *next_datablock;
+	linkedlist_datablock_internal *next_datablock;
 	uLong  avail_in_this_block;
 	uLong  filled_in_this_block;
 	uLong  unused; /* for future use and alignement */
@@ -424,8 +435,7 @@ extern int ZEXPORT zipOpenNewFileInZip(zipFile file,
 		file->ci.stream.zfree = nullptr;
 		file->ci.stream.opaque = nullptr;
 
-		err = deflateInit2(&file->ci.stream, level,
-		                   Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, 0);
+		err = U7deflateInit2(&file->ci.stream, level);
 
 		if (err == Z_OK)
 			file->ci.stream_initialised = 1;
@@ -437,7 +447,7 @@ extern int ZEXPORT zipOpenNewFileInZip(zipFile file,
 	return err;
 }
 
-extern int ZEXPORT zipWriteInFileInZip(zipFile file, const voidp buf, unsigned len) {
+extern int ZEXPORT zipWriteInFileInZip(zipFile file, voidpc buf, unsigned len) {
 	int err = ZIP_OK;
 
 	if (file == nullptr)
@@ -446,9 +456,9 @@ extern int ZEXPORT zipWriteInFileInZip(zipFile file, const voidp buf, unsigned l
 	if (file->in_opened_file_inzip == 0)
 		return ZIP_PARAMERROR;
 
-	file->ci.stream.next_in = static_cast<Bytef *>(buf);
+	file->ci.stream.next_in = static_cast<const Bytef *>(buf);
 	file->ci.stream.avail_in = len;
-	file->ci.crc32 = crc32(file->ci.crc32, static_cast<Bytef *>(buf), len);
+	file->ci.crc32 = crc32(file->ci.crc32, static_cast<const Bytef *>(buf), len);
 
 	while ((err == ZIP_OK) && (file->ci.stream.avail_in > 0)) {
 		if (file->ci.stream.avail_out == 0) {
@@ -461,29 +471,25 @@ extern int ZEXPORT zipWriteInFileInZip(zipFile file, const voidp buf, unsigned l
 		}
 
 		if (file->ci.method == Z_DEFLATED) {
-			uLong uTotalOutBefore = file->ci.stream.total_out;
+			const uLong uTotalOutBefore = file->ci.stream.total_out;
 			err = deflate(&file->ci.stream,  Z_NO_FLUSH);
 			file->ci.pos_in_buffered_data += (file->ci.stream.total_out - uTotalOutBefore) ;
 
 		} else {
 			uInt copy_this;
-			uInt i;
 			if (file->ci.stream.avail_in < file->ci.stream.avail_out)
 				copy_this = file->ci.stream.avail_in;
 			else
 				copy_this = file->ci.stream.avail_out;
-			for (i = 0; i < copy_this; i++)
-				*(reinterpret_cast<char *>(file->ci.stream.next_out) + i) =
-				    *(reinterpret_cast<const char *>(file->ci.stream.next_in) + i);
-			{
-				file->ci.stream.avail_in -= copy_this;
-				file->ci.stream.avail_out -= copy_this;
-				file->ci.stream.next_in += copy_this;
-				file->ci.stream.next_out += copy_this;
-				file->ci.stream.total_in += copy_this;
-				file->ci.stream.total_out += copy_this;
-				file->ci.pos_in_buffered_data += copy_this;
-			}
+			for (uInt i = 0; i < copy_this; i++)
+				file->ci.stream.next_out[i] = file->ci.stream.next_in[i];
+			file->ci.stream.avail_in -= copy_this;
+			file->ci.stream.avail_out -= copy_this;
+			file->ci.stream.next_in += copy_this;
+			file->ci.stream.next_out += copy_this;
+			file->ci.stream.total_in += copy_this;
+			file->ci.stream.total_out += copy_this;
+			file->ci.pos_in_buffered_data += copy_this;
 		}
 	}
 
@@ -541,7 +547,7 @@ extern int ZEXPORT zipCloseFileInZip(zipFile file) {
 	delete [] file->ci.central_header;
 
 	if (err == ZIP_OK) {
-		long cur_pos_inzip = ftell(file->filezip);
+		const long cur_pos_inzip = ftell(file->filezip);
 		if (fseek(file->filezip,
 		          file->ci.pos_local_header + 14, SEEK_SET) != 0)
 			err = ZIP_ERRNO;

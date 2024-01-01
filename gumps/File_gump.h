@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,8 +27,6 @@ class Gump_text;
  *  The file save/load box:
  */
 class File_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(File_gump)
-
 protected:
 	static short textx, texty;  // Where to draw first text field.
 	static short texth;     // Distance down to next text field.
@@ -63,7 +61,7 @@ public:
 	bool mouse_down(int mx, int my, int button) override;
 	bool mouse_up(int mx, int my, int button) override;
 	using Modal_gump::text_input;
-	void text_input(int chr, int unicode) override; // Character typed.
+	void text_input(int chr, int unicode, bool shift_pressed) override; // Character typed.
 };
 
 #endif

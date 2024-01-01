@@ -1,7 +1,7 @@
 /*
  *  exult_constants.h - Some constants/macros that are used all over the code.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ constexpr inline int DECR_TILE(int x, int amt = 1) {
 }
 // Return x - y with wrapping.
 constexpr inline int SUB_TILE(int x, int y) {
-	int delta = x - y;
+	const int delta = x - y;
 	return delta < -c_num_tiles / 2 ? delta + c_num_tiles :
 	       delta >= c_num_tiles / 2 ? delta - c_num_tiles : delta;
 }
@@ -101,4 +101,11 @@ enum Exult_Game {
     EXULT_MENU_GAME         // Game type for the exult menu
 };
 
+// For the original released translations
+enum Game_Language {
+    ENGLISH,
+	FRENCH,                 // Black Gate only
+	GERMAN,                 // Black Gate only
+	SPANISH                 // Black Gate and Serpent Isle
+};
 #endif

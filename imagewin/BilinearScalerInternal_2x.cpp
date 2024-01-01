@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2005 The Pentagram Team
-Copyright (C) 2010 The Exult Team
+Copyright (C) 2010-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -29,7 +29,7 @@ bool BilinearScalerInternal_2x(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 sw
                                uint8 *pixel, sint32 dw, sint32 dh, sint32 pitch, bool clamp_src) {
 	ignore_unused_variable_warning(dh);
 	// Source buffer pointers
-	int tpitch = tex->pitch / sizeof(uintS);
+	const int tpitch = tex->pitch / sizeof(uintS);
 	uintS *texel = static_cast<uintS *>(tex->pixels) + (sy * tpitch + sx);
 	uintS *tline_end = texel + (sw - 1);
 	uintS *tex_end = texel + (sh - 4) * tpitch;
@@ -45,7 +45,7 @@ bool BilinearScalerInternal_2x(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 sw
 	uint8 h[4];
 	uint8 i[4];
 	uint8 j[4];
-	int p_diff    = (pitch * 8) - (dw * sizeof(uintX));
+	const int p_diff    = (pitch * 8) - (dw * sizeof(uintX));
 
 	bool clip_x = true;
 	if (sw + sx < tpitch && !clamp_src) {
@@ -111,7 +111,7 @@ bool BilinearScalerInternal_2x(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 sw
 
 			pixel -= pitch * 8;
 			pixel += sizeof(uintX) * 2;
-		};
+		}
 
 		pixel  += p_diff;
 
@@ -169,7 +169,7 @@ bool BilinearScalerInternal_2x(SDL_Surface *tex, sint32 sx, sint32 sy, sint32 sw
 
 			pixel -= pitch * 8;
 			pixel += sizeof(uintX) * 2;
-		};
+		}
 
 		pixel  += p_diff;
 

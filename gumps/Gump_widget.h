@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,13 +27,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 class Gump;
 class Game_window;
+class Gump_button;
 
 /*
  *  A gump widget, such as a button or text field:
  */
-class Gump_widget : public ShapeID {
-	UNREPLICATABLE_CLASS(Gump_widget)
-
+class Gump_widget : nonreplicatable, public ShapeID {
 protected:
 	Gump_widget() = default;
 	Gump *parent = nullptr;       // Who this is in.
@@ -58,14 +57,16 @@ public:
 	}
 	virtual void paint();
 
-	virtual Rectangle get_rect();
+	virtual TileRect get_rect();
 	// update the widget, if required
 	virtual void update_widget() { }
 
 	virtual bool is_draggable() {
 		return true;
 	}
-
+	virtual Gump_button *as_button() {
+		return nullptr;
+	}
 };
 
 #endif

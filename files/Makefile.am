@@ -1,5 +1,17 @@
-AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../headers $(SDL_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) \
-		$(DEBUG_FLAGS) $(CPPFLAGS) -DEXULT_DATADIR=\"$(EXULT_DATADIR)\"
+if BUILD_EXULT
+SDLRWOPS= \
+	sdlrwopsstreambuf.cc \
+	sdlrwopsstreambuf.h \
+	sdlrwopsistream.cc \
+	sdlrwopsistream.h \
+	sdlrwopsostream.cc \
+	sdlrwopsostream.h
+else
+SDLRWOPS=
+endif
+
+AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/headers $(SDL_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) \
+		$(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS) -DEXULT_DATADIR=\"$(EXULT_DATADIR)\"
 
 SUBDIRS = sha1 zip
 
@@ -38,9 +50,11 @@ libu7file_la_SOURCES =	\
 	crc.cc		\
 	crc.h		\
 	msgfile.cc	\
-	msgfile.h
+	msgfile.h	\
+	$(SDLRWOPS)
 
 EXTRA_DIST = 		\
+	module.mk	\
 	README
 
 CLEANFILES = *~

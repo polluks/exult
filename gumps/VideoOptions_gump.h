@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -28,7 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 class Gump_button;
 
 class VideoOptions_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(VideoOptions_gump)
 	static VideoOptions_gump *video_options_gump;
 
 private:
@@ -60,6 +59,8 @@ private:
 	enum button_ids {
 	    id_first = 0,
 	    id_apply = id_first,
+	    id_help,
+	    id_cancel,
 	    id_fullscreen,
 	    id_share_settings,
 	    id_high_dpi,
@@ -95,6 +96,7 @@ public:
 	void load_settings(bool Fullscreen);
 	void save_settings();
 	void cancel();
+	void help();
 
 	void set_scaling(int scaleVal) {
 		scaling = scaleVal;

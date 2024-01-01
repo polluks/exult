@@ -1,7 +1,7 @@
 /*
  *  stackframe.cc - a usecode interpreter stack frame
  *
- *  Copyright (C) 2002  The Exult Team
+ *  Copyright (C) 2002-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ Stack_frame::Stack_frame(Usecode_function *fun,
 	num_vars = Read2(ip);
 
 	// Allocate locals.
-	int num_locals = num_vars + num_args;
+	const int num_locals = num_vars + num_args;
 	locals = new Usecode_value[num_locals];
 
 	num_externs = Read2(ip); // external function references

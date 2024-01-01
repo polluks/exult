@@ -10,16 +10,16 @@
 #define PACKAGE_TARNAME "exult"
 
 /* Package Version */
-#define VERSION "1.7.0git-iOS"
+#define VERSION "1.9.0git"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.7.0git-iOS"
+#define PACKAGE_VERSION "1.9.0git"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Exult 1.7.0git-iOS"
+#define PACKAGE_STRING "Exult 1.9.0git"
 
 /* Define to the home page for this package. */
-#define PACKAGE_URL "http://exult.sourceforge.net/"
+#define PACKAGE_URL "http://exult.info/"
 
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
@@ -39,16 +39,35 @@
 /* Build NxBR scalers */
 #define USE_XBR_SCALER 1
 
-/* Enable mt32emu */
-#define USE_MT32EMU_MIDI 1
-
 #define USE_FMOPL_MIDI
+
+#define USE_FLUIDSYNTH_MIDI
+
+#define USE_MT32EMU_MIDI
+
+#ifndef MT32EMU_CONFIG_H
+#define MT32EMU_CONFIG_H
+
+#define MT32EMU_WITH_INTERNAL_RESAMPLER 1
 
 /* MT32EMU Version */
 #define MT32EMU_VERSION_MAJOR 2
-#define MT32EMU_VERSION_MINOR 0
+#define MT32EMU_VERSION_MINOR 7
 #define MT32EMU_VERSION_PATCH 0
 #define MT32EMU_VERSION "$(MT32EMU_VERSION_MAJOR).$(MT32EMU_VERSION_MINOR).$(MT32EMU_VERSION_PATCH)" 
+
+/* Library Exports Configuration
+ *
+ * This reflects the API types actually provided by the library build.
+ * 0: The full-featured C++ API is only available in this build. The client application may ONLY use MT32EMU_API_TYPE 0.
+ * 1: The C-compatible API is only available. The library is built as a shared object, only C functions are exported,
+ *    and thus the client application may NOT use MT32EMU_API_TYPE 0.
+ * 2: The C-compatible API is only available. The library is built as a shared object, only the factory function
+ *    is exported, and thus the client application may ONLY use MT32EMU_API_TYPE 2.
+ * 3: All the available API types are provided by the library build.
+ */
+#define MT32EMU_EXPORTS_TYPE  3
+#endif
 
 /* Enable Midi Sfx */
 /* #undef ENABLE_MIDISFX */

@@ -1,9 +1,9 @@
 /*
- *  Siintrinsics.h - Intrinsic table for Serpent Isle.
+ *  Sibetaintrinsics.h - Intrinsic table for the beta version of Serpent Isle.
  *
  *  Note:   This is used in the virtual machine and the Usecode compiler.
  *
- *  Copyright (C) 2001  The Exult Team
+ *  Copyright (C) 2016-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -238,10 +238,10 @@
 	USECODE_INTRINSIC_PTR(remove_spell),                  // 0xd4
 	USECODE_INTRINSIC_PTR(create_barge_object),           // 0xd5
 	USECODE_INTRINSIC_PTR(in_usecode_path),               // 0xd6
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xd7
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xd8
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xd9
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xda
+	USECODE_INTRINSIC_PTR(start_blocking_speech),         // 0xd7
+	USECODE_INTRINSIC_PTR(close_gumps2),                  // 0xd8
+	USECODE_INTRINSIC_PTR(close_gump2),                   // 0xd9
+	USECODE_INTRINSIC_PTR(game_day),                       // 0xda (Exult)
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdb
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdc
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdd

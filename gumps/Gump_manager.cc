@@ -1,7 +1,7 @@
 /*
  *  Gump_manager.cc - Object that manages all available gumps
  *
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,14 +22,20 @@
 #  include <config.h>
 #endif
 
-#include "SDL_events.h"
-#include "SDL_keyboard.h"
-
 #include "Configuration.h"
 #include "exult.h"
 #include "Gump.h"
 #include "Gump_manager.h"
 #include "gamewin.h"
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif    // __GNUC__
+static const Uint32 EXSDL_TOUCH_MOUSEID=SDL_TOUCH_MOUSEID;
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 #include "Actor_gump.h"
 #include "Paperdoll_gump.h"
@@ -175,7 +181,7 @@ void Gump_manager::add_gump(Gump *gump) {
  */
 
 bool Gump_manager::close_gump(Gump *gump) {
-	bool ret = remove_gump(gump);
+	const bool ret = remove_gump(gump);
 	Gump *dragged = gwin->get_dragging_gump();
 	if (dragged == gump)
 		gwin->stop_dragging();
@@ -264,7 +270,7 @@ void Gump_manager::add_gump(
 	int x = (1 + cnt) * gwin->get_width() / 10;
 	int y = (1 + cnt) * gwin->get_height() / 10;
 
-	ShapeID s_id(shapenum, 0, paperdoll ? SF_PAPERDOL_VGA : SF_GUMPS_VGA);
+	const ShapeID s_id(shapenum, 0, paperdoll ? SF_PAPERDOL_VGA : SF_GUMPS_VGA);
 	Shape_frame *shape = s_id.get_shape();
 
 	if (x + shape->get_xright() > gwin->get_width() ||
@@ -312,7 +318,7 @@ void Gump_manager::add_gump(
 	}
 	if (++cnt == 8)
 		cnt = 0;
-	int sfx = Audio::game_sfx(14);
+	const int sfx = Audio::game_sfx(14);
 	Audio::get_ptr()->play_sound_effect(sfx);   // The weird noise.
 	gwin->paint();          // Show everything.
 }
@@ -458,6 +464,13 @@ bool Gump_manager::handle_modal_gump_event(
 	Uint16 keysym_unicode = 0;
 
 	switch (event.type) {
+	case SDL_FINGERDOWN: {
+		if ((!Mouse::use_touch_input) && (event.tfinger.fingerId != 0)) {
+			Mouse::use_touch_input = true;
+			gwin->set_painted();
+		}
+		break;
+	}
 	case SDL_MOUSEBUTTONDOWN:
 		gwin->get_win()->screen_to_game(event.button.x, event.button.y, gwin->get_fastmouse(), gx, gy);
 
@@ -472,7 +485,7 @@ bool Gump_manager::handle_modal_gump_event(
 		} else if (event.button.button == 2) {
 			if (!gump->mouse_down(gx, gy, event.button.button) && gwin->get_mouse3rd()) {
 				gump->key_down(SDLK_RETURN);
-				gump->text_input(SDLK_RETURN, SDLK_RETURN);
+				gump->text_input(SDLK_RETURN, SDLK_RETURN, false);
 			}
 		} else if (event.button.button == 3) {
 			rightclick = true;
@@ -522,6 +535,8 @@ bool Gump_manager::handle_modal_gump_event(
 		break;
 	}
 	case SDL_MOUSEMOTION:
+		if (Mouse::use_touch_input && event.motion.which != EXSDL_TOUCH_MOUSEID)
+			Mouse::use_touch_input = false;
 		gwin->get_win()->screen_to_game(event.motion.x, event.motion.y, gwin->get_fastmouse(), gx, gy);
 
 		Mouse::mouse->move(gx, gy);
@@ -550,12 +565,12 @@ bool Gump_manager::handle_modal_gump_event(
 			return true;
 		}
 
-		if (event.key.keysym.sym != 0 && event.key.keysym.sym > +'~') {
+		if (event.key.keysym.sym > +'~') {
 			keysym_unicode = event.key.keysym.sym;
 		}
 		translate_numpad(event.key.keysym.sym, keysym_unicode, event.key.keysym.mod);
 		gump->key_down(event.key.keysym.sym);
-		gump->text_input(event.key.keysym.sym, keysym_unicode);
+		gump->text_input(event.key.keysym.sym, keysym_unicode, (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CAPS)) != 0);
 
 		break;
 	}
@@ -575,7 +590,7 @@ bool Gump_manager::handle_modal_gump_event(
 }
 
 void Gump_manager::translate_numpad(SDL_Keycode& code, uint16& unicode, uint16 mod) {
-	bool numlock_active = (mod & KMOD_NUM) != 0;
+	const bool numlock_active = (mod & KMOD_NUM) != 0;
 	unicode = 0;
 	switch (code) {
 	case SDLK_KP_0:
@@ -682,7 +697,7 @@ bool Gump_manager::do_modal_gump(
 	// Pause the game
 	gwin->get_tqueue()->pause(SDL_GetTicks());
 
-	Mouse::Mouse_shapes saveshape = Mouse::mouse->get_shape();
+	const Mouse::Mouse_shapes saveshape = Mouse::mouse->get_shape();
 	if (shape != Mouse::dontchange)
 		Mouse::mouse->set_shape(shape);
 	bool escaped = false;
@@ -748,8 +763,8 @@ int Gump_manager::prompt_for_number(
 ) {
 	auto *slider = new Slider_gump(minval, maxval,
 	                                      step, defval);
-	bool ok = do_modal_gump(slider, Mouse::hand, paint);
-	int ret = !ok ? 0 : slider->get_val();
+	const bool ok = do_modal_gump(slider, Mouse::hand, paint);
+	const int ret = !ok ? 0 : slider->get_val();
 	delete slider;
 	return ret;
 }

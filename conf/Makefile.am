@@ -1,5 +1,5 @@
-AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../headers -I$(srcdir)/../files $(SDL_CFLAGS) $(INCDIRS) \
-		 $(WINDOWING_SYSTEM) $(DEBUG_FLAGS) $(CPPFLAGS) $(WARNINGS)
+AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/headers -I$(top_srcdir)/files $(SDL_CFLAGS) $(INCDIRS) \
+		 $(WINDOWING_SYSTEM) $(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS)
 
 if BUILD_TOOLS
 noinst_PROGRAMS = confregress
@@ -23,6 +23,7 @@ confregress_LDADD =	\
 
 EXTRA_DIST = 		\
 	config.xml	\
+	module.mk	\
 	README
 
 CLEANFILES = *~

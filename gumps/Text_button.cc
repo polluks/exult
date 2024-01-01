@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -57,7 +57,7 @@ void Text_button::init() {
 	text_y = 2 + (height - 11) / 2;
 
 	// We will get the text width
-	int text_width = fontManager.get_font("SMALL_BLACK_FONT")->get_text_width(
+	const int text_width = fontManager.get_font("SMALL_BLACK_FONT")->get_text_width(
 	                     text.c_str());
 
 	if (width < text_width + 4) width = text_width + 4;

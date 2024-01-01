@@ -5,7 +5,8 @@
  **/
 
 /*
-Copyright (C) 1998  Jeffrey S. Freedman
+Copyright (C) 1998-2000  Jeffrey S. Freedman
+Copyright (C) 2000-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -124,8 +125,8 @@ unsigned char *Ireg_game_object::write_common_ireg(
     unsigned char *buf      // Buffer to be filled.
 ) {
 	unsigned char *endptr;
-	int shapenum = get_shapenum();
-	int framenum = get_framenum();
+	const int shapenum = get_shapenum();
+	const int framenum = get_framenum();
 	if (shapenum >= 1024 || framenum >= 64) {
 		*buf++ = IREG_EXTENDED;
 		norm_len++;

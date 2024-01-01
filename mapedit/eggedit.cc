@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,17 +23,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
+#include "exult_constants.h"
+#include "objserial.h"
+#include "servemsg.h"
+#include "shapedraw.h"
+#include "shapefile.h"
+#include "shapevga.h"
 #include "studio.h"
 #include "u7drag.h"
-#include "servemsg.h"
-#include "objserial.h"
-#include "exult_constants.h"
-#include "shapefile.h"
-#include "shapedraw.h"
-#include "ignore_unused_variable_warning.h"
 
 using std::cout;
 using std::endl;
@@ -104,33 +104,6 @@ C_EXPORT void on_egg_browse_usecode_clicked(
 }
 
 /*
- *  Draw shape in egg 'monster' area.
- */
-C_EXPORT gboolean on_egg_monster_draw_expose_event(
-    GtkWidget *widget,      // The view window.
-    GdkEventExpose *event,
-    gpointer data           // ->Shape_chooser.
-) {
-	ignore_unused_variable_warning(widget, data);
-	ExultStudio::get_instance()->show_egg_monster(
-	    event->area.x, event->area.y, event->area.width,
-	    event->area.height);
-	return TRUE;
-}
-
-/*
- *  Monster shape # lost focus, so update shape displayed.
- */
-C_EXPORT gboolean on_monst_shape_focus_out_event(
-    GtkWidget *widget,
-    GdkEventFocus *event,
-    gpointer user_data
-) {
-	ignore_unused_variable_warning(widget, event, user_data);
-	ExultStudio::get_instance()->show_egg_monster();
-	return FALSE;
-}
-/*
  *  "Teleport coords" toggled.
  */
 C_EXPORT void on_teleport_coord_toggled(
@@ -139,39 +112,12 @@ C_EXPORT void on_teleport_coord_toggled(
 ) {
 	ignore_unused_variable_warning(user_data);
 	ExultStudio *studio = ExultStudio::get_instance();
-	bool on = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(btn));
+	const bool on = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(btn));
 	studio->set_sensitive("teleport_x", on);
 	studio->set_sensitive("teleport_y", on);
 	studio->set_sensitive("teleport_z", on);
 	studio->set_sensitive("teleport_eggnum", !on);
 }
-
-/*
- *  Callback for when a shape is dropped on the Egg 'monster' area.
- */
-
-static void Egg_monster_dropped(
-    int file,           // U7_SHAPE_SHAPES.
-    int shape,
-    int frame,
-    void *udata
-) {
-	if (file == U7_SHAPE_SHAPES && shape >= 150 && shape < 0xffff)
-		static_cast<ExultStudio *>(udata)->set_egg_monster(shape, frame);
-}
-
-#ifdef _WIN32
-
-static void Drop_dragged_shape(int shape, int frame, int x, int y, void *data) {
-	ignore_unused_variable_warning(x, y);
-	if (shape < 150)
-		return;
-	cout << "Dropped a shape: " << shape << "," << frame << " " << data << endl;
-
-	Egg_monster_dropped(U7_SHAPE_SHAPES, shape, frame, data);
-}
-
-#endif
 
 /*
  *  Open the egg-editing window.
@@ -186,17 +132,30 @@ void ExultStudio::open_egg_window(
 		first_time = true;
 		eggwin = get_widget("egg_window");
 		if (vgafile && palbuf) {
-			egg_monster_draw = new Shape_draw(vgafile->get_ifile(),
-			                                  palbuf.get(),
-			                                  get_widget("egg_monster_draw"));
-			egg_monster_draw->enable_drop(Egg_monster_dropped,
-			                              this);
+			egg_monster_single = new Shape_single(
+			    get_widget("monst_shape"), nullptr,
+			    [](int shnum)->bool{ return (shnum >= c_first_obj_shape) &&
+			                                (shnum < c_max_shapes); },
+			    get_widget("monst_frame"),
+			    U7_SHAPE_SHAPES,
+			    vgafile->get_ifile(),
+			    palbuf.get(),
+			    get_widget("egg_monster_draw"));
+			egg_missile_single = new Shape_single(
+			    get_widget("missile_shape"), nullptr,
+			    [](int shnum)->bool{ return (shnum >= 0) &&
+			                                (shnum < c_max_shapes); },
+			    nullptr,
+			    U7_SHAPE_SHAPES,
+			    vgafile->get_ifile(),
+			    palbuf.get(),
+			    get_widget("missile_draw"), true);
 		}
 		egg_ctx = gtk_statusbar_get_context_id(
 		              GTK_STATUSBAR(get_widget("egg_status")), "Egg Editor");
 	}
 	// Init. egg address to null.
-	gtk_object_set_user_data(GTK_OBJECT(eggwin), nullptr);
+	g_object_set_data(G_OBJECT(eggwin), "user_data", nullptr);
 	// Make 'apply' sensitive.
 	gtk_widget_set_sensitive(get_widget("egg_apply_btn"), true);
 	remove_statusbar("egg_status", egg_ctx, egg_status_id);
@@ -211,11 +170,6 @@ void ExultStudio::open_egg_window(
 		set_sensitive("teleport_eggnum", false);
 	}
 	gtk_widget_show(eggwin);
-
-#ifdef _WIN32
-	if (first_time || !eggdnd)
-		Windnd::CreateStudioDropDest(eggdnd, egghwnd, Drop_dragged_shape, nullptr, nullptr, this);
-#endif
 }
 
 /*
@@ -226,9 +180,6 @@ void ExultStudio::close_egg_window(
 ) {
 	if (eggwin) {
 		gtk_widget_hide(eggwin);
-#ifdef _WIN32
-		Windnd::DestroyStudioDropDest(eggdnd, egghwnd);
-#endif
 	}
 }
 
@@ -268,10 +219,10 @@ int ExultStudio::init_egg_window(
 		return 0;
 	}
 	// Store address with window.
-	gtk_object_set_user_data(GTK_OBJECT(eggwin), addr);
+	g_object_set_data(G_OBJECT(eggwin), "user_data", addr);
 	GtkWidget *notebook = get_widget("notebook1");
 	if (notebook)           // 1st is monster (1).
-		gtk_notebook_set_page(GTK_NOTEBOOK(notebook), type - 1);
+		gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), type - 1);
 	set_spin("probability", probability);
 	set_spin("distance", distance);
 	set_optmenu("criteria", criteria);
@@ -317,10 +268,10 @@ int ExultStudio::init_egg_window(
 		set_spin("missile_delay", data2 >> 8);
 		break;
 	case 7: {           // Teleport:
-		int qual = data1 & 0xff;
+		const int qual = data1 & 0xff;
 		if (qual == 255) {
 			set_toggle("teleport_coord", true);
-			int schunk = data1 >> 8;
+			const int schunk = data1 >> 8;
 			set_entry("teleport_x",
 			          (schunk % 12)*c_tiles_per_schunk + (data2 & 0xff),
 			          true);
@@ -349,8 +300,8 @@ int ExultStudio::init_egg_window(
 		set_spin("btnegg_distance", data1 & 0xff);
 		break;
 	case 11: {          // Intermap:
-		int mapnum = data1 & 0xff;
-		int schunk = data1 >> 8;
+		const int mapnum = data1 & 0xff;
+		const int schunk = data1 >> 8;
 		set_spin("intermap_mapnum", mapnum);
 		set_entry("intermap_x",
 		          (schunk % 12)*c_tiles_per_schunk + (data2 & 0xff), true);
@@ -391,11 +342,11 @@ int ExultStudio::save_egg_window(
 ) {
 	cout << "In save_egg_window()" << endl;
 	// Get egg (null if creating new).
-	int tx = -1;
-	int ty = -1;
-	int tz = -1;  // +++++For now.
-	int shape = -1;
-	int frame = -1; // For now.
+	const int tx = -1;
+	const int ty = -1;
+	const int tz = -1;  // +++++For now.
+	const int shape = -1;
+	const int frame = -1; // For now.
 	int type = -1;
 	GtkWidget *notebook = get_widget("notebook1");
 	if (notebook)           // 1st is monster (1).
@@ -405,21 +356,21 @@ int ExultStudio::save_egg_window(
 		cout << "Can't find notebook widget" << endl;
 		return 0;
 	}
-	int criteria = get_optmenu("criteria");
-	int probability = get_spin("probability");
-	int distance = get_spin("distance");
-	bool nocturnal = get_toggle("nocturnal");
-	bool once = get_toggle("once");
-	bool hatched = get_toggle("hatched");
-	bool auto_reset = get_toggle("autoreset");
+	const int criteria = get_optmenu("criteria");
+	const int probability = get_spin("probability");
+	const int distance = get_spin("distance");
+	const bool nocturnal = get_toggle("nocturnal");
+	const bool once = get_toggle("once");
+	const bool hatched = get_toggle("hatched");
+	const bool auto_reset = get_toggle("autoreset");
 	int data1 = -1;
 	int data2 = -1;
 	int data3 = 0;
-	string str1;
+	const char *str1 = "";
 	switch (type) {         // Set notebook page.
 	case 1: {           // Monster:
-		int shnum = get_num_entry("monst_shape");
-		int frnum = get_num_entry("monst_frame");
+		const int shnum = get_num_entry("monst_shape");
+		const int frnum = get_num_entry("monst_frame");
 		if (shnum >= 1024 or frnum >= 64) {
 			data3 = shnum;
 			data2 = frnum & 0xff;
@@ -455,13 +406,13 @@ int ExultStudio::save_egg_window(
 	case 7:             // Teleport:
 		if (get_toggle("teleport_coord")) {
 			// Abs. coords.
-			int tx = get_num_entry("teleport_x");
-			int ty = get_num_entry("teleport_y");
-			int tz = get_num_entry("teleport_z");
+			const int tx = get_num_entry("teleport_x");
+			const int ty = get_num_entry("teleport_y");
+			const int tz = get_num_entry("teleport_z");
 			data3 = tz;
 			data2 = (tx & 0xff) + ((ty & 0xff) << 8);
-			int sx = tx / c_tiles_per_schunk;
-			int sy = ty / c_tiles_per_schunk;
+			const int sx = tx / c_tiles_per_schunk;
+			const int sy = ty / c_tiles_per_schunk;
 			data1 = 255 + ((sy * 12 + sx) << 8);
 		} else          // Egg #.
 			data1 = get_spin("teleport_eggnum") & 0xff;
@@ -477,14 +428,14 @@ int ExultStudio::save_egg_window(
 		data1 = get_spin("btnegg_distance") & 0xff;
 		break;
 	case 11: {          // Intermap.
-		int tx = get_num_entry("intermap_x");
-		int ty = get_num_entry("intermap_y");
-		int tz = get_num_entry("intermap_z");
-		int mapnum = get_spin("intermap_mapnum");
+		const int tx = get_num_entry("intermap_x");
+		const int ty = get_num_entry("intermap_y");
+		const int tz = get_num_entry("intermap_z");
+		const int mapnum = get_spin("intermap_mapnum");
 		data3 = tz;
 		data2 = (tx & 0xff) + ((ty & 0xff) << 8);
-		int sx = tx / c_tiles_per_schunk;
-		int sy = ty / c_tiles_per_schunk;
+		const int sx = tx / c_tiles_per_schunk;
+		const int sy = ty / c_tiles_per_schunk;
 		data1 = mapnum + ((sy * 12 + sx) << 8);
 		break;
 	}
@@ -492,7 +443,7 @@ int ExultStudio::save_egg_window(
 		cout << "Unknown egg type" << endl;
 		return 0;
 	}
-	auto *addr = static_cast<Egg_object*>(gtk_object_get_user_data(GTK_OBJECT(eggwin)));
+	auto *addr = static_cast<Egg_object *>(g_object_get_data(G_OBJECT(eggwin), "user_data"));
 	if (Egg_object_out(server_socket, addr, tx, ty, tz,
 	                   shape, frame, type, criteria, probability, distance,
 	                   nocturnal, once, hatched, auto_reset,
@@ -512,37 +463,3 @@ int ExultStudio::save_egg_window(
 	close_egg_window();
 	return 1;
 }
-
-/*
- *  Paint the shape in the egg 'monster' notebook page.
- */
-
-void ExultStudio::show_egg_monster(
-    int x, int y, int w, int h  // Rectangle. w=-1 to show all.
-) {
-	if (!egg_monster_draw)
-		return;
-	egg_monster_draw->configure();
-	// Yes, this is kind of redundant...
-	int shnum = get_num_entry("monst_shape");
-	int frnum = get_num_entry("monst_frame");
-	egg_monster_draw->draw_shape_centered(shnum, frnum);
-	if (w != -1)
-		egg_monster_draw->show(x, y, w, h);
-	else
-		egg_monster_draw->show();
-}
-
-/*
- *  Set egg monster shape.
- */
-
-void ExultStudio::set_egg_monster(
-    int shape,
-    int frame
-) {
-	set_entry("monst_shape", shape);
-	set_entry("monst_frame", frame);
-	show_egg_monster();
-}
-

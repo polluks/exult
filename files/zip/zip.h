@@ -4,6 +4,7 @@
    Copyright (C) 1998 Gilles Vollant
 
    Modified by Ryan Nunn. Nov 9th 2001
+   Modified by the Exult Team. 2003-2022
 
    This unzip package allow creates .ZIP file, compatible with PKZip 2.04g
      WinZip, InfoZip tools and compatible.
@@ -54,9 +55,8 @@
 extern "C" {
 #endif
 
-#ifndef _ZLIB_H
+#define ZLIB_CONST
 #include "zlib.h"
-#endif
 
 struct zip_internal;
 using zipFile = zip_internal *;
@@ -120,7 +120,7 @@ using zipFile = zip_internal *;
 	  level contain the level of compression (can be Z_DEFAULT_COMPRESSION)
 	*/
 
-	extern int ZEXPORT zipWriteInFileInZip(zipFile file, const voidp buf, unsigned len);
+	extern int ZEXPORT zipWriteInFileInZip(zipFile file, voidpc buf, unsigned len);
 	/*
 	  Write data in the zipfile
 	*/

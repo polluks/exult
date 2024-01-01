@@ -3,7 +3,7 @@
  **/
 
 /*
-Copyright (C) 2009 Exult Team
+Copyright (C) 2009-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -24,10 +24,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define INCL_DATA_UTILS 1
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
 #include <vector>
+#include "exceptions.h"
 #include "exult_constants.h"
 #include "utils.h"
 #include "U7obj.h"
@@ -50,9 +52,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 template <typename T>
 void add_vector_info(const T &inf, std::vector<T> &vec) {
-	typename std::vector<T>::iterator it;
 	// Find using operator<.
-	it = std::lower_bound(vec.begin(), vec.end(), inf);
+	auto it = std::lower_bound(vec.begin(), vec.end(), inf);
 	if (it == vec.end() || *it != inf)  // Not found.
 		vec.insert(it, inf);    // Add new.
 	else {  // Already exists.
@@ -81,16 +82,15 @@ std::vector<T> &set_vector_info(bool tf, std::vector<T> &vec) {
 }
 template <typename T>
 void invalidate_vector(std::vector<T> &vec) {
-	typename std::vector<T>::iterator it;
-	for (it = vec.begin(); it != vec.end(); ++it)
-		it->set_invalid(true);
+	for (auto& elem : vec)
+		elem.set_invalid(true);
 }
 
 template <typename T>
 void clean_vector(std::vector<T> &vec) {
 	vec.erase(std::remove_if(vec.begin(), vec.end(),
 		[](T& elem) {
-			return elem.is_invalid() || !elem.have_static();
+			return elem.is_invalid() && !elem.have_static();
 		}
 		), vec.end());
 }
@@ -105,9 +105,8 @@ static const T *Search_vector_data_single_wildcard(
 		return nullptr;
 	T inf;
 	inf.*dat = src;
-	typename std::vector<T>::const_iterator it;
 	// Try finding exact match first.
-	it = std::lower_bound(vec.begin(), vec.end(), inf);
+	auto it = std::lower_bound(vec.begin(), vec.end(), inf);
 	if (it == vec.end())    // Nowhere to be found.
 		return nullptr;
 	else if (*it == inf && !it->is_invalid())   // Have it already.
@@ -133,16 +132,16 @@ static const T *Search_vector_data_double_wildcards(
 	T inf;
 	inf.*fr = frame;
 	inf.*qual = quality;
-	typename std::vector<T>::const_iterator it;
 	// Try finding exact match first.
-	it = std::lower_bound(vec.begin(), vec.end(), inf);
+	auto it = std::lower_bound(vec.begin(), vec.end(), inf);
 	if (it == vec.end())    // Nowhere to be found.
 		return nullptr;
-	else if (*it == inf && !it->is_invalid())   // Have it already.
-		return &*it;
+	auto& new_info = *it;
+	if (new_info == inf && !it->is_invalid())   // Have it already.
+		return &new_info;
 	// We only have to search forward for a match.
 	if (quality != -1) {
-		if ((*it).*fr == frame) {
+		if (new_info.*fr == frame) {
 			// Maybe quality is to blame. Try wildcard quality.
 			inf.*qual = -1;
 			it = std::lower_bound(it, vec.end(), inf);
@@ -199,7 +198,7 @@ inline int Read_count(std::istream &in) {
  *  Write # entries of binary data file (with Exult extension).
  */
 inline void Write_count(
-    std::ofstream &out,
+    std::ostream &out,
     int cnt
 ) {
 	if (cnt >= 255) {
@@ -225,7 +224,7 @@ protected:
 		int vers = 0;
 		if (haveversion)
 			vers = Read1(in);
-		size_t cnt = Read_count(in);
+		const size_t cnt = Read_count(in);
 		for (size_t j = 0; j < cnt; j++)
 			read_data(in, j, vers, patch, game, true);
 	}
@@ -248,10 +247,11 @@ public:
 	void read(const char *fname, bool patch, Exult_Game game) {
 		if (!U7exists(fname))
 			return;
-		std::ifstream fin;
-		U7open(fin, fname);
+		auto pFin = U7open_in(fname);
+		if (!pFin)
+			return;
+		auto& fin = *pFin;
 		read_binary_internal(fin, patch, game);
-		fin.close();
 	}
 	// Binary resource file.
 	void read(Exult_Game game, int resource) {
@@ -263,14 +263,14 @@ public:
 		str_int_pair resource = game->get_resource(buf);
 		U7object txtobj(resource.str, resource.num);
 		*/
-		bool bg = game == BLACK_GATE;
+		const bool bg = game == BLACK_GATE;
 		const char *flexfile =
 		    bg ? BUNDLE_CHECK(BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX)
 		    : BUNDLE_CHECK(BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX);
-		U7object txtobj(flexfile, resource);
+		const U7object txtobj(flexfile, resource);
 		std::size_t len;
 		auto txt = txtobj.retrieve(len);
-		std::string databuf(reinterpret_cast<char*>(txt.get()), len);
+		const std::string databuf(reinterpret_cast<char*>(txt.get()), len);
 		std::istringstream strin(databuf, std::ios::in | std::ios::binary);
 		read_binary_internal(strin, false, game);
 	}
@@ -387,7 +387,7 @@ public:
 	                Exult_Game game, Info &info) {
 		ignore_unused_variable_warning(version, patch, game);
 		// For backwards compatibility.
-		bool biton = ReadInt(in, 1) != 0;
+		const bool biton = ReadInt(in, 1) != 0;
 		if (biton)
 			info.*data |= (static_cast<T>(1) << bit);
 		else
@@ -514,7 +514,7 @@ static void Read_text_data_file(
 		str_int_pair resource = game->get_resource(buf);
 		U7object txtobj(resource.str, resource.num);
 		*/
-		bool bg = game == BLACK_GATE;
+		const bool bg = game == BLACK_GATE;
 		const char *flexfile =
 		    bg ? BUNDLE_CHECK(BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX)
 		    : BUNDLE_CHECK(BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX);
@@ -524,16 +524,17 @@ static void Read_text_data_file(
 	} else {
 		try {
 			snprintf(buf, 50, "<STATIC>/%s.txt", fname);
-			std::ifstream in;
-			U7open(in, buf, false);
+			auto pIn = U7open_in(buf, false);
+			if (!pIn)
+				throw file_open_exception(buf);
+			auto& in = *pIn;
 			static_version = Read_text_msg_file_sections(in,
 			                 static_strings, sections, numsections);
-			in.close();
-		} catch (std::exception &e) {
+		} catch (std::exception &) {
 			if (!editing) {
 				for (int i = 0; i < numsections; i++)
 					delete parsers[i];
-				throw e;
+				throw;
 			}
 			static_strings.resize(numsections);
 		}
@@ -541,11 +542,12 @@ static void Read_text_data_file(
 	patch_strings.resize(numsections);
 	snprintf(buf, 50, "<PATCH>/%s.txt", fname);
 	if (U7exists(buf)) {
-		std::ifstream in;
-		U7open(in, buf, false);
+		auto pIn = U7open_in(buf, false);
+		if (!pIn)
+		    throw file_open_exception(buf);
+		auto& in = *pIn;
 		patch_version = Read_text_msg_file_sections(in, patch_strings,
 		                sections, numsections);
-		in.close();
 	}
 	for (int i = 0; i < numsections; i++) {
 		parsers[i]->parse(static_strings[i], static_version, false, game);
@@ -596,13 +598,14 @@ public:
 	) {
 		if (cnt <= 0)   // Nothing to do.
 			return;
-		std::ofstream fout; // Open file.
-		U7open(fout, name);
+		auto pFout = U7open_out(name);
+		if (!pFout)
+			return;
+		auto& fout = *pFout;
 		if (version >= 0)   // container.dat has version #.
 			fout.put(version);
 		Write_count(fout, cnt); // Object count, with Exult extension.
 		write_data(fout, game);
-		fout.close();
 	}
 };
 
@@ -617,17 +620,15 @@ protected:
 	Functor writer;
 	int check_write() override {
 		int num = 0;
-		for (typename std::map<int, Info>::iterator it = info.begin();
-		        it != info.end(); ++it)
-			if (writer(it->second))
+		for (auto& kvpair : info)
+			if (writer(kvpair.second))
 				num++;
 		return num;
 	}
 	void write_data(std::ostream &out, Exult_Game game) override {
-		for (typename std::map<int, Info>::iterator it = info.begin();
-		        it != info.end(); ++it)
-			if (writer(it->second))
-				writer(out, it->first, game, it->second);
+		for (auto& kvpair : info)
+			if (writer(kvpair.second))
+				writer(out, kvpair.first, game, kvpair.second);
 	}
 public:
 	Functor_multidata_writer(const char *s, std::map<int, Info> &nfo,
@@ -774,8 +775,7 @@ public:
 		Write2(out, index);
 		out.write(reinterpret_cast<char *>(&(info.*data1)), sizeof(T1));
 		out.write(reinterpret_cast<char *>(&(info.*data2)), sizeof(T2));
-		for (int i = 0; i < pad; i++)
-			out.put(0);
+		std::fill_n(std::ostream_iterator<char>(out), pad, 0);
 	}
 	bool operator()(Info &info) {
 		return check(info);
@@ -810,7 +810,7 @@ public:
 		T *cls = info.*data;
 		if (!cls)
 			return (info.have_static_flags & T::get_info_flag()) != 0;
-		return (cls->need_write());
+		return cls->need_write();
 	}
 };
 
@@ -822,18 +822,16 @@ class Vector_writer_functor {
 public:
 	void operator()(std::ostream &out, int index, Exult_Game game, Info &info) {
 		std::vector<T> &vec = info.*data;
-		for (typename std::vector<T>::iterator it = vec.begin();
-		        it != vec.end(); ++it)
-			if (need_write(*it))
-				it->write(out, index, game);
+		for (auto& elem : vec)
+			if (need_write(elem))
+				elem.write(out, index, game);
 	}
 	bool operator()(Info &info) {
 		std::vector<T> &vec = info.*data;
 		if (vec.empty())    // Nothing to do.
 			return false;
-		for (typename std::vector<T>::iterator it = vec.begin();
-		        it != vec.end(); ++it)
-			if (need_write(*it))
+		for (auto& elem : vec)
+			if (need_write(elem))
 				return true;
 		return false;
 	}
@@ -859,10 +857,12 @@ static void Write_text_data_file(
 			delete writers[i];
 		return;
 	}
-	std::ofstream out;
 	char buf[50];
 	snprintf(buf, 50, "<PATCH>/%s.txt", fname);
-	U7open(out, buf, true); // (It's a text file.)
+	auto pOut = U7open_out(buf, true); // (It's a text file.)
+	if (!pOut)
+		return;
+	auto& out = *pOut;
 	out << "#\tExult " << VERSION << " text message file."
 	    << "\tWritten by ExultStudio." << std::endl;
 	out << "%%section version" << std::endl
@@ -872,7 +872,6 @@ static void Write_text_data_file(
 		writers[i]->write_text(out, game);
 		delete writers[i];
 	}
-	out.close();
 }
 
 #endif

@@ -1,7 +1,7 @@
 /*
  *  Paths.h - Various pathfinding clients.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -37,19 +37,19 @@ class Actor_pathfinder_client : public Pathfinder_client {
 	int dist;           // Distance for success.
 	Actor *npc;         // Who this represents.
 	bool ignore_npcs;   // If NPCs are nonblocking.
-	int check_blocking(Tile_coord const &from, Tile_coord const &to);
+	int check_blocking(Tile_coord const &from, Tile_coord const &to) const;
 public:
 //	Actor_pathfinder_client(Actor *npc, int d = 0) : dist(d)
 //		{ set_move_flags(mf); }
 	Actor_pathfinder_client(Actor *npc, int d = 0, bool ign = false);
 	// Figure when to give up.
-	int get_max_cost(int cost_to_goal) override;
+	int get_max_cost(int cost_to_goal) const override;
 	// Figure cost for a single step.
-	int get_step_cost(Tile_coord const &frm, Tile_coord &to) override;
+	int get_step_cost(Tile_coord const &frm, Tile_coord &to) const override;
 	// Estimate cost between two points.
-	int estimate_cost(Tile_coord const &from, Tile_coord const &to) override;
+	int estimate_cost(Tile_coord const &from, Tile_coord const &to) const override;
 	// Is tile at the goal?
-	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) override;
+	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) const override;
 	bool ignores_npcs() const {
 		return ignore_npcs;
 	}
@@ -64,9 +64,9 @@ public:
 	Onecoord_pathfinder_client(Actor *n, bool ign = false) : Actor_pathfinder_client(n, 0, ign)
 	{  }
 	// Estimate cost between two points.
-	int estimate_cost(Tile_coord const &from, Tile_coord const &to) override;
+	int estimate_cost(Tile_coord const &from, Tile_coord const &to) const override;
 	// Is tile at the goal?
-	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) override;
+	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) const override;
 };
 
 /*
@@ -74,30 +74,30 @@ public:
  *  Only the tz coord. of the dest. is used.
  */
 class Offscreen_pathfinder_client : public Actor_pathfinder_client {
-	Rectangle screen;       // Screen rect. in tiles.
+	TileRect screen;       // Screen rect. in tiles.
 	Tile_coord best;        // Best offscreen pt. to aim for.
 public:
 	Offscreen_pathfinder_client(Actor *n, bool ign = false);
 	Offscreen_pathfinder_client(Actor *n, Tile_coord const &b, bool ign = false);
 	// Figure cost for a single step.
-	int get_step_cost(Tile_coord const &from, Tile_coord &to) override;
+	int get_step_cost(Tile_coord const &from, Tile_coord &to) const override;
 	// Estimate cost between two points.
-	int estimate_cost(Tile_coord const &from, Tile_coord const &to) override;
+	int estimate_cost(Tile_coord const &from, Tile_coord const &to) const override;
 	// Is tile at the goal?
-	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) override;
+	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) const override;
 };
 
 /*
  *  This class provides A* cost methods for going to an object.
  */
 class Approach_object_pathfinder_client : public Actor_pathfinder_client {
-	Rectangle destbox;      // Got to intersect this box.
+	TileRect destbox;      // Got to intersect this box.
 public:
 	Approach_object_pathfinder_client(Actor *from, Tile_coord const &dest,
 	                                  int dist);
 	Approach_object_pathfinder_client(Actor *from, Game_object *to, int dist);
 	// Is tile at the goal?
-	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) override;
+	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) const override;
 };
 
 /*
@@ -105,7 +105,7 @@ public:
  *  test for when an object can be grabbed.
  */
 class Fast_pathfinder_client : public Pathfinder_client {
-	Rectangle destbox;      // Got to intersect this box.
+	TileRect destbox;      // Got to intersect this box.
 	int axtiles, aytiles, aztiles;  // NPC's dims. in tiles.
 	void init(Game_object *from, Game_object *to, int dist);
 	static bool is_grabable_internal(Game_object *from, Tile_coord const &ct,
@@ -117,13 +117,13 @@ public:
 	Fast_pathfinder_client(Actor *from, Tile_coord const &dest, int dist);
 	Fast_pathfinder_client(Actor *from, Game_object *to, int dist);
 	// Figure when to give up.
-	int get_max_cost(int cost_to_goal) override;
+	int get_max_cost(int cost_to_goal) const override;
 	// Figure cost for a single step.
-	int get_step_cost(Tile_coord const &from, Tile_coord &to) override;
+	int get_step_cost(Tile_coord const &from, Tile_coord &to) const override;
 	// Estimate cost between two points.
-	int estimate_cost(Tile_coord const &from, Tile_coord const &to) override;
+	int estimate_cost(Tile_coord const &from, Tile_coord const &to) const override;
 	// Is tile at the goal?
-	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) override;
+	bool at_goal(Tile_coord const &tile, Tile_coord const &goal) const override;
 	int get_axtiles() const {
 		return axtiles;
 	}
@@ -153,9 +153,9 @@ public:
 	Monster_pathfinder_client(Actor *attacker, int reach,
 	                          Game_object *opponent);
 	// Figure when to give up.
-	int get_max_cost(int cost_to_goal) override;
+	int get_max_cost(int cost_to_goal) const override;
 	// Figure cost for a single step.
-	int get_step_cost(Tile_coord const &from, Tile_coord &to) override;
+	int get_step_cost(Tile_coord const &from, Tile_coord &to) const override;
 };
 
 

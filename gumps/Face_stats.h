@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,7 +26,6 @@ class Actor;
 class Portrait_button;
 
 class Face_stats : public Gump {
-	UNREPLICATABLE_CLASS(Face_stats)
 	// Only allow for one to be made
 	static Face_stats   *self;
 	static int      mode;
@@ -44,7 +43,7 @@ class Face_stats : public Gump {
 	void        create_buttons();
 	void        delete_buttons();
 
-	Rectangle   region;
+	TileRect   region;
 
 public:
 	~Face_stats() override;
@@ -64,7 +63,7 @@ public:
 		return true;
 	}
 
-	Rectangle get_rect() const override {
+	TileRect get_rect() const override {
 		return region;
 	}
 	bool has_point(int x, int y) const override;

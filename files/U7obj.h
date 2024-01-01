@@ -1,7 +1,7 @@
 /*
  *  U7obj.h - Generic file reader object.
  *
- *  Copyright (C) 2008  The Exult Team
+ *  Copyright (C) 2008-2022  The Exult Team
  *
  *  Based on code by Dancer A.L Vesperman
  *
@@ -48,7 +48,7 @@ struct File_spec {
 	File_spec(std::string n, int i = -1)
 		: name(std::move(n)), index(i) {}
 	bool operator<(const File_spec &other) const {
-		int cmp = name.compare(other.name);
+		const int cmp = name.compare(other.name);
 		return cmp < 0 || (cmp == 0 && index < other.index);
 	}
 };

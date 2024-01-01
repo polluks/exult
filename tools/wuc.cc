@@ -112,7 +112,7 @@ void check_data_label_16(int label) {
 		printf("Warning: offset too big for 16 bit at label %s!\n", curlabel);
 }
 
-int find_intrinsic(const char **func_table, unsigned funsize, const char *name) {
+int find_intrinsic(const char * const *func_table, unsigned funsize, const char *name) {
 	unsigned i;
 	for (i = 0; i < funsize; i++) {
 		if (!strcasecmp(name, func_table[i]))
@@ -125,9 +125,9 @@ int find_intrinsic(const char **func_table, unsigned funsize, const char *name) 
 void read_token(FILE *fi) {
 	int i = 0;
 	int c = 32;
-	while (((c == ' ') || (c == '\t') || (c == '\n') || (c == ',')) && (!feof(fi)))
+	while (((c == ' ') || (c == '\t') || (c == '\n') || (c == ',')) && !feof(fi))
 		c = fgetc(fi);
-	while (!((c == ' ') || (c == '\t') || (c == '\n') || (c == ',')) && (!feof(fi))) {
+	while ((c != ' ') && (c != '\t') && (c != '\n') && (c != ',') && !feof(fi)) {
 		if (i >= TOKEN_LENGTH - 1) {
 			fprintf(stderr, "Error: token too long!\n");
 			exit(-1);
@@ -160,12 +160,12 @@ void read_token(FILE *fi) {
 
 int main(int argc,char *argv[]) {
 	unsigned i;
-	unsigned opsize = array_size(opcode_table);
-	unsigned pushsize = array_size(push_table);
-	unsigned popsize = array_size(pop_table);
-	unsigned compsize = array_size(compiler_table);
+	const unsigned opsize = array_size(opcode_table);
+	const unsigned pushsize = array_size(push_table);
+	const unsigned popsize = array_size(pop_table);
+	const unsigned compsize = array_size(compiler_table);
 	int label;
-	const char **func_table = bg_intrinsic_table;
+	const char * const *func_table = bg_intrinsic_table;
 	int funsize = bg_intrinsic_size;
 	int findex = 1;         // Index in argv of 1st filename.
 	unsigned int opcodetype;
@@ -186,7 +186,6 @@ int main(int argc,char *argv[]) {
 		func_table = sibeta_intrinsic_table;
 		funsize = sibeta_intrinsic_size;
 	}
-
 
 	lindex = 0;
 	for (pass = 0; pass < 2; pass++) {
@@ -246,10 +245,37 @@ int main(int argc,char *argv[]) {
 					}
 			} else if (!strcmp(token, "db")) {
 				read_token(fi);
-				if (token[0] == 39)
-					for (i = 1; i < strlen(token); i++)
-						emit_byte(token[i]);
-				else {
+				if (token[0] == '\'') {
+					const unsigned len = strlen(token);
+					for (i = 1; i < len; i++) {
+						if (token[i] == '\\' && i + 1 < len) {
+							++i;
+							switch (token[i]) {
+							case 'r':
+								emit_byte('\r');
+								break;
+							case 'n':
+								emit_byte('\n');
+								break;
+							case 't':
+								emit_byte('\t');
+								break;
+							case '\\':
+								emit_byte('\\');
+								break;
+							case '\'':
+								emit_byte('\'');
+								break;
+							default:
+								emit_byte('\\');
+								emit_byte(token[i]);
+								break;
+							}
+						} else {
+							emit_byte(token[i]);
+						}
+					}
+				} else {
 					sscanf(token, "%x", &byteval);
 					emit_byte(byteval);
 				}

@@ -1,7 +1,7 @@
 /*
  *  Paths.cc - Various pathfinding clients.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,18 +49,18 @@ Actor_pathfinder_client::Actor_pathfinder_client(
 
 int Actor_pathfinder_client::get_max_cost(
     int cost_to_goal        // From estimate_cost().
-) {
-	int max_cost = 3 * cost_to_goal;
+) const {
+	const int max_cost = 3 * cost_to_goal;
 	Game_window *gwin = Game_window::get_instance();
 	// Do at least 3 screens width.
-	int min_max_cost = (gwin->get_width() / c_tilesize) * 2 * 3;
+	const int min_max_cost = (gwin->get_width() / c_tilesize) * 2 * 3;
 	return max_cost > min_max_cost ? max_cost : min_max_cost;
 }
 
 int Actor_pathfinder_client::check_blocking(
     Tile_coord const &from,
     Tile_coord const &to
-) {
+) const {
 	if (ignores_npcs()) {
 		Game_object *block = Game_object::find_blocking(to);
 		if (!block)
@@ -69,7 +69,7 @@ int Actor_pathfinder_client::check_blocking(
 		if (blk) {
 			// If the blocking NPC is sitting, kneeling, lying down,
 			// or in combat, he is an obstacle.
-			int frnum = blk->get_framenum() & 0xf;
+			const int frnum = blk->get_framenum() & 0xf;
 			if ((frnum >= Actor::sit_frame && frnum <= Actor::sleep_frame) ||
 			        blk->get_schedule_type() == Schedule::combat)
 				return -1;
@@ -86,7 +86,7 @@ int Actor_pathfinder_client::check_blocking(
 	        block->get_framenum() % 4 >= 2)
 		return -1;
 	// Can't be either end of door.
-	Rectangle foot = block->get_footprint();
+	const TileRect foot = block->get_footprint();
 	if (foot.h == 1 && (to.tx == foot.x ||
 	                    to.tx == FIX_COORD(foot.x + foot.w - 1)))
 		return -1;
@@ -110,23 +110,23 @@ int Actor_pathfinder_client::get_step_cost(
     Tile_coord const &frm,
     Tile_coord &to          // The tile we're going to.  The 'tz'
     //   field may be modified.
-) {
+) const {
 	Game_window *gwin = Game_window::get_instance();
-	int cx = to.tx / c_tiles_per_chunk;
-	int cy = to.ty / c_tiles_per_chunk;
+	const int cx = to.tx / c_tiles_per_chunk;
+	const int cy = to.ty / c_tiles_per_chunk;
 	Map_chunk *olist = gwin->get_map()->get_chunk(cx, cy);
-	int tx = to.tx % c_tiles_per_chunk; // Get tile within chunk.
-	int ty = to.ty % c_tiles_per_chunk;
+	const int tx = to.tx % c_tiles_per_chunk; // Get tile within chunk.
+	const int ty = to.ty % c_tiles_per_chunk;
 	int cost = 1;
 	olist->setup_cache();       // Make sure cache is valid.
 	bool water;
 	bool poison;      // Get tile info.
 	Actor::get_tile_info(nullptr, gwin, olist, tx, ty, water, poison);
-	int old_lift = to.tz;       // Might climb/descend.
+	const int old_lift = to.tz;       // Might climb/descend.
 	Tile_coord from(frm);
 	if (npc->is_blocked(to, &from)) {
 		// Blocked, but check for a door or blocking NPC.
-		int ret = check_blocking(from, to);
+		const int ret = check_blocking(from, to);
 		if (ret < 0)
 			return -1;
 		else
@@ -142,10 +142,10 @@ int Actor_pathfinder_client::get_step_cost(
 	if (poison && to.tz == 0)
 		cost *= 2;      // And avoid poison if possible.
 	// Get 'flat' shapenum.
-	ShapeID flat = olist->get_flat(tx, ty);
-	int shapenum = flat.get_shapenum();
+	const ShapeID flat = olist->get_flat(tx, ty);
+	const int shapenum = flat.get_shapenum();
 	if (shapenum == 24) {   // Cobblestone path in BlackGate?
-		int framenum = flat.get_framenum();
+		const int framenum = flat.get_framenum();
 		if (framenum <= 1)
 			cost--;
 	}
@@ -159,7 +159,7 @@ int Actor_pathfinder_client::get_step_cost(
 int Actor_pathfinder_client::estimate_cost(
     Tile_coord const &from,
     Tile_coord const &to
-) {
+) const {
 	int dx = to.tx - from.tx;
 	if (dx < -c_num_tiles / 2)  // Wrap around the world.
 		dx += c_num_tiles;
@@ -189,7 +189,7 @@ int Actor_pathfinder_client::estimate_cost(
 bool Actor_pathfinder_client::at_goal(
     Tile_coord const &tile,
     Tile_coord const &goal
-) {
+) const {
 	return (goal.tz == -1 ? tile.distance_2d(goal) : tile.distance(goal)) <= dist;
 }
 
@@ -200,7 +200,7 @@ bool Actor_pathfinder_client::at_goal(
 int Onecoord_pathfinder_client::estimate_cost(
     Tile_coord const &from,
     Tile_coord const &to            // Should be the goal.
-) {
+) const {
 	if (to.tx == -1) {      // Just care about Y?
 		// Cost = 2/tile.
 		int dy = to.ty - from.ty;
@@ -227,7 +227,7 @@ int Onecoord_pathfinder_client::estimate_cost(
 bool Onecoord_pathfinder_client::at_goal(
     Tile_coord const &tile,
     Tile_coord const &goal
-) {
+) const {
 	return (goal.tx == -1 || tile.tx == goal.tx) &&
 	        (goal.ty == -1 || tile.ty == goal.ty) &&
 	        (goal.tz == -1 || tile.tz == goal.tz);
@@ -257,11 +257,11 @@ Offscreen_pathfinder_client::Offscreen_pathfinder_client(
 	    Game_window::get_instance()->get_win_tile_rect().enlarge(3)),
 	best(b) {
 	if (best.tx != -1) {    // Scale (roughly) to edge of screen.
-		Rectangle scr =
+		const TileRect scr =
 		    Game_window::get_instance()->get_win_tile_rect();
 		// Get center.
-		int cx = scr.x + scr.w / 2;
-		int cy = scr.y + scr.h / 2;
+		const int cx = scr.x + scr.w / 2;
+		const int cy = scr.y + scr.h / 2;
 		// More than 4 screens away?
 		if (best.distance_2d(Tile_coord(cx, cy, 0)) > 4 * scr.w) {
 			best.tx = best.ty = -1;
@@ -293,7 +293,7 @@ int Offscreen_pathfinder_client::get_step_cost(
     Tile_coord const &from,
     Tile_coord &to          // The tile we're going to.  The 'tz'
     //   field may be modified.
-) {
+) const {
 	int cost = Actor_pathfinder_client::get_step_cost(from, to);
 	if (cost == -1)
 		return cost;
@@ -313,16 +313,16 @@ int Offscreen_pathfinder_client::get_step_cost(
 int Offscreen_pathfinder_client::estimate_cost(
     Tile_coord const &from,
     Tile_coord const &to            // Should be the goal.
-) {
+) const {
 	if (best.tx != -1)      // Off-screen goal?
 		return Actor_pathfinder_client::estimate_cost(from, best);
 //++++++World-wrapping here????
 	int dx = from.tx - screen.x;    // Figure shortest dist.
-	int dx1 = screen.x + screen.w - from.tx;
+	const int dx1 = screen.x + screen.w - from.tx;
 	if (dx1 < dx)
 		dx = dx1;
 	int dy = from.ty - screen.y;
-	int dy1 = screen.y + screen.h - from.ty;
+	const int dy1 = screen.y + screen.h - from.ty;
 	if (dy1 < dy)
 		dy = dy1;
 	int cost = dx < dy ? dx : dy;
@@ -340,7 +340,7 @@ int Offscreen_pathfinder_client::estimate_cost(
 bool Offscreen_pathfinder_client::at_goal(
     Tile_coord const &tile,
     Tile_coord const &goal
-) {
+) const {
 	ignore_unused_variable_warning(goal);
 	return !screen.has_world_point(tile.tx - tile.tz / 2, tile.ty - tile.tz / 2); //&&
 	// Z-coord shouldn't matter.
@@ -357,7 +357,7 @@ Approach_object_pathfinder_client::Approach_object_pathfinder_client(
     Tile_coord const &dest,
     int dist
 ) : Actor_pathfinder_client(from, dist, false),
-	destbox(Rectangle(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
+	destbox(TileRect(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
 }
 
 /*
@@ -380,8 +380,8 @@ Approach_object_pathfinder_client::Approach_object_pathfinder_client(
 bool Approach_object_pathfinder_client::at_goal(
     Tile_coord const &tile,
     Tile_coord const &goal
-) {
-	int dz = tile.tz - goal.tz; // Got to be on same floor.
+) const {
+	const int dz = tile.tz - goal.tz; // Got to be on same floor.
 	if (dz > 5 || dz < -5)
 		return false;
 	return destbox.has_world_point(tile.tx, tile.ty);
@@ -398,7 +398,7 @@ Fast_pathfinder_client::Fast_pathfinder_client(
     int dist,
     int mf
 ) : Pathfinder_client(mf),
-	destbox(Rectangle(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
+	destbox(TileRect(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
 	init(from, nullptr, dist);
 }
 
@@ -426,7 +426,7 @@ Fast_pathfinder_client::Fast_pathfinder_client(
     Tile_coord const &dest,
     int dist
 ) : Pathfinder_client(from->get_type_flags()),
-	destbox(Rectangle(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
+	destbox(TileRect(dest.tx, dest.ty, 0, 0).enlarge(dist)) {
 	init(from, nullptr, dist);
 }
 
@@ -449,7 +449,7 @@ void Fast_pathfinder_client::init(
     int dist
 ) {
 	const Shape_info &info1 = from->get_info();
-	int frame1 = from->get_framenum();
+	const int frame1 = from->get_framenum();
 	axtiles = info1.get_3d_xtiles(frame1);
 	aytiles = info1.get_3d_ytiles(frame1);
 	aztiles = info1.get_3d_height();
@@ -463,7 +463,7 @@ void Fast_pathfinder_client::init(
 
 int Fast_pathfinder_client::get_max_cost(
     int cost_to_goal        // From estimate_cost().
-) {
+) const {
 	int max_cost = 2 * cost_to_goal; // Don't try too hard.
 	if (max_cost < 8)
 		max_cost = 8;
@@ -483,14 +483,14 @@ int Fast_pathfinder_client::get_step_cost(
     Tile_coord const &from,
     Tile_coord &to          // The tile we're going to.  The 'tz'
     //   field may be modified.
-) {
+) const {
 	ignore_unused_variable_warning(from);
 	Game_window *gwin = Game_window::get_instance();
-	int cx = to.tx / c_tiles_per_chunk;
-	int cy = to.ty / c_tiles_per_chunk;
+	const int cx = to.tx / c_tiles_per_chunk;
+	const int cy = to.ty / c_tiles_per_chunk;
 	Map_chunk *olist = gwin->get_map()->get_chunk(cx, cy);
-	int tx = to.tx % c_tiles_per_chunk; // Get tile within chunk.
-	int ty = to.ty % c_tiles_per_chunk;
+	const int tx = to.tx % c_tiles_per_chunk; // Get tile within chunk.
+	const int ty = to.ty % c_tiles_per_chunk;
 	olist->setup_cache();       // Make sure cache is valid.
 	int new_lift;           // Might climb/descend.
 	// Look at 1 tile's height, and step up/down 1.
@@ -508,7 +508,7 @@ int Fast_pathfinder_client::get_step_cost(
 int Fast_pathfinder_client::estimate_cost(
     Tile_coord const &from,
     Tile_coord const &to
-) {
+) const {
 	return from.distance(to);   // Distance() does world-wrapping.
 }
 
@@ -519,12 +519,12 @@ int Fast_pathfinder_client::estimate_cost(
 bool Fast_pathfinder_client::at_goal(
     Tile_coord const &tile,
     Tile_coord const &goal
-) {
-	int dz = tile.tz - goal.tz; // Got to be on same floor.
+) const {
+	const int dz = tile.tz - goal.tz; // Got to be on same floor.
 	if (dz > 5 || dz < -5)
 		return false;
-	Rectangle abox(tile.tx - axtiles + 1, tile.ty - aytiles + 1,
-	               axtiles, aytiles);
+	const TileRect abox(tile.tx - axtiles + 1, tile.ty - aytiles + 1,
+	              axtiles, aytiles);
 	return abox.intersects(destbox);
 }
 
@@ -534,8 +534,8 @@ static void Get_closest_edge(
     Tile_coord &pos1,
     Tile_coord &pos2
 ) {
-	int ht1 = fromvol.h;
-	int ht2 = tovol.h;
+	const int ht1 = fromvol.h;
+	const int ht2 = tovol.h;
 	if (pos2.tx < pos1.tx)  // Going left?
 		pos1.tx = fromvol.x;
 	else            // Right?
@@ -585,7 +585,7 @@ bool Fast_pathfinder_client::is_grabable_internal(
 	if (!client.at_goal(t, dst))
 		return false;
 
-	Block srcvol(fromvol);
+	const Block srcvol(fromvol);
 	fromvol.x += t.tx - src.tx;
 	fromvol.y += t.ty - src.ty;
 	fromvol.z += t.tz - src.tz;
@@ -715,8 +715,8 @@ bool Fast_pathfinder_client::is_straight_path(
 bool Fast_pathfinder_client::is_straight_path(
     Game_object *from, Game_object *to
 ) {
-	Block fromvol = from->get_block();
-	Block tovol = to->get_block();
+	const Block fromvol = from->get_block();
+	const Block tovol = to->get_block();
 	Tile_coord pos1(from->get_tile());
 	Tile_coord pos2(to->get_tile());
 	Get_closest_edge(fromvol, tovol, pos1, pos2);
@@ -766,13 +766,13 @@ Monster_pathfinder_client::Monster_pathfinder_client(
 
 int Monster_pathfinder_client::get_max_cost(
     int cost_to_goal        // From estimate_cost().
-) {
+) const {
 	int max_cost = 2 * cost_to_goal; // Don't try to hard.
 	// Use intelligence.
 	max_cost += intelligence / 2;
 	Game_window *gwin = Game_window::get_instance();
 	// Limit to 3/4 screen width.
-	int scost = ((3 * gwin->get_width()) / 4) / c_tilesize;
+	const int scost = ((3 * gwin->get_width()) / 4) / c_tilesize;
 	if (max_cost > scost)
 		max_cost = scost;
 	if (max_cost < 18)      // But not too small.
@@ -791,7 +791,7 @@ int Monster_pathfinder_client::get_step_cost(
     Tile_coord const &from,
     Tile_coord &to          // The tile we're going to.  The 'tz'
     //   field may be modified.
-) {
+) const {
 	if (Map_chunk::is_blocked(get_axtiles(), get_aytiles(), get_aztiles(),
 	                          from, to, get_move_flags()))
 		return -1;

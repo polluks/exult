@@ -2,7 +2,7 @@
  *  gamemap.h - Game map data.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,18 +22,18 @@
 #ifndef GAMEMAP_H
 #define GAMEMAP_H
 
+#include "chunks.h"
 #include "exult_constants.h"
 #include "flags.h"
 #include "tiles.h"
 
 #include <cassert>
-#include <string>   // STL string
+#include <fstream>
 #include <iostream>
 #include <memory>
-#include <fstream>
+#include <string>    // STL string
 #include <vector>
 
-class Map_chunk;
 class Chunk_terrain;
 class Map_patch_collection;
 class Game_object;
@@ -58,7 +58,7 @@ class Game_map {
 	int num;            // Map #.  Index in gwin->maps.
 	// Flat chunk areas:
 	static std::vector<Chunk_terrain *> *chunk_terrains;
-	static std::ifstream *chunks;   // "u7chunks" file.
+	static std::unique_ptr<std::istream> chunks;   // "u7chunks" file.
 	static bool v2_chunks;      // True if 3 bytes/entry.
 	static bool read_all_terrain;   // True if we've read them all.
 	static bool chunk_terrains_modified;
@@ -68,13 +68,13 @@ class Game_map {
 	// Chunk_terrain index for each chunk:
 	short terrain_map[c_num_chunks][c_num_chunks];
 	// A list of objects in each chunk:
-	Map_chunk *objects[c_num_chunks][c_num_chunks];
+	std::unique_ptr<Map_chunk> objects[c_num_chunks][c_num_chunks];
 	bool schunk_read[144];      // Flag for reading in each "ifix".
 	bool schunk_modified[144];  // Flag for modified "ifix".
 	char *schunk_cache[144];
 	int  schunk_cache_sizes[144];
 	int caching_out;        // >0 in 'cache_out_schunk'.
-	Map_patch_collection *map_patches;
+	std::unique_ptr<Map_patch_collection> map_patches;
 
 	Map_chunk *create_chunk(int cx, int cy);
 	static Chunk_terrain *read_terrain(int chunk_num);
@@ -102,8 +102,8 @@ public:
 	inline short get_terrain_num(int cx, int cy) const {
 		return terrain_map[cx][cy];
 	}
-	inline Map_patch_collection *get_map_patches() {
-		return map_patches;
+	inline Map_patch_collection& get_map_patches() {
+		return *map_patches;
 	}
 	void set_map_modified() {
 		map_modified = true;
@@ -124,7 +124,7 @@ public:
 	}
 	void ensure_chunk_read(int cx, int cy) {
 		if (cx < c_num_chunks && cy < c_num_chunks) {
-			int sc = 12 * (cy/c_chunks_per_schunk) + cx/c_chunks_per_schunk;
+			const int sc = 12 * (cy/c_chunks_per_schunk) + cx/c_chunks_per_schunk;
 			if (!schunk_read[sc])
 				get_superchunk_objects(sc);
 		}
@@ -134,19 +134,27 @@ public:
 		schunk_modified[12 * (cy / c_chunks_per_schunk) +
 		                cx / c_chunks_per_schunk] = true;
 	}
+	// Get objs. list for a chunk.
+	Map_chunk *get_chunk_unsafe(int cx, int cy) {
+		return objects[cx][cy].get();
+	}
+	// Get/create objs. list for a chunk.
+	Map_chunk *get_chunk_unchecked(int cx, int cy) {
+		Map_chunk *list = get_chunk_unsafe(cx, cy);
+		return list ? list : create_chunk(cx, cy);
+	}
 	// Get/create objs. list for a chunk.
 	Map_chunk *get_chunk(int cx, int cy) {
 		assert((cx >= 0) && (cx < c_num_chunks) &&
 		       (cy >= 0) && (cy < c_num_chunks));
-		Map_chunk *list = objects[cx][cy];
-		return list ? list : create_chunk(cx, cy);
+		return get_chunk_unchecked(cx, cy);
 	}
 	Map_chunk *get_chunk_safely(int cx, int cy) {
-		Map_chunk *list;
-		return cx >= 0 && cx < c_num_chunks &&
-		       cy >= 0 && cy < c_num_chunks ?
-		       ((list = objects[cx][cy]) != nullptr ? list :
-		        create_chunk(cx, cy)) : nullptr;
+		if (cx >= 0 && cx < c_num_chunks &&
+		    cy >= 0 && cy < c_num_chunks) {
+			return get_chunk_unchecked(cx, cy);
+		}
+		return nullptr;
 	}
 	// Get "map" superchunk objs/scenery.
 	void get_map_objects(int schunk);

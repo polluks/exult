@@ -6,6 +6,7 @@
 
 /*
 Copyright (C) 2000  Jeffrey S. Freedman
+Copyright (C) 2001-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -33,7 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  don't have to be reimplemented.
  */
 class Barge_object : public Container_game_object, public Time_sensitive {
-	static Barge_object *editing;   // Egg being edited by ExultStudio.
+	static Game_object_shared editing;   // Egg being edited by ExultStudio.
     std::vector<Game_object_shared> objects; // All objects in/on barge.
 	int perm_count;         // Counts permanent parts of barge,
 	//   which proceed those placed on it.
@@ -70,7 +71,7 @@ public:
 		first_step(true), taking_2nd_step(false),
 		boat(-1), frame_time(0), path(nullptr)
 	{  }
-	Rectangle get_tile_footprint();
+	TileRect get_tile_footprint();
 	bool is_moving() const {
 		return frame_time > 0;
 	}

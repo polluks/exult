@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -54,7 +54,7 @@ class Palette {
 	bool faded_out;     // true if faded palette to black.
 	bool fades_enabled;
 	void set_loaded(const U7multiobject &pal, const char *xfname, int xindex);
-	void loadxform(const char *buf, const char *xfname, int &xindex);
+	void loadxform(const unsigned char *buf, const char *xfname, int &xindex);
 
 	static unsigned char border[3];
 public:

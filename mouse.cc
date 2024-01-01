@@ -1,7 +1,7 @@
 /*
  *  mouse.cc - Mouse pointers.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,8 +22,16 @@
 #  include <config.h>
 #endif
 
-#include "SDL_mouse.h"
-#include "SDL_timer.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "mouse.h"
 #include "gamewin.h"
 #include "fnames.h"
@@ -41,13 +49,15 @@
 using std::max;
 #endif
 
+bool Mouse::use_touch_input = false;
+
 static inline bool should_hide_frame(int frame) {
-#ifdef __IPHONEOS__
-	return frame == 0 || (frame >=8 && frame <= 47);
-#else
-	ignore_unused_variable_warning(frame);
-	return false;
-#endif
+	// on touch input only we hide the cursor
+	if (Mouse::use_touch_input) {
+		return frame == 0 || (frame >=8 && frame <= 47);
+	} else {
+		return false;
+	}
 }
 
 short Mouse::short_arrows[8] = {8, 9, 10, 11, 12, 13, 14, 15};
@@ -94,10 +104,10 @@ void Mouse::Init() {
 	int maxabove = 0;
 	int maxbelow = 0;
 	for (auto& frame : pointers) {
-		int xleft = frame->get_xleft();
-		int xright = frame->get_xright();
-		int yabove = frame->get_yabove();
-		int ybelow = frame->get_ybelow();
+		const int xleft = frame->get_xleft();
+		const int xright = frame->get_xright();
+		const int yabove = frame->get_yabove();
+		const int ybelow = frame->get_ybelow();
 		if (xleft > maxleft)
 			maxleft = xleft;
 		if (xright > maxright)
@@ -107,8 +117,8 @@ void Mouse::Init() {
 		if (ybelow > maxbelow)
 			maxbelow = ybelow;
 	}
-	int maxw = maxleft + maxright;
-	int maxh = maxabove + maxbelow;
+	const int maxw = maxleft + maxright;
+	const int maxh = maxabove + maxbelow;
 	// Create backup buffer.
 	backup = iwin->create_buffer(maxw, maxh);
 	box.w = maxw;
@@ -208,7 +218,7 @@ void Mouse::set_location(
 void Mouse::flash_shape(
     Mouse_shapes flash
 ) {
-	Mouse_shapes saveshape = get_shape();
+	const Mouse_shapes saveshape = get_shape();
 	hide();
 	set_shape(flash);
 	show();
@@ -278,12 +288,12 @@ void Mouse::set_speed_cursor() {
 		} else
 			gwin->get_shape_location(gwin->get_main_actor(), ax, ay);
 
-		int dy = ay - mousey;
-		int dx = mousex - ax;
-		Direction dir = Get_direction_NoWrap(dy, dx);
-		Rectangle gamewin_dims = gwin->get_game_rect();
-		float speed_section = max(max(-static_cast<float>(dx) / ax, static_cast<float>(dx) / (gamewin_dims.w - ax)), max(static_cast<float>(dy) / ay, -static_cast<float>(dy) / (gamewin_dims.h - ay)));
-		bool nearby_hostile = gwin->is_hostile_nearby();
+		const int dy = ay - mousey;
+		const int dx = mousex - ax;
+		const Direction dir = Get_direction_NoWrap(dy, dx);
+		const TileRect gamewin_dims = gwin->get_game_rect();
+		const float speed_section = max(max(-static_cast<float>(dx) / ax, static_cast<float>(dx) / (gamewin_dims.w - ax)), max(static_cast<float>(dy) / ay, -static_cast<float>(dy) / (gamewin_dims.h - ay)));
+		const bool nearby_hostile = gwin->is_hostile_nearby();
 		bool has_active_nohalt_scr = false;
 		Usecode_script *scr = nullptr;
 		Actor *act = gwin->get_main_actor();
@@ -296,13 +306,13 @@ void Mouse::set_speed_cursor() {
 			}
 
 		const int base_speed = 200 * gwin->get_std_delay();
-		if (speed_section < 0.4) {
+		if (speed_section < 0.4f) {
 			if (gwin->in_combat())
 				cursor = get_short_combat_arrow(dir);
 			else
 				cursor = get_short_arrow(dir);
 			avatar_speed = base_speed / slow_speed_factor;
-		} else if (speed_section < 0.8 || gwin->in_combat() || nearby_hostile
+		} else if (speed_section < 0.8f || gwin->in_combat() || nearby_hostile
 		           || has_active_nohalt_scr) {
 			if (gwin->in_combat())
 				cursor = get_medium_combat_arrow(dir);

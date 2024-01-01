@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,38 +31,36 @@ using std::ifstream;
 using std::ofstream;
 
 void Keyring::read() {
-	ifstream in;
+	std::unique_ptr<std::istream> pIn;
 
 	// clear keyring first
 	keys.clear();
 
 	try {
-		U7open(in, KEYRINGDAT);
+		pIn = U7open_in(KEYRINGDAT);
 	} catch (exult_exception &/*e*/) {
 		// maybe an old savegame, just leave the keyring empty
 		return;
 	}
+	if (!pIn)
+		return;
+	auto& in = *pIn;
 
 	do {
-		int val = Read2(in);
+		const int val = Read2(in);
 		if (in.good())
 			addkey(val);
 	} while (in.good());
-
-	in.close();
 }
 
 void Keyring::write() {
-	ofstream out;
+	auto pOut = U7open_out(KEYRINGDAT);
+	if (!pOut)
+		throw file_open_exception(KEYRINGDAT);
+	auto& out = *pOut;
 
-	U7open(out, KEYRINGDAT);
-
-	std::set<int>::iterator iter;
-
-	for (iter = keys.begin(); iter != keys.end(); ++iter)
-		Write2(out, *iter);
-
-	out.close();
+	for (const int key : keys)
+		Write2(out, key);
 }
 
 void Keyring::clear() {

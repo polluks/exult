@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -30,8 +30,6 @@ class Actor;
  *  A rectangular area showing party combat statistics:
  */
 class CombatStats_gump : public Gump {
-	UNREPLICATABLE_CLASS(CombatStats_gump)
-
 public:
 	CombatStats_gump(int initx, int inity);
 	// Add object.

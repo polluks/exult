@@ -8,7 +8,7 @@
 #define INCL_EXECBOX_H  1
 
 /*
-Copyright (C) 2002 The Exult Team
+Copyright (C) 2002-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,28 +25,14 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wparentheses"
-#if !defined(__llvm__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-#else
-#pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
-#endif
-#endif  // __GNUC__
-#include <gtk/gtk.h>
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif  // __GNUC__
-
 class Exec_box;
 class Exec_process;
+
+#include "studio.h"
+
 // Called when child is done:
 using Exec_done_fun = void (*)(int exit_code, Exec_box *box,
                                gpointer user_data);
-
 
 #ifndef _WIN32
 
@@ -80,7 +66,6 @@ public:
 };
 
 #else
-#include "ignore_unused_variable_warning.h"
 
 class Exec_process {
 public:

@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2003-2005  The Pentagram Team
-Copyright (C) 2010 The Exult team
+Copyright (C) 2010-2022  The Exult team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "pent_include.h"
 #include <cstring>
+#include <mutex>
 
 #include "LowLevelMidiDriver.h"
 #include "XMidiSequence.h"
@@ -26,6 +27,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "XMidiEvent.h"
 #include "XMidiEventList.h"
 #include "array_size.h"
+
+LowLevelMidiDriver::SDLMutex::SDLMutex() : mutex(SDL_CreateMutex()) {
+}
+
+LowLevelMidiDriver::SDLMutex::~SDLMutex() {
+	SDL_DestroyMutex(mutex);
+}
+
+void LowLevelMidiDriver::SDLMutex::lock() {
+	SDL_LockMutex(mutex);
+}
+
+void LowLevelMidiDriver::SDLMutex::unlock() {
+	SDL_UnlockMutex(mutex);
+}
 
 // If the time to wait is less than this then we yield instead of waiting on the condition variable
 // This must be great than or equal to 2
@@ -154,19 +170,18 @@ int LowLevelMidiDriver::initMidiDriver(uint32 samp_rate, bool is_stereo)
 	// Destroy first before re-initing
 	if (initialized) destroyMidiDriver();
 
-	string s;
-
 	// Reset the current stream states
-	std::memset(sequences, 0, sizeof (XMidiSequence*) * LLMD_NUM_SEQ);
-	std::memset(chan_locks, -1, sizeof (sint32) * 16);
-	std::memset(chan_map, -1, sizeof (sint32) * LLMD_NUM_SEQ * 16);
+	std::fill(std::begin(sequences), std::end(sequences), nullptr);
+	std::fill(std::begin(chan_locks), std::end(chan_locks), -1);
+	for (auto& chan : chan_map)
+		std::fill(std::begin(chan), std::end(chan), -1);
 	for (int i = 0; i < LLMD_NUM_SEQ; i++) {
 		playing[i] = false;
 		callback_data[i] = -1;
 	}
 
-	mutex = SDL_CreateMutex();
-	cbmutex = SDL_CreateMutex();
+	mutex = std::make_unique<SDLMutex>();
+	cbmutex = std::make_unique<SDLMutex>();
 	cond = SDL_CreateCond();
 	thread = nullptr;
 	sample_rate = samp_rate;
@@ -175,12 +190,15 @@ int LowLevelMidiDriver::initMidiDriver(uint32 samp_rate, bool is_stereo)
 	next_sysex = 0;
 
 	// Zero the memory
-	std::memset(mt32_patch_banks,0,sizeof(mt32_patch_banks[0])*128);
-	std::memset(mt32_timbre_banks,0,sizeof(mt32_timbre_banks[0])*128);
-	std::memset(mt32_timbre_used,-1,sizeof(mt32_timbre_used[0])*64);
-	std::memset(mt32_bank_sel,0,sizeof(mt32_bank_sel[0])*LLMD_NUM_SEQ);
-	std::memset(mt32_patch_bank_sel,0,sizeof(mt32_patch_bank_sel[0])*128);
-	std::memset(mt32_rhythm_bank,0,sizeof(mt32_rhythm_bank[0])*128);
+	std::fill(std::begin(mt32_patch_banks), std::end(mt32_patch_banks), nullptr);
+	std::fill(std::begin(mt32_timbre_banks), std::end(mt32_timbre_banks), nullptr);
+	for (auto& timbre : mt32_timbre_used)
+		std::fill(std::begin(timbre), std::end(timbre), -1);
+	for (auto& bank : mt32_bank_sel)
+		std::fill(std::begin(bank), std::end(bank), 0);
+	// Note: This is inconsistent with the one from LowLevelMidiDriver::loadTimbreLibrary
+	std::fill(std::begin(mt32_patch_bank_sel), std::end(mt32_patch_bank_sel), 0);
+	std::fill(std::begin(mt32_rhythm_bank), std::end(mt32_rhythm_bank), nullptr);
 
 	int code = 0;
 
@@ -190,12 +208,10 @@ int LowLevelMidiDriver::initMidiDriver(uint32 samp_rate, bool is_stereo)
 	if (code)
 	{
 		perr << "Failed to initialize midi player (code: " << code << ")" << endl;
-		SDL_DestroyMutex(mutex);
-		SDL_DestroyMutex(cbmutex);
+		mutex.reset();
+		cbmutex.reset();
 		SDL_DestroyCond(cond);
 		thread = nullptr;
-		mutex = nullptr;
-		cbmutex = nullptr;
 		cond = nullptr;
 	}
 	else
@@ -215,11 +231,9 @@ void LowLevelMidiDriver::destroyMidiDriver()
 
 	initialized = false;
 
-	SDL_DestroyMutex(mutex);
-	SDL_DestroyMutex(cbmutex);
+	mutex.reset();
+	cbmutex.reset();
 	SDL_DestroyCond(cond);
-	cbmutex = nullptr;
-	mutex = nullptr;
 	thread = nullptr;
 	cond = nullptr;
 
@@ -243,9 +257,10 @@ void LowLevelMidiDriver::startSequence(int seq_num, XMidiEventList *eventlist, b
 	while (uploading_timbres) {
 		waitTillNoComMessages();
 
-		lockComMessage();
-		bool isplaying = playing[3];
-		unlockComMessage();
+		const bool isplaying = [this](){
+			const std::lock_guard<SDLMutex> lock(*mutex);
+			return playing[3];
+		}();
 
 		// If sequence is still playing timbres are still loading
 		// so we need to wait and try it again
@@ -325,11 +340,8 @@ bool LowLevelMidiDriver::isSequencePlaying(int seq_num)
 
 	waitTillNoComMessages();
 
-	lockComMessage();
-	bool ret = playing[seq_num];
-	unlockComMessage();
-
-	return ret;
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	return playing[seq_num];
 }
 
 void LowLevelMidiDriver::pauseSequence(int seq_num)
@@ -360,11 +372,8 @@ uint32 LowLevelMidiDriver::getSequenceCallbackData(int seq_num)
 {
 	if (seq_num >= LLMD_NUM_SEQ || seq_num < 0) return 0;
 
-	SDL_mutexP(cbmutex);
-	uint32 ret = callback_data[seq_num];
-	SDL_mutexV(cbmutex);
-
-	return ret;
+	const std::lock_guard<SDLMutex> lock(*cbmutex);
+	return callback_data[seq_num];
 }
 
 //
@@ -373,34 +382,23 @@ uint32 LowLevelMidiDriver::getSequenceCallbackData(int seq_num)
 
 sint32 LowLevelMidiDriver::peekComMessageType()
 {
-	lockComMessage();
-	sint32 ret = 0;
-	if (!messages.empty()) ret = messages.front().type;
-	unlockComMessage();
-	return ret;
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	if (!messages.empty()) {
+		return messages.front().type;
+	}
+	return 0;
 }
 
 void LowLevelMidiDriver::sendComMessage(ComMessage& message)
 {
-	lockComMessage();
+	const std::lock_guard<SDLMutex> lock(*mutex);
 	messages.push(message);
 	SDL_CondSignal(cond);
-	unlockComMessage();
 }
 
 void LowLevelMidiDriver::waitTillNoComMessages()
 {
 	while (peekComMessageType()) yield ();
-}
-
-void LowLevelMidiDriver::lockComMessage()
-{
-	SDL_mutexP(mutex);
-}
-
-void LowLevelMidiDriver::unlockComMessage()
-{
-	SDL_mutexV(mutex);
 }
 
 //
@@ -416,23 +414,19 @@ int LowLevelMidiDriver::initThreadedSynth()
 	sendComMessage(message);
 
 	quit_thread = false;
-	thread = SDL_CreateThread (threadMain_Static, "LowLevelMidiDriver", this);
+	thread = SDL_CreateThread(threadMain_Static, "LowLevelMidiDriver", this);
 
 	while (peekComMessageType() == LLMD_MSG_THREAD_INIT)
 		yield ();
 
 	int code = 0;
-
-	lockComMessage();
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	while (!messages.empty())
 	{
-		while (!messages.empty())
-		{
-			if (messages.front().type == LLMD_MSG_THREAD_INIT_FAILED)
-				code = messages.front().data.init_failed.code;
-			messages.pop();
-		}
+		if (messages.front().type == LLMD_MSG_THREAD_INIT_FAILED)
+			code = messages.front().data.init_failed.code;
+		messages.pop();
 	}
-	unlockComMessage();
 
 	return code;
 }
@@ -468,13 +462,11 @@ void LowLevelMidiDriver::destroyThreadedSynth()
 		SDL_WaitThread(thread, &status_thread);
 	}
 
-	lockComMessage();
-	{
-		// Get rid of all the messages
-		while (!messages.empty()) messages.pop();
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	// Get rid of all the messages
+	while (!messages.empty()) {
+		messages.pop();
 	}
-	unlockComMessage();
-
 }
 
 int LowLevelMidiDriver::threadMain_Static(void *data)
@@ -490,23 +482,22 @@ int LowLevelMidiDriver::threadMain()
 	giveinfo();
 
 	// Open the device
-	int code = open();
-
-	lockComMessage();
+	const int code = open();
 	{
+		const std::lock_guard<SDLMutex> lock(*mutex);
 		// Pop all the messages
-		while(!messages.empty()) messages.pop();
+		while(!messages.empty()) {
+			messages.pop();
+		}
 
 		// If we have an error code, push it to the message queue then return
 		// else we are ok to go
-		if (code)
-		{
+		if (code) {
 			ComMessage message(LLMD_MSG_THREAD_INIT_FAILED, -1);
 			message.data.init_failed.code = code;
 			messages.push(message);
 		}
 	}
-	unlockComMessage();
 
 	if (code) return code;
 
@@ -523,11 +514,11 @@ int LowLevelMidiDriver::threadMain()
 
 		for (int i = 0; i < LLMD_NUM_SEQ; i++)
 		{
-			int seq = i;
+			const int seq = i;
 
 			if (sequences[seq])
 			{
-				sint32 ms = sequences[seq]->timeTillNext();
+				const sint32 ms = sequences[seq]->timeTillNext();
 				if (ms < time_till_next) time_till_next = ms;
 			}
 		}
@@ -535,9 +526,12 @@ int LowLevelMidiDriver::threadMain()
 		if (time_till_next <= LLMD_MINIMUM_YIELD_THRESHOLD)
 		{
 			bool wait = false;
-			lockComMessage();
-			if (messages.empty()) wait = true;
-			unlockComMessage();
+			{
+				const std::lock_guard<SDLMutex> lock(*mutex);
+				if (messages.empty()) {
+					wait = true;
+				}
+			}
 			if (wait)
 			{
 				//printf("Yielding\n");
@@ -551,18 +545,17 @@ int LowLevelMidiDriver::threadMain()
 		}
 		else
 		{
-			lockComMessage();
+			const std::lock_guard<SDLMutex> lock(*mutex);
 			if (messages.empty())
 			{
 				//printf("Waiting %i ms\n", time_till_next-2);
-				SDL_CondWaitTimeout(cond, mutex,time_till_next-2);
+				SDL_CondWaitTimeout(cond, *mutex,time_till_next-2);
 				//printf("Finished Waiting\n");
 			}
 			else
 			{
 				//printf("Messages in queue, not waiting\n");
 			}
-			unlockComMessage();
 		}
 	}
 
@@ -575,14 +568,12 @@ int LowLevelMidiDriver::threadMain()
 	// Close the device
 	close();
 
-	lockComMessage();
-	{
-		// Pop all messages
-		while(!messages.empty()) messages.pop();
-		initialized = false;
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	// Pop all messages
+	while(!messages.empty()) {
+		messages.pop();
 	}
-	unlockComMessage();
-
+	initialized = false;
 	return 0;
 }
 
@@ -593,7 +584,7 @@ int LowLevelMidiDriver::threadMain()
 int LowLevelMidiDriver::initSoftwareSynth()
 {
 	// Open the device
-	int ret = open();
+	const int ret = open();
 
 	// Uh oh, failed
 	if (ret) return 1;
@@ -667,15 +658,12 @@ void LowLevelMidiDriver::produceSamples(sint16 *samples, uint32 bytes)
 
 		// We care about the return code now
 		if (playSequences()) {
-
-			lockComMessage();
-			{
-				// Pop all messages
-				while(!messages.empty()) messages.pop();
-				initialized = false;
+			const std::lock_guard<SDLMutex> lock(*mutex);
+			// Pop all messages
+			while(!messages.empty()) {
+				messages.pop();
 			}
-			unlockComMessage();
-
+			initialized = false;
 			break;
 		}
 
@@ -699,223 +687,218 @@ bool LowLevelMidiDriver::playSequences ()
 	// Play all notes, from all sequences
 	for (i = 0; i < LLMD_NUM_SEQ; i++)
 	{
-		int seq = i;
+		const int seq = i;
 
 		while (sequences[seq] && !peekComMessageType())
 		{
-			sint32 pending_events = sequences[seq]->playEvent();
+			const sint32 pending_events = sequences[seq]->playEvent();
 
 			if (pending_events > 0) break;
 			else if (pending_events == -1)
 			{
 				delete sequences[seq];
 				sequences[seq] = nullptr;
-				lockComMessage();
+				const std::lock_guard<SDLMutex> lock(*mutex);
 				playing[seq] = false;
-				unlockComMessage();
 			}
 		}
 	}
 
 	// Did we get issued a music command?
-	lockComMessage();
+	const std::lock_guard<SDLMutex> lock(*mutex);
+	while (!messages.empty())
 	{
-		while (!messages.empty())
+		ComMessage message = messages.front();
+
+		// Quick Exit if we get a 'queue' and get an exit command
+		if (messages.back().type == LLMD_MSG_THREAD_EXIT)
+			message = messages.back();
+
+		switch (message.type)
 		{
-			ComMessage message = messages.front();
-
-			// Quick Exit if we get a 'queue' and get an exit command
-			if (messages.back().type == LLMD_MSG_THREAD_EXIT)
-				message = messages.back();
-
-			switch (message.type)
+		case LLMD_MSG_FINISH:
 			{
-			case LLMD_MSG_FINISH:
-				{
-					delete sequences[message.sequence];
-					sequences[message.sequence] = nullptr;
-					playing[message.sequence] = false;
-					callback_data[message.sequence] = -1;
-					unlockAndUnprotectChannel(message.sequence);
-				}
-				break;
-
-			case LLMD_MSG_THREAD_EXIT:
-				{
-					for (i = 0; i < LLMD_NUM_SEQ; i++)
-					{
-						delete sequences[i];
-						sequences[i] = nullptr;
-						playing[i] = false;
-						callback_data[i] = -1;
-						unlockAndUnprotectChannel(i);
-					}
-				}
-				unlockComMessage();
-				return true;
-
-			case LLMD_MSG_SET_VOLUME:
-				{
-					if (message.sequence == -1)
-					{
-						global_volume = message.data.volume.level;
-						for (i = 0; i < LLMD_NUM_SEQ; i++)
-							if (sequences[i])
-								sequences[i]->setVolume(sequences[i]->getVolume());
-					}
-					else if (sequences[message.sequence])
-						sequences[message.sequence]->setVolume(message.data.volume.level);
-				}
-				break;
-
-			case LLMD_MSG_SET_SPEED:
-				{
-					if (sequences[message.sequence])
-						sequences[message.sequence]->setSpeed(message.data.speed.percentage);
-				}
-				break;
-
-			case LLMD_MSG_PAUSE:
-				{
-					if (sequences[message.sequence])
-					{
-						if (!message.data.pause.paused) sequences[message.sequence]->unpause();
-						else sequences[message.sequence]->pause();
-					}
-				}
-				break;
-
-
-			case LLMD_MSG_PLAY:
-				{
-					// Kill the previous stream
-					delete sequences[message.sequence];
-					sequences[message.sequence] = nullptr;
-					playing[message.sequence] = false;
-					callback_data[message.sequence] = -1;
-					unlockAndUnprotectChannel(message.sequence);
-
-					giveinfo();
-
-					if (message.data.play.list)
-					{
-						sequences[message.sequence] = new XMidiSequence(
-							this,
-							message.sequence,
-							message.data.play.list,
-							message.data.play.repeat,
-							message.data.play.volume,
-							message.data.play.branch);
-
-						playing[message.sequence] = true;
-
-						/*
-						uint16 mask = sequences[message.sequence]->getChanMask();
-
-						// Allocate some channels
-						for (i = 0; i < 16; i++)
-						if (mask & (1<<i)) allocateChannel(message.sequence, i);
-						*/
-					}
-
-				}
-				break;
-
-				// Attempt to load first 64 timbres into memory
-			case LLMD_MSG_PRECACHE_TIMBRES:
-				{
-					//pout << "Precaching Timbres..." << std::endl;
-
-					// Display messages     0123456789ABCDEF0123
-					const char display[] = " Precaching Timbres ";
-					sendMT32SystemMessage(display_base,0,display_mem_size,display);
-
-					if (message.data.precache.list)
-					{
-						// Precache Timbres for this sequence
-						if (message.data.precache.list->x_patch_bank)
-						{
-							int bank_sel[16] = {0};
-
-							for (XMidiEvent *e = message.data.play.list->x_patch_bank; e != nullptr; e=e->next_patch_bank)
-							{
-								if ((e->status >> 4) == MIDI_STATUS_CONTROLLER)
-								{
-									if (e->data[0] == XMIDI_CONTROLLER_BANK_CHANGE)
-									{
-										bank_sel[e->status & 0xF] = e->data[1];
-									}
-								}
-								else if ((e->status >> 4) == MIDI_STATUS_PROG_CHANGE)
-								{
-									if (mt32_patch_banks[0])
-									{
-										int bank = bank_sel[e->status & 0xF];
-										int patch = e->data[0];
-										//pout << "Program in seq: " << message.sequence << " Channel: " << (e->status & 0xF) << " Bank: " << bank << " Patch: " << patch << std::endl;
-										if (bank != mt32_patch_bank_sel[patch])
-											setPatchBank(bank,patch);
-									}
-								}
-								else if (e->status == ((MIDI_STATUS_NOTE_ON << 4) | 0x9))
-								{
-									int temp = e->data[0];
-									if (mt32_rhythm_bank[temp])
-										loadRhythmTemp(temp);
-								}
-							}
-						}
-					}
-					else
-					{
-						int count = 0;
-
-						for (int bank = 0; bank < 128; bank++)
-						{
-							if (mt32_timbre_banks[bank]) for (int timbre = 0; timbre < 128; timbre++)
-							{
-								if (mt32_timbre_banks[bank][timbre])
-								{
-									uploadTimbre(bank,timbre);
-									count++;
-
-									if (count == 64)
-										break;
-								}
-							}
-							if (count == 64)
-								break;
-						}
-
-						if (mt32_patch_banks[0])
-						{
-							for (int patch = 0; patch < 128; patch++)
-							{
-								if (mt32_patch_banks[0][patch] && mt32_patch_banks[0][patch]->timbre_bank >= 2)
-									setPatchBank(0,patch);
-							}
-						}
-					}
-				}
-				break;
-
-				// Uh we have no idea what it is
-			default:
-				break;
+				delete sequences[message.sequence];
+				sequences[message.sequence] = nullptr;
+				playing[message.sequence] = false;
+				callback_data[message.sequence] = -1;
+				unlockAndUnprotectChannel(message.sequence);
 			}
+			break;
 
-			// Pop it
-			messages.pop();
+		case LLMD_MSG_THREAD_EXIT:
+			{
+				for (i = 0; i < LLMD_NUM_SEQ; i++)
+				{
+					delete sequences[i];
+					sequences[i] = nullptr;
+					playing[i] = false;
+					callback_data[i] = -1;
+					unlockAndUnprotectChannel(i);
+				}
+			}
+			return true;
+
+		case LLMD_MSG_SET_VOLUME:
+			{
+				if (message.sequence == -1)
+				{
+					global_volume = message.data.volume.level;
+					for (i = 0; i < LLMD_NUM_SEQ; i++)
+						if (sequences[i])
+							sequences[i]->setVolume(sequences[i]->getVolume());
+				}
+				else if (sequences[message.sequence])
+					sequences[message.sequence]->setVolume(message.data.volume.level);
+			}
+			break;
+
+		case LLMD_MSG_SET_SPEED:
+			{
+				if (sequences[message.sequence])
+					sequences[message.sequence]->setSpeed(message.data.speed.percentage);
+			}
+			break;
+
+		case LLMD_MSG_PAUSE:
+			{
+				if (sequences[message.sequence])
+				{
+					if (!message.data.pause.paused) sequences[message.sequence]->unpause();
+					else sequences[message.sequence]->pause();
+				}
+			}
+			break;
+
+
+		case LLMD_MSG_PLAY:
+			{
+				// Kill the previous stream
+				delete sequences[message.sequence];
+				sequences[message.sequence] = nullptr;
+				playing[message.sequence] = false;
+				callback_data[message.sequence] = -1;
+				unlockAndUnprotectChannel(message.sequence);
+
+				giveinfo();
+
+				if (message.data.play.list)
+				{
+					sequences[message.sequence] = new XMidiSequence(
+						this,
+						message.sequence,
+						message.data.play.list,
+						message.data.play.repeat,
+						message.data.play.volume,
+						message.data.play.branch);
+
+					playing[message.sequence] = true;
+
+					/*
+					uint16 mask = sequences[message.sequence]->getChanMask();
+
+					// Allocate some channels
+					for (i = 0; i < 16; i++)
+					if (mask & (1<<i)) allocateChannel(message.sequence, i);
+					*/
+				}
+
+			}
+			break;
+
+			// Attempt to load first 64 timbres into memory
+		case LLMD_MSG_PRECACHE_TIMBRES:
+			{
+				//pout << "Precaching Timbres..." << std::endl;
+
+				// Display messages     0123456789ABCDEF0123
+				const char display[] = " Precaching Timbres ";
+				sendMT32SystemMessage(display_base,0,display_mem_size,display);
+
+				if (message.data.precache.list)
+				{
+					// Precache Timbres for this sequence
+					if (message.data.precache.list->x_patch_bank)
+					{
+						int bank_sel[16] = {0};
+
+						for (XMidiEvent *e = message.data.play.list->x_patch_bank; e != nullptr; e=e->next_patch_bank)
+						{
+							if ((e->status >> 4) == MIDI_STATUS_CONTROLLER)
+							{
+								if (e->data[0] == XMIDI_CONTROLLER_BANK_CHANGE)
+								{
+									bank_sel[e->status & 0xF] = e->data[1];
+								}
+							}
+							else if ((e->status >> 4) == MIDI_STATUS_PROG_CHANGE)
+							{
+								if (mt32_patch_banks[0])
+								{
+									const int bank = bank_sel[e->status & 0xF];
+									const int patch = e->data[0];
+									//pout << "Program in seq: " << message.sequence << " Channel: " << (e->status & 0xF) << " Bank: " << bank << " Patch: " << patch << std::endl;
+									if (bank != mt32_patch_bank_sel[patch])
+										setPatchBank(bank,patch);
+								}
+							}
+							else if (e->status == ((MIDI_STATUS_NOTE_ON << 4) | 0x9))
+							{
+								const int temp = e->data[0];
+								if (mt32_rhythm_bank[temp])
+									loadRhythmTemp(temp);
+							}
+						}
+					}
+				}
+				else
+				{
+					int count = 0;
+
+					for (int bank = 0; bank < 128; bank++)
+					{
+						if (mt32_timbre_banks[bank]) for (int timbre = 0; timbre < 128; timbre++)
+						{
+							if (mt32_timbre_banks[bank][timbre])
+							{
+								uploadTimbre(bank,timbre);
+								count++;
+
+								if (count == 64)
+									break;
+							}
+						}
+						if (count == 64)
+							break;
+					}
+
+					if (mt32_patch_banks[0])
+					{
+						for (int patch = 0; patch < 128; patch++)
+						{
+							if (mt32_patch_banks[0][patch] && mt32_patch_banks[0][patch]->timbre_bank >= 2)
+								setPatchBank(0,patch);
+						}
+					}
+				}
+			}
+			break;
+
+			// Uh we have no idea what it is
+		default:
+			break;
 		}
+
+		// Pop it
+		messages.pop();
 	}
-	unlockComMessage();
 
 	return false;
 }
 
 void LowLevelMidiDriver::sequenceSendEvent(uint16 sequence_id, uint32 message)
 {
-	int log_chan = message & 0xF;
+	const int log_chan = message & 0xF;
 	message &= 0xFFFFFFF0;	// Strip the channel number
 
 	// Controller handling
@@ -951,15 +934,15 @@ void LowLevelMidiDriver::sequenceSendEvent(uint16 sequence_id, uint32 message)
 	{
 		if (mt32_patch_banks[0])
 		{
-			int bank = mt32_bank_sel[sequence_id][log_chan];
-			int patch = (message & 0xFF00)>>8;
+			const int bank = mt32_bank_sel[sequence_id][log_chan];
+			const int patch = (message & 0xFF00)>>8;
 			//pout << "Program in seq: " << sequence_id << " Channel: " << log_chan << " Bank: " << bank << " Patch: " << patch << std::endl;
 			if (bank != mt32_patch_bank_sel[patch]) setPatchBank(bank,patch);
 		}
 	}
 	else if ((message & 0x00F0) == (MIDI_STATUS_NOTE_ON << 4) && log_chan == 0x9)
 	{
-		int temp = (message>>8)&0xFF;
+		const int temp = (message>>8)&0xFF;
 		if (mt32_rhythm_bank[temp]) loadRhythmTemp(temp);
 	}
 
@@ -990,20 +973,20 @@ void LowLevelMidiDriver::sequenceSendSysEx(uint16 sequence_id, uint8 status, con
 
 		if (msg[0] == 0x41 && msg[1] == 0x10 && msg[2] == 0x16 && msg[3] == 0x12)
 		{
-			uint32 actual_address = (msg[4]<<14) | (msg[5]<<7) | msg[6];
+			const uint32 actual_address = (msg[4]<<14) | (msg[5]<<7) | msg[6];
 
-			uint32 timbre_add_start = ConvBaseToActual(timbre_base);
-			uint32 timbre_add_end = timbre_add_start + timbre_mem_offset(64);
-			uint32 patch_add_start = ConvBaseToActual(patch_base);
-			uint32 patch_add_end = patch_add_start + patch_mem_offset(128);
-			uint32 rhythm_add_start = ConvBaseToActual(rhythm_base);
-			uint32 rhythm_add_end = rhythm_add_start + rhythm_mem_offset(85);
-			uint32 timbre_temp_add_start = ConvBaseToActual(timbre_temp_base);
-			uint32 timbre_temp_add_end = timbre_temp_add_start + timbre_mem_offset(8);
-			uint32 patch_temp_add_start = ConvBaseToActual(patch_temp_base);
-			uint32 patch_temp_add_end = patch_temp_add_start + patch_temp_offset(8);
-			uint32 timbre_unk_add_start = ConvBaseToActual(timbre_unk_base);
-			uint32 timbre_unk_add_end = timbre_unk_add_start + timbre_mem_offset(128);
+			const uint32 timbre_add_start = ConvBaseToActual(timbre_base);
+			const uint32 timbre_add_end = timbre_add_start + timbre_mem_offset(64);
+			const uint32 patch_add_start = ConvBaseToActual(patch_base);
+			const uint32 patch_add_end = patch_add_start + patch_mem_offset(128);
+			const uint32 rhythm_add_start = ConvBaseToActual(rhythm_base);
+			const uint32 rhythm_add_end = rhythm_add_start + rhythm_mem_offset(85);
+			const uint32 timbre_temp_add_start = ConvBaseToActual(timbre_temp_base);
+			const uint32 timbre_temp_add_end = timbre_temp_add_start + timbre_mem_offset(8);
+			const uint32 patch_temp_add_start = ConvBaseToActual(patch_temp_base);
+			const uint32 patch_temp_add_end = patch_temp_add_start + patch_temp_offset(8);
+			const uint32 timbre_unk_add_start = ConvBaseToActual(timbre_unk_base);
+			const uint32 timbre_unk_add_end = timbre_unk_add_start + timbre_mem_offset(128);
 
 			//uint32 sysex_size = length-(4+3+1+1);
 
@@ -1036,7 +1019,7 @@ void LowLevelMidiDriver::sequenceSendSysEx(uint16 sequence_id, uint8 status, con
 
 	// Just send it
 
-	int ticks = SDL_GetTicks();
+	const int ticks = SDL_GetTicks();
 	if (next_sysex > ticks)
 		SDL_Delay(next_sysex - ticks); // Wait till we think the buffer is empty
 	send_sysex(status, msg, length);
@@ -1051,9 +1034,8 @@ uint32 LowLevelMidiDriver::getTickCount(uint16 sequence_id)
 
 void LowLevelMidiDriver::handleCallbackTrigger(uint16 sequence_id, uint8 data)
 {
-	SDL_mutexP(cbmutex);
+	const std::lock_guard<SDLMutex> lock(*cbmutex);
 	callback_data[sequence_id] = data;
-	SDL_mutexV(cbmutex);
 }
 
 int LowLevelMidiDriver::protectChannel(uint16 sequence_id, int chan, bool protect)
@@ -1162,7 +1144,7 @@ int LowLevelMidiDriver::lockChannel(uint16 sequence_id, int chan, bool lock)
 	// Unlock the channel
 	else
 	{
-		int phys = chan_map[sequence_id][chan];
+		const int phys = chan_map[sequence_id][chan];
 
 		// Not locked
 		if (phys < 0) return -1;
@@ -1199,7 +1181,7 @@ int LowLevelMidiDriver::unlockAndUnprotectChannel(uint16 sequence_id)
 	// For each channel
 	for (int c = 0; c < 16; c++)
 	{
-		int phys = chan_map[sequence_id][c];
+		const int phys = chan_map[sequence_id][c];
 
 		// Doesn't need anything done to it
 		if (phys >= 0 && chan_locks[phys] == sequence_id) continue;
@@ -1232,97 +1214,97 @@ void LowLevelMidiDriver::loadTimbreLibrary(IDataSource *ds, TimbreLibraryType ty
 
 	// Wait till all pending commands have been executed
 	waitTillNoComMessages();
+	std::unique_ptr<XMidiFile> xmidi;
 
-	// Lock!
-	lockComMessage();
-
-	// Kill all existing timbres and stuff
-
-	// Free memory
-	for (i = 0; i < 128; i++) {
-
-		if (mt32_patch_banks[i]) for (j = 0; j < 128; j++) delete mt32_patch_banks[i][j];
-		if (mt32_timbre_banks[i]) for (j = 0; j < 128; j++) delete mt32_timbre_banks[i][j];
-
-		// Delete the bank
-		delete [] mt32_patch_banks[i];
-		delete [] mt32_timbre_banks[i];
-
-		delete mt32_rhythm_bank[i];
-	}
-
-	// Zero the memory
-	std::memset(mt32_patch_banks,0,sizeof(mt32_patch_banks[0])*128);
-
-	// Zero the memory
-	std::memset(mt32_timbre_banks,0,sizeof(mt32_timbre_banks[0])*128);
-
-	// Mask it out
-	std::memset(mt32_timbre_used,-1,sizeof(mt32_timbre_used[0])*64);
-
-	// Zero the memory
-	std::memset(mt32_bank_sel,0,sizeof(mt32_bank_sel[0])*LLMD_NUM_SEQ);
-
-	// Zero the memory
-	std::memset(mt32_patch_bank_sel,-1,sizeof(mt32_patch_bank_sel[0])*128);
-
-	// Zero
-	std::memset(mt32_rhythm_bank,0,sizeof(mt32_rhythm_bank[0])*128);
-
-	// Setup Default Patch library
-	mt32_patch_banks[0] = new MT32Patch*[128];
-	for (i = 0; i < 128; i++) {
-		mt32_patch_banks[0][i] = new MT32Patch;
-
-		// Setup Patch Defaults
-		*(mt32_patch_banks[0][i]) = mt32_patch_template;
-		mt32_patch_banks[0][i]->timbre_bank = 0;
-		mt32_patch_banks[0][i]->timbre_num = i;
-	}
-
-	// TODO: This should not be hard-coded.
-	// Setup default rhythm library (thanks to the munt folks for making it show
-	// data on the terminal).
-	// This data is the same for all of the originals.
-	static const MT32RhythmSpec default_rhythms[] = {
-		{28, {0x00, 0x5a, 0x07, 0x00}},
-		{33, {0x06, 0x64, 0x07, 0x01}},
-		{74, {0x01, 0x5a, 0x05, 0x00}},
-		{76, {0x01, 0x5a, 0x06, 0x00}},
-		{77, {0x01, 0x5a, 0x07, 0x00}},
-		{78, {0x02, 0x64, 0x07, 0x01}},
-		{79, {0x01, 0x5a, 0x08, 0x00}},
-		{80, {0x05, 0x5a, 0x07, 0x01}},
-		{81, {0x01, 0x5a, 0x09, 0x00}},
-		{82, {0x03, 0x5f, 0x07, 0x01}},
-		{83, {0x04, 0x64, 0x04, 0x01}},
-		{84, {0x04, 0x64, 0x05, 0x01}},
-		{85, {0x04, 0x64, 0x06, 0x01}},
-		{86, {0x04, 0x64, 0x07, 0x01}},
-		{87, {0x04, 0x64, 0x08, 0x01}}
-	};
-
-	for (unsigned ii = 0; ii < array_size(default_rhythms); ii++) {
-		loadRhythm(default_rhythms[ii].rhythm, default_rhythms[ii].note);
-	}
-
-	XMidiFile *xmidi = nullptr;
-
-	if (type == TIMBRE_LIBRARY_U7VOICE_MT)
-		xmidi = new XMidiFile(ds,XMIDIFILE_HINT_U7VOICE_MT_FILE);
-	else if (type == TIMBRE_LIBRARY_SYX_FILE)
-		xmidi = new XMidiFile(ds,XMIDIFILE_HINT_SYX_FILE);
-	else if (type == TIMBRE_LIBRARY_XMIDI_FILE)
-		xmidi = new XMidiFile(ds,XMIDIFILE_HINT_SYSEX_IN_MID);
-	else if (type == TIMBRE_LIBRARY_XMIDI_MT)
 	{
-		loadXMidiTimbreLibrary(ds);
-		ds->seek(0);
-		xmidi = new XMidiFile(ds,XMIDIFILE_HINT_XMIDI_MT_FILE);	// a bit of a hack, it just sets up a few sysex messages
-	}
+		// Lock!
+		const std::lock_guard<SDLMutex> lock(*mutex);
 
-	// Finally unlock
-	unlockComMessage();
+		// Kill all existing timbres and stuff
+
+		// Free memory
+		for (i = 0; i < 128; i++) {
+
+			if (mt32_patch_banks[i]) for (j = 0; j < 128; j++) delete mt32_patch_banks[i][j];
+			if (mt32_timbre_banks[i]) for (j = 0; j < 128; j++) delete mt32_timbre_banks[i][j];
+
+			// Delete the bank
+			delete [] mt32_patch_banks[i];
+			delete [] mt32_timbre_banks[i];
+
+			delete mt32_rhythm_bank[i];
+		}
+
+		// Zero the memory
+		std::fill(std::begin(mt32_patch_banks), std::end(mt32_patch_banks), nullptr);
+
+		// Zero the memory
+		std::fill(std::begin(mt32_timbre_banks), std::end(mt32_timbre_banks), nullptr);
+
+		// Mask it out
+		for (auto& timbre : mt32_timbre_used)
+			std::fill(std::begin(timbre), std::end(timbre), -1);
+
+		// Zero the memory
+		for (auto& bank : mt32_bank_sel)
+			std::fill(std::begin(bank), std::end(bank), 0);
+
+		// Zero the memory; note: this is inconsistent with LowLevelMidiDriver::initMidiDriver
+		std::fill(std::begin(mt32_patch_bank_sel), std::end(mt32_patch_bank_sel), -1);
+
+		// Zero
+		std::fill(std::begin(mt32_rhythm_bank), std::end(mt32_rhythm_bank), nullptr);
+
+		// Setup Default Patch library
+		mt32_patch_banks[0] = new MT32Patch*[128];
+		for (i = 0; i < 128; i++) {
+			mt32_patch_banks[0][i] = new MT32Patch;
+
+			// Setup Patch Defaults
+			*(mt32_patch_banks[0][i]) = mt32_patch_template;
+			mt32_patch_banks[0][i]->timbre_bank = 0;
+			mt32_patch_banks[0][i]->timbre_num = i;
+		}
+
+		// TODO: This should not be hard-coded.
+		// Setup default rhythm library (thanks to the munt folks for making it show
+		// data on the terminal).
+		// This data is the same for all of the originals.
+		static const MT32RhythmSpec default_rhythms[] = {
+			{28, {0x00, 0x5a, 0x07, 0x00}},
+			{33, {0x06, 0x64, 0x07, 0x01}},
+			{74, {0x01, 0x5a, 0x05, 0x00}},
+			{76, {0x01, 0x5a, 0x06, 0x00}},
+			{77, {0x01, 0x5a, 0x07, 0x00}},
+			{78, {0x02, 0x64, 0x07, 0x01}},
+			{79, {0x01, 0x5a, 0x08, 0x00}},
+			{80, {0x05, 0x5a, 0x07, 0x01}},
+			{81, {0x01, 0x5a, 0x09, 0x00}},
+			{82, {0x03, 0x5f, 0x07, 0x01}},
+			{83, {0x04, 0x64, 0x04, 0x01}},
+			{84, {0x04, 0x64, 0x05, 0x01}},
+			{85, {0x04, 0x64, 0x06, 0x01}},
+			{86, {0x04, 0x64, 0x07, 0x01}},
+			{87, {0x04, 0x64, 0x08, 0x01}}
+		};
+
+		for (const auto& default_rhythm : default_rhythms) {
+			loadRhythm(default_rhythm.rhythm, default_rhythm.note);
+		}
+
+		if (type == TIMBRE_LIBRARY_U7VOICE_MT)
+			xmidi = std::make_unique<XMidiFile>(ds,XMIDIFILE_HINT_U7VOICE_MT_FILE);
+		else if (type == TIMBRE_LIBRARY_SYX_FILE)
+			xmidi = std::make_unique<XMidiFile>(ds,XMIDIFILE_HINT_SYX_FILE);
+		else if (type == TIMBRE_LIBRARY_XMIDI_FILE)
+			xmidi = std::make_unique<XMidiFile>(ds,XMIDIFILE_HINT_SYSEX_IN_MID);
+		else if (type == TIMBRE_LIBRARY_XMIDI_MT)
+		{
+			loadXMidiTimbreLibrary(ds);
+			ds->seek(0);
+			xmidi = std::make_unique<XMidiFile>(ds,XMIDIFILE_HINT_XMIDI_MT_FILE);	// a bit of a hack, it just sets up a few sysex messages
+		}
+	}
 
 	if (!xmidi) return;
 
@@ -1332,7 +1314,6 @@ void LowLevelMidiDriver::loadTimbreLibrary(IDataSource *ds, TimbreLibraryType ty
 	XMidiEventList *eventlist = xmidi->StealEventList();
 	if (!eventlist)
 	{
-		delete xmidi;
 		return;
 	}
 
@@ -1365,9 +1346,10 @@ void LowLevelMidiDriver::loadTimbreLibrary(IDataSource *ds, TimbreLibraryType ty
 		bool is_playing = true;
 
 		do {
-			lockComMessage();
-			is_playing = playing[3];
-			unlockComMessage();
+			{
+				const std::lock_guard<SDLMutex> lock(*mutex);
+				is_playing = playing[3];
+			}
 
 			if (is_playing) yield();
 		} while (is_playing);
@@ -1377,7 +1359,6 @@ void LowLevelMidiDriver::loadTimbreLibrary(IDataSource *ds, TimbreLibraryType ty
 		precache.data.precache.list = nullptr;
 		sendComMessage(precache);
 	}
-	delete xmidi;
 }
 
 void LowLevelMidiDriver::extractTimbreLibrary(XMidiEventList *eventlist)
@@ -1408,7 +1389,7 @@ void LowLevelMidiDriver::extractTimbreLibrary(XMidiEventList *eventlist)
 			continue;
 		}
 
-		uint16 length = (*event)->ex.sysex_data.len;
+		const uint16 length = (*event)->ex.sysex_data.len;
 		uint8 *msg = (*event)->ex.sysex_data.buffer;
 
 		if (msg && length > 7 && msg[0] == 0x41 && msg[1] == 0x10 && msg[2] == 0x16 && msg[3] == 0x12)
@@ -1422,20 +1403,19 @@ void LowLevelMidiDriver::extractTimbreLibrary(XMidiEventList *eventlist)
 			if ((actual_address+sysex_size) >= timbre_add_start && actual_address < timbre_add_end)
 			{
 				uint32 start = actual_address;
-				uint32 size = sysex_size;
+				// uint32 size = sysex_size;
 				if (actual_address < timbre_add_start)
 				{
 					sysex_size -= timbre_add_start-actual_address;
 					actual_address = timbre_add_start;
 				}
-				if ((start+size) > timbre_add_end) size = timbre_add_end-start;
+				// if ((start+size) > timbre_add_end) size = timbre_add_end-start;
 				start -= timbre_add_start;
 				start /= 256;
 
 				// Allocate memory
 				if (!mt32_timbre_banks[2]) {
-					mt32_timbre_banks[2] = new MT32Timbre*[128];
-					std::memset(mt32_timbre_banks[2],0,sizeof(mt32_timbre_banks[2][0])*128);
+					mt32_timbre_banks[2] = new MT32Timbre*[128]{};
 				}
 				if (!mt32_timbre_banks[2][start]) mt32_timbre_banks[2][start] = new MT32Timbre;
 
@@ -1488,7 +1468,7 @@ void LowLevelMidiDriver::extractTimbreLibrary(XMidiEventList *eventlist)
 				uint32 size = sysex_size;
 				if (actual_address < rhythm_add_start)
 				{
-					sysex_size -= rhythm_add_start-actual_address;
+					// sysex_size -= rhythm_add_start-actual_address;
 					actual_address = rhythm_add_start;
 				}
 				if ((start+size) > rhythm_add_end) size = rhythm_add_end-start;
@@ -1546,7 +1526,7 @@ void LowLevelMidiDriver::sendMT32SystemMessage(uint32 address_base, uint16 addre
 	sysex_buffer[3] = 0x12;		// DTI Command ID (set data)
 
 	// 7-bit address
-	uint32 actual_address = address_offset + ConvBaseToActual(address_base);
+	const uint32 actual_address = address_offset + ConvBaseToActual(address_base);
 	sysex_buffer[4] = (actual_address>>14)&0x7F;
 	sysex_buffer[5] = (actual_address>>7)&0x7F;
 	sysex_buffer[6] = actual_address&0x7F;
@@ -1572,7 +1552,7 @@ void LowLevelMidiDriver::sendMT32SystemMessage(uint32 address_base, uint16 addre
 
 	// Just send it
 
-	int ticks = SDL_GetTicks();
+	const int ticks = SDL_GetTicks();
 	// Making assumption that software MT32 can instantly consume sysex
 	if (!isSampleProducer() && next_sysex > ticks)
 		SDL_Delay(next_sysex - ticks);	// Wait till we think the buffer is empty
@@ -1668,7 +1648,7 @@ void LowLevelMidiDriver::loadRhythmTemp(int temp)
 {
 	if (!mt32_rhythm_bank[temp]) return;
 
-	int timbre = mt32_rhythm_bank[temp]->timbre;
+	const int timbre = mt32_rhythm_bank[temp]->timbre;
 
 	if (timbre < 0x40) {
 
@@ -1715,8 +1695,8 @@ void LowLevelMidiDriver::uploadTimbre(int bank, int patch)
 	uint32 lru_time = 0xFFFFFFFF;
 
 	for (int i = 0; i < 64; i++) {
-		int tbank = mt32_timbre_used[i][0];
-		int tpatch = mt32_timbre_used[i][1];
+		const int tbank = mt32_timbre_used[i][0];
+		const int tpatch = mt32_timbre_used[i][1];
 
 		// Timbre is unused, so we will use it
 		if (tbank == -1) {
@@ -1745,8 +1725,8 @@ void LowLevelMidiDriver::uploadTimbre(int bank, int patch)
 
 	if (lru_index == -1) return;
 
-	int lru_bank = mt32_timbre_used[lru_index][0];
-	int lru_patch = mt32_timbre_used[lru_index][1];
+	const int lru_bank = mt32_timbre_used[lru_index][0];
+	const int lru_patch = mt32_timbre_used[lru_index][1];
 
 	// Unsetup the old timbre
 	if (lru_bank != -1) mt32_timbre_banks[lru_bank][lru_patch]->index = -1;
@@ -1774,12 +1754,12 @@ void LowLevelMidiDriver::loadXMidiTimbreLibrary(IDataSource *ds)
 	uint32 i;
 
 	// Read all the timbres
-	for (i = 0; ds->getPos() < ds->getSize(); i++) {
+	for (i = 0; ds->getAvail() > 0; i++) {
 		// Seek to the entry
 		ds->seek(i*6);
 
-		uint32 patch = static_cast<uint8>(ds->read1());
-		uint32 bank = static_cast<uint8>(ds->read1());
+		const uint32 patch = static_cast<uint8>(ds->read1());
+		const uint32 bank = static_cast<uint8>(ds->read1());
 
 		// If we read both == 255 then we've read all of them
 		if (patch == 255 || bank == 255) {
@@ -1788,10 +1768,10 @@ void LowLevelMidiDriver::loadXMidiTimbreLibrary(IDataSource *ds)
 		}
 
 		// Get offset and seek to it
-		uint32 offset = ds->read4();
+		const uint32 offset = ds->read4();
 		ds->seek(offset);
 
-		uint16 size = ds->read2();
+		const uint16 size = ds->read2();
 
 		char name[11] = {0};
 		ds->read(name,10);
@@ -1805,14 +1785,12 @@ void LowLevelMidiDriver::loadXMidiTimbreLibrary(IDataSource *ds)
 
 		// Allocate memory
 		if (!mt32_timbre_banks[bank]) {
-			mt32_timbre_banks[bank] = new MT32Timbre*[128];
-			std::memset(mt32_timbre_banks[bank],0,sizeof(mt32_timbre_banks[bank][0])*128);
+			mt32_timbre_banks[bank] = new MT32Timbre*[128]{};
 		}
 		if (!mt32_timbre_banks[bank][patch]) mt32_timbre_banks[bank][patch] = new MT32Timbre;
 
 		if (!mt32_patch_banks[bank]) {
-			mt32_patch_banks[bank] = new MT32Patch*[128];
-			std::memset(mt32_patch_banks[bank],0,sizeof(mt32_patch_banks[bank][0])*128);
+			mt32_patch_banks[bank] = new MT32Patch*[128]{};
 		}
 		if (!mt32_patch_banks[bank][patch]) mt32_patch_banks[bank][patch] = new MT32Patch;
 

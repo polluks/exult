@@ -8,6 +8,8 @@ U7PATH=C:/Ultima7
 # Base of the exult source
 SRC=../..
 
+srcdir=.
+
 UCCDIR=$(SRC)
 UCC=$(UCCDIR)/ucc.exe
 
@@ -22,6 +24,19 @@ USECODE_OBJECTS = \
 CLEANFILES = \
 	usecode	
 
+all: usecode
+
+install: all
+	mkdir -p $(bgdir)
+	cp lbjoin.cfg $(bgdir)/lbjoin.cfg
+	mkdir -p $(bgdir)/lbjoin/
+	cp usecode $(bgdir)/lbjoin/usecode
+	cp ./../../COPYING $(bgdir)/lbjoin/License.txt
+
+uninstall:
+	rm -f $(bgdir)/lbjoin.cfg
+	rm -rf $(bgdir)/lbjoin
+
 $(UCC):
 	+(cd $(UCCDIR);$(MAKE) -f Makefile.mingw ucc.exe)
 
@@ -31,17 +46,4 @@ usecode: $(UCC) $(USECODE_OBJECTS)
 
 clean:
 	rm -f $(CLEANFILES)
-
-all: usecode
-
-install: all
-	mkdir $(bgdir)
-	cp lbjoin.cfg $(bgdir)/lbjoin.cfg
-	mkdir -p $(bgdir)/lbjoin/
-	cp usecode $(bgdir)/lbjoin/usecode
-
-
-uninstall:
-	rm -f $(bgdir)/lbjoin.cfg
-	rm -rf $(bgdir)/lbjoin
 

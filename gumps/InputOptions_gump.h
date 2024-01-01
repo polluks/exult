@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2015 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,8 +27,36 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 class Gump_button;
 
 class InputOptions_gump : public Modal_gump {
+private:
+	int doubleclick;
+	int rightclick_close;
+	int right_pathfind;
+	bool scroll_mouse;
+	int mouse3rd;
+	int fastmouse;
+	bool item_menu;
+	int dpad_location;
+	bool touch_pathfind;
+
+	enum button_ids {
+	    id_first = 0,
+	    id_ok = id_first,
+	    id_cancel,
+	    id_help,
+	    id_doubleclick,
+	    id_rightclick_close,
+	    id_right_pathfind,
+	    id_scroll_mouse,
+	    id_mouse3rd,
+	    id_fastmouse,
+	    id_item_menu,
+	    id_dpad_location,
+	    id_touch_pathfind,
+	    id_count
+	};
+	std::array<std::unique_ptr<Gump_button>, id_count> buttons;
+
 public:
-	UNREPLICATABLE_CLASS(InputOptions_gump)
 	InputOptions_gump();
 
 	// Paint it and its contents.
@@ -44,6 +72,31 @@ public:
 	void load_settings();
 	void save_settings();
 	void cancel();
+	void help();
+
+	void toggle_doubleclick(int state) {
+		doubleclick = state;
+	}
+
+	void toggle_rightclick_close(int state) {
+		rightclick_close = state;
+	}
+
+	void toggle_right_pathfind(int state) {
+		right_pathfind = state;
+	}
+
+	void toggle_scroll_mouse(int state) {
+		scroll_mouse = state;
+	}
+
+	void toggle_mouse3rd(int state) {
+		mouse3rd = state;
+	}
+
+	void toggle_fastmouse(int state) {
+		fastmouse = state;
+	}
 
 	void toggle_item_menu(int state) {
 		item_menu = state;
@@ -56,22 +109,5 @@ public:
 	void toggle_touch_pathfind(int state) {
 		touch_pathfind = state;
 	}
-
-private:
-	enum button_ids {
-	    id_first = 0,
-	    id_ok = id_first,
-	    id_cancel,
-	    id_item_menu,
-	    id_dpad_location,
-	    id_touch_pathfind,
-	    id_count
-	};
-	std::array<std::unique_ptr<Gump_button>, id_count> buttons;
-
-	bool item_menu;
-	int dpad_location;
-	bool touch_pathfind;
 };
-
 #endif

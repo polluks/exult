@@ -20,8 +20,13 @@ bg_DATA = \
 
 bgpatchdir = $(bgdir)/lbjoin/patch
 
-bgpatch_DATA = \
+nodist_bgpatch_DATA = \
 	usecode	
+
+EXTRA_DIST = \
+	Makefile.mingw	\
+	$(USECODE_OBJECTS)	\
+	$(bg_DATA)
 
 CLEANFILES = \
 	usecode	

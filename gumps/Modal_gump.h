@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MODAL_GUMP_H
 
 #include "Gump.h"
-#include "SDL_events.h"
 #include "ignore_unused_variable_warning.h"
 
 /*
@@ -28,7 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  the user clicks okay.
  */
 class Modal_gump : public Gump {
-	UNREPLICATABLE_CLASS(Modal_gump)
 
 protected:
 	bool done;          // true when user clicks checkmark.
@@ -59,8 +57,8 @@ public:
 	virtual void key_down(int chr) { // Key pressed
 		ignore_unused_variable_warning(chr);
 	}
-	virtual void text_input(int chr, int unicode) { // Character typed (unicode)
-		ignore_unused_variable_warning(chr, unicode);
+	virtual void text_input(int chr, int unicode, bool shift_pressed) { // Character typed (unicode)
+		ignore_unused_variable_warning(chr, unicode, shift_pressed);
 	}
 	virtual void text_input(const char *text) { // complete string input
 		ignore_unused_variable_warning(text);
@@ -72,7 +70,6 @@ public:
 	virtual bool run() {
 		return false;
 	}
-
 };
 
 #endif

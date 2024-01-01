@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,8 +27,6 @@ class Slider_button;
  *  A slider for choosing a number.
  */
 class Slider_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(Slider_gump)
-
 protected:
 	int diamondx;           // Rel. pos. where diamond is shown.
 	static short diamondy;

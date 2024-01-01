@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,9 +49,8 @@ const string CLASSNAME = "class";
 UCData::UCData() = default;
 
 UCData::~UCData() {
-	_file.close();
-	for (unsigned int i = 0; i < _funcs.size(); i++)
-		delete _funcs[i];
+	for (auto *func : _funcs)
+		delete func;
 	delete _symtbl;
 }
 
@@ -122,15 +121,15 @@ void UCData::open_usecode(const string &filename) {
 }
 
 void UCData::disassamble(ostream &o) {
-	boost::io::ios_flags_saver flags(o);
-	boost::io::ios_fill_saver fill(o);
+	const boost::io::ios_flags_saver flags(o);
+	const boost::io::ios_fill_saver fill(o);
 	load_globals(o);
 	load_funcs(o);
 	analyse_classes();
 
 	if (options.verbose) {
-		for (auto i = search_funcs.begin(); i != search_funcs.end(); ++i)
-			o << "Looking for function number " << setw(8) << (*i) << endl;
+		for (const unsigned int func : search_funcs)
+			o << "Looking for function number " << setw(8) << func << endl;
 		o << endl;
 	}
 
@@ -139,6 +138,20 @@ void UCData::disassamble(ostream &o) {
 
 	if (options.output_trans_table)
 		o << "<trans>" << endl;
+
+	if (options.output_ucs && options.game_u7()) {
+		o << "#game \"";
+		if (options.game_bg() || options.game_fov()) {
+			o << "blackgate";
+		} else if (options.game_si() || options.game_ss()) {
+			o << "serpentisle";
+		} else if (options.game_sib()) {
+			o << "serpentbeta";
+		} else {
+			o << "uhhh... unknown?";
+		}
+		o << '"' << endl;
+	}
 
 	if (options.output_ucs && UCFunc::num_global_statics > 0) {
 		o << "// Global static variables" << endl;
@@ -201,13 +214,13 @@ void UCData::disassamble(ostream &o) {
 	}
 
 	if (!_foundfunc)
-		o << "Function not found." << endl;
+		std::cerr << "Function not found." << endl;
 
 	if (search_funcs.empty())
-		o << "Functions: " << _funcs.size() << endl;
+		std::cerr << "Functions: " << _funcs.size() << endl;
 
 	if (options.output_list)
-		o << endl << "Functions: " << setbase(10) << _funcs.size() << endl;
+		std::cerr << endl << "Functions: " << setbase(10) << _funcs.size() << endl;
 
 	if (options.output_trans_table)
 		o << "</>" << endl;
@@ -228,12 +241,12 @@ void UCData::dump_flags(ostream &o) {
 	vector<FlagData> flags;
 
 	// *BLEH* ugly!
-	for (auto func = _funcs.begin(); func != _funcs.end(); ++func)
-		for (auto op = (*func)->_opcodes.begin(); op != (*func)->_opcodes.end(); ++op) {
+	for (auto *func : _funcs)
+		for (auto op = func->_opcodes.begin(); op != func->_opcodes.end(); ++op) {
 			if (op->_id == 0x42)
-				flags.emplace_back((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::GETFLAG);
+				flags.emplace_back(func->_funcid, op->_offset, op->_params_parsed[0], FlagData::GETFLAG);
 			else if (op->_id == 0x43)
-				flags.emplace_back((*func)->_funcid, op->_offset, op->_params_parsed[0], FlagData::SETFLAG);
+				flags.emplace_back(func->_funcid, op->_offset, op->_params_parsed[0], FlagData::SETFLAG);
 		}
 
 	o << "Number of flags found: " << setbase(10) << flags.size() << endl << endl;
@@ -244,20 +257,20 @@ void UCData::dump_flags(ostream &o) {
 
 		o << setbase(16) << setfill('0');
 		int currfunc = -1;
-		for (unsigned int i = 0; i < flags.size(); i++) {
-			if (currfunc != flags[i].func()) {
-				o << "Function: " << setw(4) << flags[i].func() << endl;
-				currfunc = static_cast<int>(flags[i].func());
+		for (auto& flag : flags) {
+			if (currfunc != flag.func()) {
+				o << "Function: " << setw(4) << flag.func() << endl;
+				currfunc = static_cast<int>(flag.func());
 				o << "              flag  offset" << endl;
 			}
 
 			o << "        ";
-			if (flags[i].access() == FlagData::GETFLAG)
+			if (flag.access() == FlagData::GETFLAG)
 				o << "push  ";
-			else if (flags[i].access() == FlagData::SETFLAG)
+			else if (flag.access() == FlagData::SETFLAG)
 				o << "pop   ";
-			o << setw(4) << flags[i].flag()   << "  "
-			  << setw(4) << flags[i].offset() << endl;
+			o << setw(4) << flag.flag()   << "  "
+			  << setw(4) << flag.offset() << endl;
 		}
 	}
 
@@ -267,20 +280,20 @@ void UCData::dump_flags(ostream &o) {
 
 		o << setbase(16) << setfill('0');
 		auto currflag = static_cast<unsigned int>(-1);
-		for (unsigned int i = 0; i < flags.size(); i++) {
-			if (currflag != flags[i].flag()) {
-				o << "Flag: " << setw(4) << flags[i].flag() << endl;
-				currflag = flags[i].flag();
+		for (auto& flag : flags) {
+			if (currflag != flag.flag()) {
+				o << "Flag: " << setw(4) << flag.flag() << endl;
+				currflag = flag.flag();
 				o << "              func  offset" << endl;
 			}
 
 			o << "        ";
-			if (flags[i].access() == FlagData::GETFLAG)
+			if (flag.access() == FlagData::GETFLAG)
 				o << "push  ";
-			else if (flags[i].access() == FlagData::SETFLAG)
+			else if (flag.access() == FlagData::SETFLAG)
 				o << "pop   ";
-			o << setw(4) << flags[i].func()   << "  "
-			  << setw(4) << flags[i].offset() << endl;
+			o << setw(4) << flag.func()   << "  "
+			  << setw(4) << flag.offset() << endl;
 		}
 	}
 }
@@ -288,25 +301,20 @@ void UCData::dump_flags(ostream &o) {
 void UCData::file_open(const string &filename) {
 	/* Open a usecode file */
 	try {
-		_file.clear();
-		U7open(_file, filename.c_str(), false);
-	} catch (const std::exception &err) {
-		_file.setstate(std::ifstream::failbit);
-	}
+		_pFile = U7open_in(filename.c_str(), false);
+	} catch (const std::exception &err) {}
 }
-
-#undef LOAD_SPEED_TEST
-
-#ifdef LOAD_SPEED_TEST
-#include "tools/dbgutils.h"
-#endif
 
 void UCData::load_globals(ostream &o) {
 	if (_global_flags_file.empty())
 		return;
 	try {
-		std::ifstream gflags;
-		U7open(gflags, _global_flags_file.c_str(), false);
+		auto pGflags = U7open_in(_global_flags_file.c_str(), false);
+		if (!pGflags) {
+			cout << "error. failed to open " << _global_flags_file << ". exiting." << endl;
+			exit(1);
+		}
+		auto& gflags = *pGflags;
 		std::map<unsigned int, std::string>& FlagMap = UCFunc::FlagMap;
 		std::set<std::string> flags;
 		unsigned int ii = 0;
@@ -314,8 +322,8 @@ void UCData::load_globals(ostream &o) {
 		std::string flagname;
 		std::getline(gflags, flagname, '\0');
 		bool first = true;
-		boost::io::ios_flags_saver oflags(o);
-		boost::io::ios_fill_saver fill(o);
+		const boost::io::ios_flags_saver oflags(o);
+		const boost::io::ios_fill_saver fill(o);
 		o << setbase(16) << setfill('0');
 		while (gflags.good()) {
 			if (!flagname.empty()) {
@@ -335,7 +343,7 @@ void UCData::load_globals(ostream &o) {
 			}
 			ii++;
 			std::getline(gflags, flagname, '\0');
-		};
+		}
 		o << endl << "};" << endl << endl;
 	} catch (const std::exception &err) {
 		cout << "error. failed to open " << _global_flags_file << ". exiting." << endl;
@@ -344,6 +352,7 @@ void UCData::load_globals(ostream &o) {
 }
 
 void UCData::load_funcs(ostream &o) {
+	auto& _file = *_pFile;
 	if (options.game_u7() && Usecode_symbol_table::has_symbol_table(_file)) {
 		delete _symtbl;
 		if (options.verbose) o << "Loading symbol table..." << endl;
@@ -352,12 +361,6 @@ void UCData::load_funcs(ostream &o) {
 	}
 
 	if (options.verbose) o << "Loading functions..." << endl;
-
-#ifdef LOAD_SPEED_TEST
-	dbg::DateDiff dd;
-	dbg::timeDateDiff(o);
-	dd.start();
-#endif
 
 	bool eof = false;
 	while (!eof) {
@@ -382,41 +385,34 @@ void UCData::load_funcs(ostream &o) {
 		}
 	}
 
-#ifdef LOAD_SPEED_TEST
-	dd.end();
-	o << setbase(10) << setfill(' ');
-	dd.print_start(o) << endl;
-	dd.print_end(o) << endl;
-	dd.print_diff(o) << endl;
-	o << setbase(16) << setfill('0');
-#endif
-
 	if (options.verbose) o << "Creating function map..." << endl;
 
-	for (auto i = _funcs.begin(); i != _funcs.end(); ++i) {
-		int funcid = (*i)->_funcid;
+	for (auto *func : _funcs) {
+		const int funcid = func->_funcid;
 		Usecode_symbol::Symbol_kind kind;
-		if ((*i)->_sym)
-			kind = (*i)->_sym->get_kind();
+		if (func->_sym)
+			kind = func->_sym->get_kind();
 		else if (funcid < 0x400)
 			kind = Usecode_symbol::shape_fun;
 		else if (funcid < 0x800)
 			kind = Usecode_symbol::object_fun;
 		else
 			kind = Usecode_symbol::fun_defined;
-		_funcmap.insert(FuncMapPair((*i)->_funcid, UCFuncSet(funcid, (*i)->_num_args,
-		                                                     (*i)->return_var, (*i)->aborts,
-		                                                     (*i)->_cls != nullptr, (*i)->funcname,
-		                                                     kind, (*i)->_varmap)));
+		_funcmap.insert(FuncMapPair(func->_funcid, UCFuncSet(funcid, func->_num_args,
+		                                                     func->return_var, func->aborts,
+		                                                     func->_cls != nullptr, func->funcname,
+		                                                     kind, func->_varmap)));
 	}
-	/*  for(map<unsigned int, UCFuncSet>::iterator i=_funcmap.begin(); i!=_funcmap.end(); ++i)
-	        o << i->first << "\t" << i->second.num_args << endl;*/
+	/*
+	for(auto i : _funcmap)
+		o << i.first << "\t" << i.second.num_args << endl;
+	*/
 }
 
 void UCData::analyse_classes() {
 	if (!_symtbl)
 		return;
-	int nclasses = _symtbl->get_num_classes();
+	const int nclasses = _symtbl->get_num_classes();
 	// Class 0 can't inherit from any others.
 	for (int i = 1; i < nclasses; i++) {
 		Usecode_class_symbol *cls = _symtbl->get_class(i);
@@ -455,9 +451,9 @@ void UCData::output_extern_header(ostream &o) {
 	}
 	load_funcs(o);
 
-	for (auto func = _funcs.begin(); func != _funcs.end(); ++func) {
+	for (auto *func : _funcs) {
 		//(*func)->output_ucs_funcname(o << "extern ", _funcmap, (*func)->_funcid, (*func)->_num_args, (*func)->return_var) << ';' << endl;
-		(*func)->output_ucs_funcname(o << "extern ", _funcmap, _symtbl) << ';' << endl;
+		func->output_ucs_funcname(o << "extern ", _funcmap, _symtbl) << ';' << endl;
 	}
 }
 

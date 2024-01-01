@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,16 +31,20 @@
 #include "font.h"
 #include "game.h"
 
-#include "SDL_timer.h"
-#include "SDL_events.h"
-#include "SDL_stdinc.h"
-#include "SDL_scancode.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 using std::atoi;
 using std::size_t;
 using std::strchr;
 using std::string;
-using std::strlen;
 using std::strncmp;
 using std::unique_ptr;
 using std::make_unique;
@@ -59,7 +63,7 @@ TextScroller::TextScroller(const char *archive, int index, Font *fnt, Shape *shp
 	const char  CR = '\r';
 	const char  LF = '\n';
 
-	unique_ptr<unsigned char[]> txt = txtobj->retrieve(len);
+	const unique_ptr<unsigned char[]> txt = txtobj->retrieve(len);
 	if (!txt || len <= 0) {
 		text = new vector<string>();
 		return;
@@ -98,22 +102,22 @@ int TextScroller::show_line(Game_window *gwin, int left, int right, int y, int i
 	// \R    right aligned to left center line
 	// |     carriage return (stay on same line)
 	// #xxx  display character with number xxx
-	string str = (*text)[index];
+	const string str = (*text)[index];
 	const char *ptr = str.c_str();
 	char *txt = new char[strlen(ptr) + 1];
 
 	char *txtptr = txt;
 	int ypos = y;
-	int vspace = 2; // 2 extra pixels between lines
+	const int vspace = 2; // 2 extra pixels between lines
 	// Align text to the left by default
 	int align = -1;
 	int xpos = left;
-	int center = (right + left) / 2;
+	const int center = (right + left) / 2;
 	bool add_line = true;
 
 	while (*ptr) {
 		if (!strncmp(ptr, "\\P", 2)) {
-			int pix = *(ptr + 2) - '0';
+			const int pix = *(ptr + 2) - '0';
 			ptr += 3;
 			Shape_frame *frame = shapes->get_frame(pix);
 			if (frame) {
@@ -174,12 +178,12 @@ bool TextScroller::run(Game_window *gwin) {
 	gwin->clear_screen();
 	gwin->show(true);
 
-	int topx = (gwin->get_width() - 320) / 2;
-	int topy = (gwin->get_height() - 200) / 2;
-	int endy = topy + 200;
+	const int topx = (gwin->get_width() - 320) / 2;
+	const int topy = (gwin->get_height() - 200) / 2;
+	const int endy = topy + 200;
 	uint32 starty = endy;
 	uint32 startline = 0;
-	unsigned int maxlines = text->size();
+	const unsigned int maxlines = text->size();
 	if (!maxlines) {
 		gwin->clear_screen();
 		gwin->show(true);

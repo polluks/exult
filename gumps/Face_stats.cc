@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -36,9 +36,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define PALETTE_INDEX_GREEN 64
 #define PALETTE_INDEX_BLUE  79
 
-#define PORTRAIT_NUM_MODES  3
+#define PORTRAIT_NUM_MODES  5
 
 #define PORTRAIT_WIDTH      40
+#define PORTRAIT_HEIGHT     35
 
 class Stat_bar : public Gump_button {
 	Actor       *actor;
@@ -148,7 +149,7 @@ public:
 
 	bool on_button(int mx, int my) const override;
 
-	Rectangle get_rect() override;
+	TileRect get_rect() override;
 
 	bool is_draggable() override {
 		return false;
@@ -211,7 +212,7 @@ void Portrait_button::update_widget() {
 	        para != actor->get_flag(Obj_flags::paralyzed) ||
 	        charm != actor->get_flag(Obj_flags::charmed) ||
 	        curse != actor->get_flag(Obj_flags::cursed)) {
-		Rectangle r = get_rect();
+		TileRect r = get_rect();
 		gwin->add_dirty(r);
 		hit = actor->was_hit();
 		pois = actor->get_flag(Obj_flags::poisoned);
@@ -263,17 +264,17 @@ void Portrait_button::paint() {
 		mana->paint();
 }
 
-Rectangle Portrait_button::get_rect() {
-	Rectangle rect = Face_button::get_rect();
+TileRect Portrait_button::get_rect() {
+	TileRect rect = Face_button::get_rect();
 	if (hit || pois || prot || para || charm || curse)
 		rect.enlarge(2);
 
 	if (hp) {
-		Rectangle r = hp->get_rect();
+		const TileRect r = hp->get_rect();
 		rect = rect.add(r);
 	}
 	if (mana) {
-		Rectangle r = mana->get_rect();
+		const TileRect r = mana->get_rect();
 		rect = rect.add(r);
 	}
 
@@ -307,8 +308,9 @@ Face_stats::~Face_stats() {
 
 void Face_stats::paint(
 ) {
-	for (int i = 0; i < 8; i++)
-		if (party[i]) party[i]->paint();
+	for (auto *act : party)
+		if (act)
+			act->paint();
 }
 
 /*
@@ -316,17 +318,18 @@ void Face_stats::paint(
  */
 
 Gump_button *Face_stats::on_button(int mx, int my) {
-	for (int i = 0; i < 8; i++)
-		if (party[i] && party[i]->on_button(mx, my))
-			return party[i];
+	for (auto *act : party)
+		if (act && act->on_button(mx, my))
+			return act;
 
 	return nullptr;
 }
 
 // add dirty region, if dirty
 void Face_stats::update_gump() {
-	for (int i = 0; i < 8; i++)
-		if (party[i]) party[i]->update_widget();
+	for (auto *act : party)
+		if (act)
+			act->update_widget();
 }
 
 // Delete all the buttons
@@ -348,59 +351,88 @@ void Face_stats::delete_buttons() {
 }
 
 void Face_stats::create_buttons() {
-	int i;
-	int pos = 0;
-	int width = PORTRAIT_WIDTH;
+	int  i;
+	int  posx            = 0;
+	int  posy            = 0;
+	int  width           = PORTRAIT_WIDTH;
+	int  black_bar_width = 0;
+	int  height          = 0;
+	bool vertical        = false;
 
-	resx = gwin->get_win()->get_full_width();
-	resy = gwin->get_win()->get_full_height();
-	gamex = gwin->get_game_width();
-	gamey = gwin->get_game_height();
-	x = 0;
-	y = gwin->get_win()->get_end_y();
+	resx            = gwin->get_win()->get_full_width();
+	resy            = gwin->get_win()->get_full_height();
+	gamex           = gwin->get_game_width();
+	gamey           = gwin->get_game_height();
+	x               = 0;
+	y               = gwin->get_win()->get_end_y();
+	black_bar_width = (resx - gamex) / 2;
 
 	party_size = partyman->get_count();
 
 	int num_to_paint = 0;
 
 	for (i = 0; i < party_size; i++) {
-		int num = partyman->get_member(i);
-		Actor *act = gwin->get_npc(num);
+		const int num = partyman->get_member(i);
+		Actor* act = gwin->get_npc(num);
 		assert(act != nullptr);
 		// Show faces if in SI, or if paperdolls are allowed
 		if (sman->can_use_paperdolls() ||
-		        // Otherwise, show faces also if the character
-		        // has paperdoll information
-		        act->get_info().get_npc_paperdoll())
+			// Otherwise, show faces also if the character
+			// has paperdoll information
+			act->get_info().get_npc_paperdoll())
 			++num_to_paint;
 	}
 
 	if (mode == 0)
-		pos = 0;
+		posx = 0;
 	else if (mode == 1)
-		pos = (resx - (num_to_paint + 1) * PORTRAIT_WIDTH) / 2;
+		posx = (resx - (num_to_paint + 1) * PORTRAIT_WIDTH) / 2;
 	else if (mode == 2) {
-		pos = resx - PORTRAIT_WIDTH;
-		width = - PORTRAIT_WIDTH;
+		posx  = resx - PORTRAIT_WIDTH;
+		width = -PORTRAIT_WIDTH;
+	} else if (mode == 3) {
+		// if large black bars we dont want potraits floating in space so put them next to the game window
+		if (black_bar_width > (PORTRAIT_WIDTH * 2))
+			posx = black_bar_width - PORTRAIT_WIDTH - 5;
+		// center potrait in blank space
+		else if (black_bar_width > PORTRAIT_WIDTH)
+			posx = black_bar_width / 2 - PORTRAIT_WIDTH / 2;
+		else
+			posx = 0;
+		posy   = PORTRAIT_HEIGHT;
+		width  = 0;
+		height = PORTRAIT_HEIGHT;
+		// center potraits in Y, mainly to avoid conflicting with other on screeen controls
+		y        = gamey / 2 - (PORTRAIT_HEIGHT * 4) / 2;
+		vertical = true;
 	}
 
-	pos += gwin->get_win()->get_start_x();
+	posx += gwin->get_win()->get_start_x();
 
 	std::memset(party, 0, sizeof(party));
 
-	party[0] = new Portrait_button(this, pos, 0, gwin->get_main_actor());
+	party[0] = new Portrait_button(this, posx, posy, gwin->get_main_actor());
 
 	for (i = 0; i < party_size; i++) {
+		// if vertical display first 4 on left and last 4 on right
+		if (vertical && i == 3) {
+			if (black_bar_width > (PORTRAIT_WIDTH * 2))
+				posx = gamex + 5;
+			else if (black_bar_width > PORTRAIT_WIDTH)
+				posx = black_bar_width + gamex - black_bar_width / 2 - PORTRAIT_WIDTH / 2;
+			else
+				posx = black_bar_width + gamex - PORTRAIT_WIDTH;
+			posy = 0;
+		}
 		npc_nums[i + 1] = partyman->get_member(i);
-		Actor *act = gwin->get_npc(npc_nums[i + 1]);
+		Actor* act      = gwin->get_npc(npc_nums[i + 1]);
 		assert(act != nullptr);
 		// Show faces if in SI, or if paperdolls are allowed
-		if (sman->can_use_paperdolls() ||
-		        // Otherwise, show faces also if the character
-		        // has paperdoll information
-		        act->get_info().get_npc_paperdoll()) {
-			pos += width;
-			party[i + 1] = new Portrait_button(this, pos, 0, gwin->get_npc(npc_nums[i + 1]));
+		// Otherwise, show faces also if the character has paperdoll information
+		if (sman->can_use_paperdolls() || act->get_info().get_npc_paperdoll()) {
+			posx += width;
+			posy += height;
+			party[i + 1] = new Portrait_button(this, posx, posy, gwin->get_npc(npc_nums[i + 1]));
 		} else {
 			party[i + 1] = nullptr;
 		}
@@ -410,16 +442,15 @@ void Face_stats::create_buttons() {
 
 	for (i = 0; i < 8; i++)
 		if (party[i]) {
-			Rectangle r = party[i]->get_rect();
-			region = region.add(r);
+			const TileRect r = party[i]->get_rect();
+			region     = region.add(r);
 		}
 }
 
 bool Face_stats::has_point(int x, int y) const {
-	for (int i = 0; i < 8; i++)
-		if (party[i] && party[i]->on_button(x, y))
+	for (auto *act : party)
+		if (act && act->on_button(x, y))
 			return true;
-
 	return false;
 }
 
@@ -442,16 +473,17 @@ bool Face_stats::add(
 	if (sx < 0 && sy < 0 && my < 0 && mx < 0)
 		return false;
 
-	for (int i = 0; i < 8; i++)
-		if (party[i] && party[i]->on_button(mx, my))
-			return party[i]->get_actor()->add(obj, dont_check, combine);
+	for (auto *act : party)
+		if (act && act->on_button(mx, my))
+			return act->get_actor()->add(obj, dont_check, combine);
 
 	return false;
 }
 
 Container_game_object *Face_stats::find_actor(int mx, int my) {
-	for (int i = 0; i < 8; i++) if (party[i] && party[i]->on_button(mx, my))
-		return party[i]->get_actor();
+	for (auto *act : party)
+		if (act && act->on_button(mx, my))
+			return act->get_actor();
 
 	return nullptr;
 }

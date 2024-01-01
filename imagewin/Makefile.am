@@ -1,7 +1,8 @@
-AM_CPPFLAGS = -I$(srcdir)/../headers -I$(srcdir)/.. -I$(srcdir)/../files $(SDL_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) \
-		-I$(srcdir)/../conf -I../conf \
-		$(DEBUG_FLAGS) $(CPPFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir) -I$(top_srcdir)/files $(SDL_CFLAGS) $(INCDIRS) $(WINDOWING_SYSTEM) \
+		-I$(top_srcdir)/conf \
+		$(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS)
 
+if HAVE_SDL
 noinst_LTLIBRARIES = libimagewin.la
 
 libimagewin_la_SOURCES = \
@@ -9,11 +10,14 @@ libimagewin_la_SOURCES = \
 	ibuf8.h \
 	imagebuf.cc \
 	imagebuf.h \
+	iwin8.cc \
+	iwin8.h
+
+if BUILD_EXULT
+libimagewin_la_SOURCES += \
 	imagewin.cc \
 	imagewin.h \
-	iwin8.cc \
-	iwin8.h \
-	savepcx.cc \
+	save_screenshot.cc \
 	manip.h \
 	scale_2x.cc \
 	scale_2x.h \
@@ -44,5 +48,7 @@ libimagewin_la_SOURCES = \
 	PointScaler.h \
 	scale_xbr.cc \
 	scale_xbr.h
+endif
+endif
 
 EXTRA_DIST =

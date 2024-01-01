@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2015-2020 Litchie
+ * Copyright (C) 2015 Chaoji Li
+ * Copyright (C) 2020-2022 The Exult Team
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -255,10 +256,4 @@ const char* ios_get_documents_dir()
 //		*strncpy(docs_dir, , sizeof(docs_dir)-1) = 0;
 	}
 	return docs_dir;
-}
-
-void ios_open_url(const char *sUrl)
-{
-	NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:sUrl]];
-	[[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 }

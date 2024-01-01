@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001  The Exult Team
+Copyright (C) 2001-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -40,7 +40,7 @@ Serial_out &Serial_out::operator<<(
     std::string &s
 ) {
 	const char *str = s.c_str();
-	int len = std::strlen(str);     // Get length.
+	const int len = std::strlen(str);     // Get length.
 	*this << len;           // First the length.
 	std::memcpy(buf, str, len);     // Then the bytes.
 	buf += len;

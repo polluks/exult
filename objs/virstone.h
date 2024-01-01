@@ -6,6 +6,7 @@
 
 /*
 Copyright (C) 2000  Jeffrey S. Freedman
+Copyright (C) 2001-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -39,6 +40,9 @@ public:
 		: Ireg_game_object(shapenum, framenum, tilex, tiley, lft),
 		  pos(0, 0, 0), map(0)
 	{  }
+	Virtue_stone_object *as_virtstone() override {
+		return this;
+	}
 	void set_target_pos(Tile_coord const &t) {  // Set/get position.
 		pos = t;
 	}

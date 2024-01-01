@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -42,7 +42,6 @@
 #include "fnames.h"
 #include "gamemgr/modmgr.h"
 #include "gumps/Gamemenu_gump.h"
-#include "shapeid.h"
 #include "ignore_unused_variable_warning.h"
 #include "array_size.h"
 #ifdef __IPHONEOS__
@@ -50,7 +49,6 @@
  #endif
 #include <memory>
 using std::unique_ptr;
-using std::make_unique;
 
 #define MAX_GAMES 100
 
@@ -82,7 +80,7 @@ int maximum_size(Font *font, const char *options[], int num_choices, int centerx
 	ignore_unused_variable_warning(centerx);
 	int max_width = 0;
 	for (int i = 0; i < num_choices; i++) {
-		int width = font->get_text_width(options[i]);
+		const int width = font->get_text_width(options[i]);
 		if (width > max_width)
 			max_width = width;
 	}
@@ -97,20 +95,20 @@ void create_scroller_menu(MenuList *menu, Font *fonton, Font *font, int first, i
 		"NEXT",
 		"LAST"
 	};
-	int ncount = array_size(menuscroller);
+	const int ncount = array_size(menuscroller);
 	assert(ncount == 4);
-	int max_width = maximum_size(font, menuscroller, ncount, xpos);
+	const int max_width = maximum_size(font, menuscroller, ncount, xpos);
 	xpos = xpos - max_width * 3 / 2;
 
 	num_choices--;
-	int lastpage = num_choices - num_choices % pagesize;
+	const int lastpage = num_choices - num_choices % pagesize;
 
 	for (int i = 0; i < ncount; i++) {
 		//Check to see if this entry is needed at all:
-		if (!((i < 2 && first == 0) ||
-		        (i == 0 && first == pagesize) ||
-		        (i >= 2 && lastpage == first) ||
-		        (i == 3 && lastpage == first + pagesize))) {
+		if ((i >= 2 || first != 0) &&
+		        (i != 0 || first != pagesize) &&
+		        (i < 2 || lastpage != first) &&
+		        (i != 3 || lastpage != first + pagesize)) {
 			auto *entry = new MenuTextEntry(fonton, font, menuscroller[i],
 			        xpos, ypos);
 			//These commands have negative ids:
@@ -192,12 +190,12 @@ std::unique_ptr<MenuList> ExultMenu::create_main_menu(int first) {
 	}
 	int xpos = (gwin->get_win()->get_full_width() / 2 + fr->get_width()) / 2;
 	std::vector<ModManager> &game_list = gamemanager->get_game_list();
-	int num_choices = game_list.size();
-	int last = num_choices > first + pagesize ? first + pagesize : num_choices;
+	const int num_choices = game_list.size();
+	const int last = num_choices > first + pagesize ? first + pagesize : num_choices;
 	for (int i = first; i < last; i++) {
-		int menux = xpos + (i % 2) * gwin->get_win()->get_full_width() / 2 + gwin->get_win()->get_start_x();
-		ModManager &exultgame = game_list[i];
-		bool have_sfx = Audio::have_config_sfx(exultgame.get_cfgname()) ||
+		const int menux = xpos + (i % 2) * gwin->get_win()->get_full_width() / 2 + gwin->get_win()->get_start_x();
+		const ModManager &exultgame = game_list[i];
+		const bool have_sfx = Audio::have_config_sfx(exultgame.get_cfgname()) ||
 		                Audio::have_roland_sfx(exultgame.get_game_type()) ||
 		                Audio::have_sblaster_sfx(exultgame.get_game_type()) ||
 		                Audio::have_midi_sfx();
@@ -220,7 +218,7 @@ std::unique_ptr<MenuList> ExultMenu::create_main_menu(int first) {
 	}
 
 	create_scroller_menu(menu.get(), navfonton, navfont, first, pagesize, num_choices,
-	                     centerx, ypos = gwin->get_win()->get_end_y() - 5 * font->get_text_height());
+	                     centerx, gwin->get_win()->get_end_y() - 5 * font->get_text_height());
 
 	const char *menuchoices[] = {
 		"SETUP",
@@ -232,8 +230,8 @@ std::unique_ptr<MenuList> ExultMenu::create_main_menu(int first) {
 		"EXIT"
 #endif
 	};
-	int num_entries = array_size(menuchoices);
-	int max_width = maximum_size(font, menuchoices, num_entries, centerx);
+	const int num_entries = array_size(menuchoices);
+	const int max_width = maximum_size(font, menuchoices, num_entries, centerx);
 	xpos = centerx - max_width * (num_entries - 1) / 2;
 	ypos = gwin->get_win()->get_end_y() - 3 * font->get_text_height();
 	for (int i = 0; i < 4; i++) {
@@ -244,6 +242,7 @@ std::unique_ptr<MenuList> ExultMenu::create_main_menu(int first) {
 		menu->add_entry(entry);
 		xpos += max_width;
 	}
+	menu->set_selection(0);
 	return menu;
 }
 
@@ -254,11 +253,11 @@ std::unique_ptr<MenuList> ExultMenu::create_mods_menu(ModManager *selgame, int f
 	int xpos = gwin->get_win()->get_full_width() / 4;
 
 	std::vector<ModInfo> &mod_list = selgame->get_mod_list();
-	int num_choices = mod_list.size();
-	int last = num_choices > first + pagesize ? first + pagesize : num_choices;
+	const int num_choices = mod_list.size();
+	const int last = num_choices > first + pagesize ? first + pagesize : num_choices;
 	for (int i = first; i < last; i++) {
-		int menux = xpos + (i % 2) * gwin->get_win()->get_full_width() / 2 + gwin->get_win()->get_start_x();
-		ModInfo &exultmod = mod_list[i];
+		const int menux = xpos + (i % 2) * gwin->get_win()->get_full_width() / 2 + gwin->get_win()->get_start_x();
+		const ModInfo &exultmod = mod_list[i];
 		auto *entry = new MenuGameEntry(fonton, font,
 		        exultmod.get_menu_string().c_str(),
 		        nullptr, menux, ypos);
@@ -278,13 +277,13 @@ std::unique_ptr<MenuList> ExultMenu::create_mods_menu(ModManager *selgame, int f
 	}
 
 	create_scroller_menu(menu.get(), navfonton, navfont, first, pagesize, num_choices,
-	                     centerx, ypos = gwin->get_win()->get_end_y() - 5 * font->get_text_height());
+	                     centerx, gwin->get_win()->get_end_y() - 5 * font->get_text_height());
 
 	const char *menuchoices[] = {
 		"RETURN TO MAIN MENU"
 	};
-	int num_entries = array_size(menuchoices);
-	int max_width = maximum_size(font, menuchoices, num_entries, centerx);
+	const int num_entries = array_size(menuchoices);
+	const int max_width = maximum_size(font, menuchoices, num_entries, centerx);
 	xpos = centerx - max_width * (num_entries - 1) / 2;
 	ypos = gwin->get_win()->get_end_y() - 3 * font->get_text_height();
 	for (int i = 0; i < num_entries; i++) {
@@ -295,6 +294,8 @@ std::unique_ptr<MenuList> ExultMenu::create_mods_menu(ModManager *selgame, int f
 		menu->add_entry(entry);
 		xpos += max_width;
 	}
+	menu->set_selection(0);
+	menu->set_cancel(-4);
 	return menu;
 }
 
@@ -307,10 +308,9 @@ BaseGameInfo *ExultMenu::show_mods_menu(ModManager *selgame) {
 	gpal->apply();
 
 	int first_mod = 0;
-	int num_choices = selgame->get_mod_list().size() - 1;
-	int last_page = num_choices - num_choices % pagesize;
+	const int num_choices = selgame->get_mod_list().size() - 1;
+	const int last_page = num_choices - num_choices % pagesize;
 	auto menu = create_mods_menu(selgame, first_mod);
-	menu->set_selection(0);
 	BaseGameInfo *sel_mod = nullptr;
 
 	Shape_frame *exultlogo = exult_flx.get_shape(EXULT_FLX_EXULT_LOGO_SHP, 1);
@@ -329,7 +329,7 @@ BaseGameInfo *ExultMenu::show_mods_menu(ModManager *selgame) {
 		font->draw_text(gwin->get_win()->get_ib8(),
 						gwin->get_win()->get_end_x() - font->get_text_width(VERSION),
 						gwin->get_win()->get_end_y() - font->get_text_height() - 5, VERSION);
-		int choice = menu->handle_events(gwin, menu_mouse);
+		const int choice = menu->handle_events(gwin, menu_mouse);
 		switch (choice) {
 		case -10: // The incompatibility notice; do nothing
 			break;
@@ -367,37 +367,44 @@ BaseGameInfo *ExultMenu::run() {
 	navfonton = fontManager.get_font("HOT_NAV_FONT");
 
 	if (!gamemanager->get_game_count()) {
-		int topy = centery - 25;
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 20, "WARNING");
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 40, "Could not find the static data for either");
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 50, R"("The Black Gate" or "Serpent Isle".)");
-#ifndef __IPHONEOS__
-		const char games_missing_msg[] = "Please edit the configuration file";
-#else
-		const char games_missing_msg[] = "Please add the games in iTunes File Sharing";
-#endif
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 60, games_missing_msg);
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 70, "and restart Exult.");
+//OS Specific messages
 #ifdef __IPHONEOS__
-		font->center_text(gwin->get_win()->get_ib8(),
-		                  centerx, topy + 100, "Touch screen for help!");
+		const char game_missing_msg[] = "Please add the games in iTunes File Sharing";
+		const char close_screen_msg[] = "Touch screen for help!";
+#else
+		const char game_missing_msg[] = "Please edit the configuration file.";
+		const char close_screen_msg[] = "Press ESC to exit.";
 #endif
+//Create our message and programatically center it.
+		const char * const message[8] =
+		{
+			"WARNING",
+			"",
+			"Could not find the static data for either",
+			R"("The Black Gate" or "Serpent Isle".)",
+			game_missing_msg,
+			"",
+			"",
+			close_screen_msg,
+		};
+		const int total_lines = sizeof(message)/sizeof(message[0]); //While this method is no longer "proper" it fits the rest of the coding style.
+		const int topy = centery - ( total_lines*10 )/2;
+		for (int line_num = 0;line_num < total_lines; line_num++)
+		{
+			font->center_text(gwin->get_win()->get_ib8(),
+		                  centerx, topy + (line_num*10), message[line_num]);
+		}
 		gpal->apply();
 		while (!wait_delay(200)) {
 		}
-#ifndef __IPHONEOS__
-		throw quit_exception(1);
-#else
+#ifdef __IPHONEOS__
 		// Never quits because Apple doesn't allow you to.
-		ios_open_url("http://exult.sourceforge.net/docs.php#ios_games");
+		SDL_OpenURL("http://exult.info/docs.php#ios_games");
 		while (1) {
 			wait_delay(1000);
 		}
+#else
+		throw quit_exception(1);
 #endif
 	}
 	IExultDataSource mouse_data(BUNDLE_CHECK(BUNDLE_EXULT_FLX, EXULT_FLX),
@@ -427,14 +434,13 @@ BaseGameInfo *ExultMenu::run() {
 	exultlogo = exult_flx.get_shape(EXULT_FLX_EXULT_LOGO_SHP, 1);
 
 	int first_game = 0;
-	int num_choices = gamemanager->get_game_count() - 1;
-	int last_page = num_choices - num_choices % pagesize;
+	const int num_choices = gamemanager->get_game_count() - 1;
+	const int last_page = num_choices - num_choices % pagesize;
 	// Erase the old logo.
 	gwin->clear_screen(true);
 
-	auto menu = create_main_menu(first_game);;
+	auto menu = create_main_menu(first_game);
 	BaseGameInfo *sel_game = nullptr;
-	menu->set_selection(0);
 
 	do {
 		// Interferes with the menu.
@@ -442,7 +448,7 @@ BaseGameInfo *ExultMenu::run() {
 		font->draw_text(gwin->get_win()->get_ib8(),
 						gwin->get_win()->get_end_x() - font->get_text_width(VERSION),
 						gwin->get_win()->get_end_y() - font->get_text_height() - 5, VERSION);
-		int choice = menu->handle_events(gwin, menu_mouse);
+		const int choice = menu->handle_events(gwin, menu_mouse);
 		switch (choice) {
 		case -4: // Setup
 			gpal->fade_out(c_fade_out_time);
@@ -458,7 +464,6 @@ BaseGameInfo *ExultMenu::run() {
 			logoy = centery - exultlogo->get_height() / 2;
 			first_game = 0;
 			menu = create_main_menu(first_game);
-			menu->set_selection(0);
 			break;
 		case -3: { // Exult Credits
 			gpal->fade_out(c_fade_out_time);
@@ -486,7 +491,7 @@ BaseGameInfo *ExultMenu::run() {
 		break;
 		case -1: // Exit
 #ifdef __IPHONEOS__
-			ios_open_url("http://exult.sourceforge.net/docs.php#iOS%20Guide");
+			SDL_OpenURL("http://exult.info/docs.php#iOS%20Guide");
 			break;
 #else
 			gpal->fade_out(c_fade_out_time);

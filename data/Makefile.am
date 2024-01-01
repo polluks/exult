@@ -43,17 +43,14 @@ EXULT_FLX_OBJECTS = \
 	exultmsg.txt \
 	exultmsg_de.txt \
 	exultmsg_es.txt \
-	exultmsg_fr.txt
-	
+	exultmsg_fr.txt \
+	endfont.shp
 
 EXULT_BG_FLX_OBJECTS = \
 	bg/flx.in \
 	bg/BGmap.shp \
 	bg/defaultkeys.txt	\
-	bg/mr_faces.shp \
 	bg/u7menupal.pal \
-	bg/bg_paperdol.vga \
-	bg/bg_mr_faces.vga \
 	bg/bodies.txt \
 	bg/paperdol_info.txt \
 	bg/shape_files.txt \
@@ -61,7 +58,38 @@ EXULT_BG_FLX_OBJECTS = \
 	bg/shape_info.txt \
 	bg/blends.dat \
 	bg/container.dat \
-	bg/autonotes.txt
+	bg/autonotes.txt \
+	bg/intro_hand.shp
+
+EXULT_BG_INTROSFX_MT32_OBJECTS = \
+	bg/introsfx_mt.in \
+	bg/intro_mt_static1.wav \
+	bg/intro_mt_static2.wav \
+	bg/intro_mt_static3.wav \
+	bg/intro_mt_guardian1.wav \
+	bg/intro_mt_guardian2.wav \
+	bg/intro_mt_guardian3.wav \
+	bg/intro_mt_guardian4.wav \
+	bg/intro_mt_outstatic.wav \
+	bg/intro_mt_outnoise.wav \
+	bg/intro_mt_monitorslap.wav \
+	bg/intro_mt_moongate.wav \
+	bg/intro_mt_shot.wav
+
+EXULT_BG_INTROSFX_SB_OBJECTS = \
+	bg/introsfx_sb.in \
+	bg/intro_sb_static1.wav \
+	bg/intro_sb_static2.wav \
+	bg/intro_sb_static3.wav \
+	bg/intro_sb_guardian1.wav \
+	bg/intro_sb_guardian2.wav \
+	bg/intro_sb_guardian3.wav \
+	bg/intro_sb_guardian4.wav \
+	bg/intro_sb_outstatic.wav \
+	bg/intro_sb_outnoise.wav \
+	bg/intro_sb_monitorslap.wav \
+	bg/intro_sb_moongate.wav \
+	bg/intro_sb_shot.wav
 
 EXULT_SI_FLX_OBJECTS = \
 	si/flx.in \
@@ -74,7 +102,14 @@ EXULT_SI_FLX_OBJECTS = \
 	si/shape_info.txt \
 	si/blends.dat \
 	si/container.dat \
-	si/autonotes.txt
+	si/autonotes.txt \
+	si/ext_intro_castle.flc \
+	si/ext_intro_ship1.flc \
+	si/ext_intro_ship2.flc \
+	si/ext_intro_pil1.flc \
+	si/ext_intro_a.xmi \
+	si/ext_intro_r.xmi \
+	si/ext_intro_si01.ogg
 
 EXULT_BG_PAPERDOL_VGA_OBJECTS = \
 	bg/amulets.shp \
@@ -131,12 +166,13 @@ EXULT_BG_PAPERDOL_VGA_OBJECTS = \
 	bg/shieldbacks.shp \
 	bg/diaper.shp \
 	bg/bg_paperdol.in
+
 EXULT_BG_MR_FACES_VGA_OBJECTS = \
 	bg/mr_faces.shp \
-	bg/u7menupal.pal \
 	bg/bg_mr_faces.in
 
 ESTUDIO_NEW_FILES = \
+	estudio/new/avatar_data.txt \
 	estudio/new/combos.flx \
 	estudio/new/faces.vga \
 	estudio/new/gumps.vga \
@@ -167,8 +203,7 @@ EXULT_BG_MR_FACES_VGA =
 endif
 
 flex_DATA =  \
-		$(EXULT_FLX) $(EXULT_BG_FLX) $(EXULT_SI_FLX) midisfx.flx \
-		exultmsg.txt $(EXULT_BG_PAPERDOL_VGA) $(EXULT_BG_MR_FACES_VGA)
+		$(EXULT_FLX) $(EXULT_BG_FLX) $(EXULT_SI_FLX) midisfx.flx
 
 if BUILD_STUDIO
 estudionew_DATA = $(ESTUDIO_NEW_FILES)
@@ -176,11 +211,12 @@ else
 estudionew_DATA =
 endif
 
-CLEANFILES = exult.flx exult_bg.flx exult_si.flx bg/bg_paperdol.vga bg/bg_mr_faces.vga *~
+CLEANFILES = exult.flx exult_bg.flx exult_si.flx bg/bg_paperdol.vga bg/bg_mr_faces.vga bg/introsfx_mt32.flx bg/introsfx_mt.flx *~
 
 EXTRA_DIST = flx.in $(EXULT_FLX_OBJECTS) $(EXULT_BG_FLX_OBJECTS) \
 	$(EXULT_SI_FLX_OBJECTS) $(ESTUDIO_NEW_FILES) midisfx.flx \
-	exultmsg.txt bginclude.uc \
+	$(EXULT_BG_INTROSFX_MT32_OBJECTS) $(EXULT_BG_INTROSFX_SB_OBJECTS) \
+	exultmsg.txt bginclude.uc marketpl.mid myusecode.uc \
 	$(EXULT_BG_PAPERDOL_VGA_OBJECTS) $(EXULT_BG_MR_FACES_VGA_OBJECTS)
 
 if CROSS_COMPILING
@@ -201,8 +237,14 @@ bg/bg_mr_faces.vga: $(expack) $(EXULT_BG_MR_FACES_VGA_OBJECTS)
 exult.flx: $(expack) $(EXULT_FLX_OBJECTS)
 	$(expack) -i $(srcdir)/flx.in
 
-exult_bg.flx: $(expack) $(EXULT_BG_FLX_OBJECTS)
+exult_bg.flx: $(expack) $(EXULT_BG_FLX_OBJECTS) bg/bg_paperdol.vga bg/bg_mr_faces.vga bg/introsfx_mt32.flx bg/introsfx_sb.flx
 	$(expack) -i $(srcdir)/bg/flx.in
+
+bg/introsfx_mt32.flx: $(expack) $(EXULT_BG_INTROSFX_MT32_OBJECTS)
+	$(expack) -i $(srcdir)/bg/introsfx_mt.in
+
+bg/introsfx_sb.flx: $(expack) $(EXULT_BG_INTROSFX_SB_OBJECTS)
+	$(expack) -i $(srcdir)/bg/introsfx_sb.in
 
 exult_si.flx: $(expack) $(EXULT_SI_FLX_OBJECTS)
 	$(expack) -i $(srcdir)/si/flx.in
@@ -212,4 +254,8 @@ exult_flx.h: exult.flx
 exult_bg_flx.h: exult_bg.flx
 
 exult_si_flx.h: exult_si.flx
+
+bg/introsfx_mt32_flx.h: bg/introsfx_mt32.flx
+
+bg/introsfx_sb_flx.h: bg/introsfx_sb.flx
 

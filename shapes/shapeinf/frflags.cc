@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2008-2013 The Exult Team
+Copyright (C) 2008-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -49,7 +49,7 @@ bool Frame_flags_info::read(
 	else
 		quality &= 0xff;
 
-	int size = 8 * sizeof(m_flags); // Bit count.
+	const int size = 8 * sizeof(m_flags); // Bit count.
 	int bit = 0;
 	unsigned int flags = 0;
 	while (in.good() && bit < size) {

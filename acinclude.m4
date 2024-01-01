@@ -42,7 +42,7 @@ AC_DEFUN([EXULT_CHECK_SDL],[
 
   REQ_MAJOR=2
   REQ_MINOR=0
-  REQ_PATCHLEVEL=6
+  REQ_PATCHLEVEL=10
   REQ_VERSION=$REQ_MAJOR.$REQ_MINOR.$REQ_PATCHLEVEL
 
   AC_MSG_CHECKING([for SDL - version >= $REQ_VERSION])
@@ -60,6 +60,7 @@ AC_DEFUN([EXULT_CHECK_SDL],[
       exult_sdlok=no
     else
       AC_DEFINE(HAVE_SDL_H, 1, [Define to 1 if you have the "SDL.h" header file])
+      AM_CONDITIONAL(HAVE_SDL, true)
     fi
   fi
 
@@ -69,7 +70,7 @@ AC_DEFUN([EXULT_CHECK_SDL],[
 
   if test x$exult_sdlok = xyes ; then
 
-    if test ! \( \( $sdl_major_version -gt $REQ_MAJOR \) -o \( \( $sdl_major_version -eq $REQ_MAJOR \) -a \( \( $sdl_minor_version -gt $REQ_MINOR \) -o \( \( $sdl_minor_version -eq $REQ_MINOR \) -a \( $sdl_patchlevel -gt $REQ_PATCHLEVEL \) \) \) \) \); then
+    if test ! \( \( $sdl_major_version -gt $REQ_MAJOR \) -o \( \( $sdl_major_version -eq $REQ_MAJOR \) -a \( \( $sdl_minor_version -gt $REQ_MINOR \) -o \( \( $sdl_minor_version -eq $REQ_MINOR \) -a \( $sdl_patchlevel -ge $REQ_PATCHLEVEL \) \) \) \) \); then
       exult_sdlok="no, version < $REQ_VERSION found"
     else
       AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
@@ -90,6 +91,8 @@ AC_DEFUN([EXULT_CHECK_SDL],[
   if test "x$exult_sdlok" = xyes; then
     LIBS="$LIBS $SDL_LIBS"
 
+    dnl as normal executable...
+
     AC_LINK_IFELSE([AC_LANG_SOURCE([[
     #include "SDL.h"
 
@@ -97,13 +100,33 @@ AC_DEFUN([EXULT_CHECK_SDL],[
       SDL_Init(0);
       return 0;
     }
-    ]])],sdllinkok=yes,sdllinkok=no)
+    ]])],sdllinkok=exe,sdllinkok=no)
+
+    if test x$sdllinkok = xno; then
+
+      dnl as library with SDL_main...
+
+      AC_LINK_IFELSE([AC_LANG_SOURCE([[
+      #include "SDL.h"
+
+      int main(int argc, char* argv[]) {
+        SDL_Init(0);
+        return 0;
+      }
+      #undef main
+      int main(int argc, char * argv[]) {
+        return SDL_main(argc, argv);
+      }
+      ]])],sdllinkok=lib,sdllinkok=no)      
+
+    fi
+
     if test x$sdllinkok = xno; then
       exult_sdlok=no
     fi
   fi
 
-  AC_MSG_RESULT($exult_sdlok)
+    AC_MSG_RESULT($exult_sdlok)
 
   LDFLAGS="$exult_backupldflags"
   CPPFLAGS="$exult_backupcppflags"
@@ -114,7 +137,12 @@ AC_DEFUN([EXULT_CHECK_SDL],[
     AC_SUBST(SDL_LIBS)
     ifelse([$1], , :, [$1])
   else
-    ifelse([$2], , :, [$2])
+    if test x$enable_android_apk != xno; then
+      AC_DEFINE(HAVE_SDL_H, 0, [Define to 1 if you have the "SDL.h" header file])
+      AM_CONDITIONAL(HAVE_SDL, false)
+    else
+      ifelse([$2], , :, [$2])
+    fi
   fi
 ]);
 

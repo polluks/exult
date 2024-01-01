@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2010-2013 The Exult Team
+Copyright (C) 2010-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,7 +20,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "OggAudioSample.h"
 #include "headers/exceptions.h"
 #include "databuf.h"
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
 #include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include <new>
 
 namespace Pentagram {
@@ -56,7 +66,7 @@ size_t OggAudioSample::read_func  (void *ptr, size_t size, size_t nmemb, void *d
 {
 	auto *ids = static_cast<IDataSource*>(datasource);
 	//if (ids->eof()) return 0;
-	size_t limit = ids->getSize() - ids->getPos();
+	const size_t limit = ids->getAvail();
 	if (limit == 0) return 0;
 	else if (limit < size*nmemb) nmemb = limit/size;
 	ids->read(ptr,size*nmemb);
@@ -89,7 +99,7 @@ bool OggAudioSample::isThis(IDataSource *oggdata)
 {
 	OggVorbis_File vf;
 	oggdata->seek(0);
-	int res = ov_test_callbacks(oggdata,&vf,nullptr,0,callbacks);
+	const int res = ov_test_callbacks(oggdata,&vf,nullptr,0,callbacks);
 	ov_clear(&vf);
 
 	return res == 0;
@@ -118,8 +128,8 @@ void OggAudioSample::initDecompressor(void *DecompData) const
 	decomp->bitstream = 0;
 
 	vorbis_info *info = ov_info(&decomp->ov,-1);
-	*const_cast<uint32*>(&sample_rate) = decomp->last_rate = info->rate;
-	*const_cast<bool*>(&stereo) = decomp->last_stereo = info->channels == 2;
+	sample_rate = decomp->last_rate = info->rate;
+	stereo = decomp->last_stereo = info->channels == 2;
 	decomp->freed = false;
 }
 
@@ -146,8 +156,8 @@ uint32 OggAudioSample::decompressFrame(void *DecompData, void *samples) const
 
 	if (info == nullptr) return 0;
 
-	*const_cast<uint32*>(&sample_rate) = decomp->last_rate;
-	*const_cast<bool*>(&stereo) = decomp->last_stereo;
+	sample_rate = decomp->last_rate;
+	stereo = decomp->last_stereo;
 	decomp->last_rate = info->rate;
 	decomp->last_stereo = info->channels == 2;
 
@@ -157,7 +167,7 @@ uint32 OggAudioSample::decompressFrame(void *DecompData, void *samples) const
 	const int bigendianp = 1;
 #endif
 
-	long count = ov_read(&decomp->ov,static_cast<char*>(samples),frame_size,bigendianp,2,1,&decomp->bitstream);
+	const long count = ov_read(&decomp->ov,static_cast<char*>(samples),frame_size,bigendianp,2,1,&decomp->bitstream);
 
 	//if (count == OV_EINVAL || count == 0) {
 	if (count <= 0) return 0;

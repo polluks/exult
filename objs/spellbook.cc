@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000-2013 The Exult Team.
+Copyright (C) 2000-2022 The Exult Team.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -41,10 +41,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "usefuns.h"
 #include "ignore_unused_variable_warning.h"
 
-using std::memcpy;
 using std::ostream;
 
-// ++++TAG: De-hard-code reagent shape and costs.
+// TODO: De-hard-code reagent shape and costs.
 const int REAGENTS = 842;       // Shape #.
 
 /*
@@ -96,7 +95,7 @@ unsigned short Spellbook_object::si_reagents[9 * 8] = {
 	// Circle 2:
 	gr | gn, bm | sa, ns | sa, bp | sa | wh, mr | sa, gr | gn | ss, gr | gn | mr, gr | gn | sa,
 	// Circle 3:
-	gr | gn | wh, gr | ns | sa, bp | mr, bp | gr, gr | gn | mr | sa, ns | ss, bp | ns | ss, bp | mr | sa | sa,
+	gr | gn | wh, gr | ns | sa, bp | mr, bp | gr, gr | gn | mr | sa, ns | ss, bp | ns | ss, bp | mr | sa,
 	// Circle 4:
 	bm | mr, gr | ss, mr | sa, sa | bm | gr | mr | ss | sc, gr | mr | ns | sa, bm | sa, bp | ss, bm | sa,
 	// Circle 5:
@@ -159,8 +158,8 @@ Spellbook_object::Spellbook_object(
 int Spellbook_object::add_spell(
     int spell           // 0-71
 ) {
-	int circle = spell / 8;
-	int num = spell % 8;    // # within circle.
+	const int circle = spell / 8;
+	const int num = spell % 8;    // # within circle.
 	if (circles[circle] & (1 << num))
 		return 0;       // Already have it.
 	circles[circle] |= (1 << num);
@@ -183,8 +182,8 @@ void Spellbook_object::clear_spells() {
 int Spellbook_object::remove_spell(
     int spell           // 0-71
 ) {
-	int circle = spell / 8;
-	int num = spell % 8;    // # within circle.
+	const int circle = spell / 8;
+	const int num = spell % 8;    // # within circle.
 	if ((circles[circle] & (1 << num)) == 0)
 		return 0;       // Already does not have it.
 	circles[circle] ^= (1 << num);
@@ -201,14 +200,14 @@ bool Spellbook_object::can_do_spell(
 ) {
 	if (cheat.in_wizard_mode())
 		return true;        // Cheating.
-	int circle = spell / 8;     // Circle spell is in.
-	unsigned char cflags = circles[circle];
+	const int circle = spell / 8;     // Circle spell is in.
+	const unsigned char cflags = circles[circle];
 	if ((cflags & (1 << (spell % 8))) == 0)
 		return false;       // We don't have that spell.
-	int mana = act->get_property(Actor::mana);
-	// ++++TAG: Need to de-hard-code cost.
-	int cost = circle + (GAME_SI ? 1 : 0);
-	int level = act->get_level();
+	const int mana = act->get_property(Actor::mana);
+	// TODO: Need to de-hard-code cost.
+	const int cost = circle + (GAME_SI ? 1 : 0);
+	const int level = act->get_level();
 	if ((mana < cost) || (level < circle))
 		// Not enough mana or not yet at required level?
 		return false;
@@ -241,8 +240,8 @@ bool Spellbook_object::do_spell(
 		int circle = spell / 8; // Figure/subtract mana.
 		if (cheat.in_wizard_mode())
 			circle = 0;
-		int mana = act->get_property(Actor::mana);
-		// ++++TAG: Need to de-hard-code cost.
+		const int mana = act->get_property(Actor::mana);
+		// TODO: Need to de-hard-code cost.
 		act->set_property(Actor::mana, mana - circle - (GAME_SI ? 1 : 0));
 		// Figure what we used.
 		unsigned short flags = reagents[spell];
@@ -270,7 +269,7 @@ void Spellbook_object::execute_spell(
     int spell,
     bool in_combat          // Being used in combat.
 ) {
-	act->begin_casting(859);    // ++++TAG: Need to de-hard-code.
+	act->begin_casting(859);    // TODO: Need to de-hard-code.
 
 	// We use intercept_item for spells cast from readied spellbook
 	// while in combat.

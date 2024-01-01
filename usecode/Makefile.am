@@ -1,17 +1,24 @@
-AM_CPPFLAGS = -I$(srcdir)/../headers -I$(srcdir)/.. -I$(srcdir)/../files -I$(srcdir)/../imagewin \
-		-I$(srcdir)/../shapes -I$(srcdir)/../objs -I$(srcdir)/../audio -I$(srcdir)/../audio/midi_drivers \
-		-I$(srcdir)/../gumps -I$(srcdir)/../tools -I$(srcdir)/../shapes/shapeinf \
-		-I$(srcdir)/../server $(SDL_CFLAGS) $(VORBIS_CFLAGS) $(OGG_CFLAGS) $(INCDIRS) \
-		$(WINDOWING_SYSTEM) $(DEBUG_FLAGS) $(CPPFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir) -I$(top_srcdir)/files -I$(top_srcdir)/imagewin \
+		-I$(top_srcdir)/shapes -I$(top_srcdir)/objs -I$(top_srcdir)/audio -I$(top_srcdir)/audio/midi_drivers \
+		-I$(top_srcdir)/gumps -I$(top_srcdir)/tools -I$(top_srcdir)/shapes/shapeinf \
+		-I$(top_srcdir)/server $(SDL_CFLAGS) $(VORBIS_CFLAGS) $(OGG_CFLAGS) $(INCDIRS) \
+		$(WINDOWING_SYSTEM) $(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS)
 
 SUBDIRS = . compiler ucxt
 
 noinst_LTLIBRARIES = libusecode.la
 
 libusecode_la_SOURCES = \
+	opcodes.h	\
 	bgintrinsics.h	\
 	siintrinsics.h	\
 	sibetaintrinsics.h	\
+	ucsymtbl.cc	\
+	ucsymtbl.h	\
+	usefuns.h
+
+if BUILD_EXULT
+libusecode_la_SOURCES += \
 	intrinsics.cc	\
 	ucinternal.cc	\
 	ucinternal.h	\
@@ -37,9 +44,7 @@ libusecode_la_SOURCES = \
 	ucserial.h	\
 	ucserial.cc	\
 	ucfunction.h	\
-	ucfunction.cc	\
-	ucsymtbl.cc	\
-	ucsymtbl.h	\
-	usefuns.h
+	ucfunction.cc
+endif
 
 CLEANFILES = *~

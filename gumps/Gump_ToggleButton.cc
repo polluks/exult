@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -63,7 +63,7 @@ void Gump_ToggleButton::unpush(
 
 bool Gump_ToggleTextButton::activate(int button) {
 	int delta;
-	int numselections = selections.size();
+	const int numselections = selections.size();
 	if (button == 1)
 		delta = 1;
 	else if (button == 3)

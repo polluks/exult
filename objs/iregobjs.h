@@ -2,7 +2,7 @@
  *  iregobjs.h - Ireg (moveable) game objects.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,10 +25,21 @@
 #include "common_types.h"
 #include "objs.h"
 
-inline uint8_t nibble_swap(uint8_t val) {
-	constexpr const size_t shift = 4;
-	constexpr const size_t mask = (8 * sizeof(uint8) - 1);
-	return (val << shift) | (val>>( (-shift) & mask));
+#ifdef _MSC_VER
+#  include <intrin.h>
+inline uint8 rotl8(uint8 val, size_t shift) {
+	return _rotl8(val, static_cast<uint8>(shift));
+}
+#else
+inline uint8 rotl8(uint8 val, size_t shift) {
+	const int mask = (8 * sizeof(uint8) - 1);
+	return (val << shift) | (val >> ((-shift) & mask));
+}
+#endif
+
+inline uint8 nibble_swap(uint8 val) {
+	constexpr const int shift = 4;
+	return rotl8(val, shift);
 }
 
 /*

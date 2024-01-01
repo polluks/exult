@@ -18,7 +18,9 @@
  */
 
 // Tells the compiler the game type
-#game "serpentisle" // Tells the compiler the game type
+#game "serpentisle"
+// Want to enforce braces around all statements
+#strictbraces "true"
 
 // Starts autonumbering at function number 0xC00.
 // I leave function numbers in the range 0xA00 to
@@ -31,12 +33,18 @@
 #include "header/constants.uc"
 // SI Global Flags
 #include "header/si/si_gflags.uc"
+// Standard structure definitions
+#include "header/si/si_structs.uc"
 // Calls defined in SI Usecode
 #include "header/si/si_externals.uc"
 // SI Shapes
 #include "header/si/si_shapes.uc"
 // SI NPCs
 #include "header/si/si_npcs.uc"
+// SI Faces
+#include "header/si/si_faces.uc"
+// SI Sprites
+#include "header/si/si_sprites.uc"
 
 // New functions
 #include "header/functions.uc"
@@ -118,6 +126,8 @@
 #include "items/bucket_cure.uc"
 // Fixes Shrine of Order issues
 #include "items/hourglass.uc"
+// Fixes the missing face for Smith in the Dream Realm.
+#include "items/nightmare.uc"
 // Can no longer get to Test of Purity from SS
 #include "items/pillar.uc"
 // Iolo, Shamino and Dupre refuse blue potions in Spinebreaker mountains
@@ -127,6 +137,8 @@
 // Changes watches/sundials to 24 hour time
 // if you ask Shamino to do it.
 #include "items/time_tellers.uc"
+// Using new and improved UI_is_water for better fishing experience.
+#include "items/fishingrod.uc"
 
 // Fixes to spells the Avatar can cast
 #include "spells/spells.uc"
@@ -139,3 +151,10 @@
 #include "cutscenes/monitor_banquet.uc"
 // Absolutely force companions to be there and force-kills them after
 #include "cutscenes/wall_of_lights.uc"
+// Fixes gang planck blocking check
+#include "misc/is_obj_blocked.uc"
+// Fixes Boydon's tournament flag post List Field
+#include "misc/list_field.uc"
+// Allows Hound of Doskar to track Anti-Shamino with Beatrix' Book.
+#include "npcs/hound.uc"
+

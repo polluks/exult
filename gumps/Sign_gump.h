@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,8 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  A sign showing runes.
  */
 class Sign_gump : public Gump {
-	UNREPLICATABLE_CLASS(Sign_gump)
-
 protected:
 	std::string *lines;         // Lines of text.
 	int num_lines;

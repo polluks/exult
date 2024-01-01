@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2011-2013 The Exult Team
+Copyright (C) 2011-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -22,8 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "ShortcutBar_gump.h"
 
-#include "SDL_events.h"
-
 #include "fnames.h"
 #include "exult.h"
 #include "keyactions.h"
@@ -35,7 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "Gump_manager.h"
 #include "Gump_button.h"
 #include "exult_flx.h"
-#include "gamewin.h"
 #include "Text_button.h"
 #include "cheat.h"
 #include "ucmachine.h"
@@ -54,7 +51,7 @@ Game_object *is_party_item(
     int qual            // Desired quality
 ) {
 	Actor *party[9];        // Get party.
-	int cnt = Game_window::get_instance()->get_party(party, 1);
+	const int cnt = Game_window::get_instance()->get_party(party, 1);
 	for (int i = 0; i < cnt; i++) {
 		Actor *person = party[i];
 		Game_object *obj = person->find_item(shnum, qual, frnum);
@@ -90,12 +87,12 @@ void ShortcutBar_gump::createButtons() {
 	starty = gwin->get_win()->get_start_y();
 	resy = gwin->get_win()->get_full_height();
 	gamey = gwin->get_game_height();
-	for (int i = 0; i < MAX_SHORTCUT_BAR_ITEMS; ++i)
-		buttonItems[i].translucent = false;
+	for (auto& buttonItem : buttonItems)
+		buttonItem.translucent = false;
 	int x = (gamex - 320)/2;
 
 	memset(buttonItems, 0, sizeof(buttonItems));
-	bool trlucent = gwin->get_shortcutbar_type() == 1 && starty >= 0;
+	const bool trlucent = gwin->get_shortcutbar_type() == 1 && starty >= 0;
 	// disk
 	buttonItems[0].shapeId = new ShapeID(EXULT_FLX_SB_DISK_SHP, trlucent ? 1 : 0, SF_EXULT_FLX);
 	buttonItems[0].name = "disk";
@@ -222,15 +219,15 @@ void ShortcutBar_gump::createButtons() {
 	} else
 		numButtons = 9;
 
-	int barItemWidth = (320/numButtons);
+	const int barItemWidth = (320/numButtons);
 
 	for (int i = 0; i < numButtons; i++, x += barItemWidth) {
 		Shape_frame *frame = buttonItems[i].shapeId->get_shape();
-		int dX = frame->get_xleft() + (barItemWidth-frame->get_width()) / 2;
-		int dY = frame->get_yabove() + (height - frame->get_height()) / 2;
+		const int dX = frame->get_xleft() + (barItemWidth-frame->get_width()) / 2;
+		const int dY = frame->get_yabove() + (height - frame->get_height()) / 2;
 		buttonItems[i].mx = x + dX;
 		buttonItems[i].my = starty + dY;
-		buttonItems[i].rect = Rectangle(x, starty, barItemWidth, height);
+		buttonItems[i].rect = TileRect(x, starty, barItemWidth, height);
 		// this is safe to do since it only effects certain palette colors
 		// which will be color cycling otherwise
 		if (trlucent)
@@ -271,8 +268,8 @@ ShortcutBar_gump::ShortcutBar_gump
 	height = 25;
 	locx = placex;
 	locy = placey;
-	for(int i = 0; i < MAX_SHORTCUT_BAR_ITEMS; ++i)
-		buttonItems[i].pushed = false;
+	for (auto& buttonItem : buttonItems)
+		buttonItem.pushed = false;
 	createButtons();
 	gumpman->add_gump(this);
 	has_changed = true;
@@ -290,9 +287,9 @@ void ShortcutBar_gump::paint() {
 	Gump::paint();
 
 	for (int i = 0; i < numButtons; i++) {
-		ShortcutBarButtonItem& item = buttonItems[i];
-		int x = locx + item.mx;
-		int y = locy + item.my;
+		const ShortcutBarButtonItem& item = buttonItems[i];
+		const int x = locx + item.mx;
+		const int y = locy + item.my;
 		sman->paint_shape(x, y, item.shapeId->get_shape(), item.translucent);
 		// when the bar is on the game screen it may need an outline
 		if (gwin->get_outline_color() < NPIXCOLORS && starty >= 0)
@@ -305,17 +302,33 @@ void ShortcutBar_gump::paint() {
 
 int ShortcutBar_gump::handle_event(SDL_Event *event) {
 	Game_window *gwin = Game_window::get_instance();
+	static bool handle_events = true;
 	// When the Save/Load menu is open, or the notebook, don't handle events
 	if (gumpman->modal_gump_mode() || gwin->get_usecode()->in_usecode() || g_waiting_for_click
-		|| Notebook_gump::get_instance())
+		|| Notebook_gump::get_instance()) {
+		// do not register a mouse up event on notebook checkmark
+		if (Notebook_gump::get_instance()) {
+			handle_events = false;
+		}
 		return 0;
-
-	if (event->type == SDL_MOUSEBUTTONDOWN || event->type == SDL_MOUSEBUTTONUP) {
+	}
+	
+	if ((event->type == SDL_MOUSEBUTTONDOWN || event->type == SDL_MOUSEBUTTONUP) && handle_events) {
 		int x;
 		int y;
 		gwin->get_win()->screen_to_game(event->button.x, event->button.y,
 		                                gwin->get_fastmouse(), x, y);
+		Gump *on_gump = gumpman->find_gump(x, y);
+		Gump_button *button;
 		if (x >= startx && x <= (locx + width) && y >= starty && y <= (starty + height)) {
+			// do not register a mouse up event when closing a gump via checkmark over the bar
+			if (on_gump && (button = on_gump->on_button(x, y)) && button->is_checkmark()) {
+				handle_events = false;
+				return 0;
+			} else if (on_gump) {
+				// do not click "through" a gump
+				return 0;
+			}
 			if (event->type == SDL_MOUSEBUTTONDOWN) {
 				mouse_down(event, x, y);
 			} else if (event->type == SDL_MOUSEBUTTONUP) {
@@ -323,6 +336,9 @@ int ShortcutBar_gump::handle_event(SDL_Event *event) {
 			}
 			return 1;
 		}
+	} else {
+		handle_events = true;
+		return 0;
 	}
 	return 0;
 }

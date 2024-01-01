@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,16 +27,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 class Gump_button;
 
 class Gamemenu_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(Gamemenu_gump)
-
 private:
 	enum button_ids {
 	    id_first = 0,
 	    id_load_save = id_first,
 	    id_video_options,
 	    id_audio_options,
-	    id_gameplay_options,
-	    id_misc_options,
+	    id_game_display_options,
+	    id_game_engine_options,
 	    id_input,
 	    id_quit,
 	    id_count
@@ -65,8 +63,8 @@ public:
 	void loadsave();
 	void video_options();
 	void audio_options();
-	void gameplay_options();
-	void misc_options();
+	void game_display_options();
+	void game_engine_options();
 	void input_options();
 
 	static void do_exult_menu();

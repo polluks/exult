@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,13 +20,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <config.h>
 #endif
 
-#include "SDL_events.h"
-
 #include "Gamemenu_gump.h"
 #include "AudioOptions_gump.h"
 #include "VideoOptions_gump.h"
-#include "GameplayOptions_gump.h"
-#include "MiscOptions_gump.h"
+#include "GameDisplayOptions_gump.h"
+#include "GameEngineOptions_gump.h"
 #include "InputOptions_gump.h"
 #include "Gump_button.h"
 #include "Yesno_gump.h"
@@ -50,9 +48,9 @@ static const int colx = 31;
 static const char *loadsavetext = "Load/Save Game";
 static const char *videoopttext = "Video Options";
 static const char *audioopttext = "Audio Options";
-static const char *gameopttext = "Gameplay Options";
-static const char *misctext = "Misc Options";
-static const char *inputtext = "Input Options";
+static const char *displaytext = "Game Display";
+static const char *enginetext = "Game Engine";
+static const char *inputtext = "Game Input";
 #ifndef __IPHONEOS__
 static const char *quitmenutext = "Quit to Menu";
 static const char *quittext = "Quit";
@@ -61,7 +59,7 @@ static const char *quittext = "Quit";
 using Gamemenu_button = CallbackTextButton<Gamemenu_gump>;
 
 Gamemenu_gump::Gamemenu_gump() : Modal_gump(nullptr, EXULT_FLX_GAMEMENU_SHP, SF_EXULT_FLX) {
-	set_object_area(Rectangle(0, 0, 0, 0), 8, 95);
+	set_object_area(TileRect(0, 0, 0, 0), 8, 95);
 
 	int y = 0;
 	if (!gwin->is_in_exult_menu())
@@ -71,10 +69,10 @@ Gamemenu_gump::Gamemenu_gump() : Modal_gump(nullptr, EXULT_FLX_GAMEMENU_SHP, SF_
 	        videoopttext, colx, rowy[y++], 108, 11);
 	buttons[id_audio_options] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::audio_options,
 	        audioopttext, colx, rowy[y++], 108, 11);
-	buttons[id_gameplay_options] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::gameplay_options,
-	        gameopttext, colx, rowy[y++], 108, 11);
-	buttons[id_misc_options] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::misc_options,
-	        misctext, colx, rowy[y++], 108, 11);
+	buttons[id_game_engine_options] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::game_engine_options,
+	        enginetext, colx, rowy[y++], 108, 11);
+	buttons[id_game_display_options] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::game_display_options,
+	        displaytext, colx, rowy[y++], 108, 11);
 	buttons[id_input] = std::make_unique<Gamemenu_button>(this, &Gamemenu_gump::input_options,
 	        inputtext, colx, rowy[y++], 108, 11);
 #ifndef __IPHONEOS__
@@ -123,14 +121,14 @@ void Gamemenu_gump::audio_options() {
 	delete aud_opts;
 }
 
-void Gamemenu_gump::gameplay_options() {
-	auto *gp_opts = new GameplayOptions_gump();
+void Gamemenu_gump::game_display_options() {
+	auto *gp_opts = new GameDisplayOptions_gump();
 	gumpman->do_modal_gump(gp_opts, Mouse::hand);
 	delete gp_opts;
 }
 
-void Gamemenu_gump::misc_options() {
-	auto *cbt_opts = new MiscOptions_gump();
+void Gamemenu_gump::game_engine_options() {
+	auto *cbt_opts = new GameEngineOptions_gump();
 	gumpman->do_modal_gump(cbt_opts, Mouse::hand);
 	delete cbt_opts;
 }

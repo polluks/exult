@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013  The Exult Team
+Copyright (C) 2000-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -50,11 +50,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "AudioMixer.h"
 #include "OggAudioSample.h"
 
-using std::cerr;
 using std::cout;
 using std::endl;
 using std::string;
-using std::strcpy;
 
 //
 // Midi devices types and conversions
@@ -90,6 +88,29 @@ using std::strcpy;
 
 #define SEQ_NUM_MUSIC	0
 #define SEQ_NUM_SFX		1
+
+static std::unique_ptr<IDataSource> open_music_flex(const std::string& flex, int num) {
+	// Try in patch dir first.
+	string pflex("<PATCH>/");
+	size_t prefix_len = 0;
+	if (flex[0] == '<')
+	{
+		prefix_len = flex.find(">/");
+		if (prefix_len != string::npos)
+			prefix_len += 2;
+		else
+			prefix_len = 0;
+	}
+
+	pflex += flex.c_str() + prefix_len;
+	if (is_system_path_defined("<BUNDLE>")) {
+		string bflex("<BUNDLE>/");
+		bflex += flex.c_str() + prefix_len;
+		return std::make_unique<IExultDataSource>(flex, bflex, pflex, num);
+	} else {
+		return std::make_unique<IExultDataSource>(flex, pflex, num);
+	}
+}
 
 void	MyMidiPlayer::start_music(int num,bool repeat,std::string flex)
 {
@@ -153,28 +174,7 @@ void	MyMidiPlayer::start_music(int num,bool repeat,std::string flex)
 		else if (flex == MAINSHP_FLX) num--;
 	}
 
-	// Try in patch dir first.
-	string pflex("<PATCH>/");
-	size_t prefix_len = 0;
-	if (flex[0] == '<')
-	{
-		prefix_len = flex.find(">/");
-		if (prefix_len != string::npos)
-			prefix_len += 2;
-		else
-			prefix_len = 0;
-	}
-
-	pflex += flex.c_str() + prefix_len;
-	std::unique_ptr<IDataSource> mid_data;
-	if (is_system_path_defined("<BUNDLE>")) {
-		string bflex("<BUNDLE>/");
-		bflex += flex.c_str() + prefix_len;
-		mid_data = std::make_unique<IExultDataSource>(flex, bflex, pflex, num);
-	} else {
-		mid_data = std::make_unique<IExultDataSource>(flex, pflex, num);
-	}
-
+	std::unique_ptr<IDataSource> mid_data = open_music_flex(flex, num);
 	// Extra safety.
 	if (!mid_data->getSize())
 	{
@@ -272,6 +272,7 @@ int MyMidiPlayer::setup_timbre_for_track(std::string &str)
 
 	// SI
 	else if (str == MAINSHP_FLX) lib = TIMBRE_LIB_MAINMENU;
+	else if (str == EXULT_SI_FLX) lib = TIMBRE_LIB_INTRO;
 	else if (str == R_SINTRO) lib = TIMBRE_LIB_INTRO;
 	else if (str == A_SINTRO) lib = TIMBRE_LIB_INTRO;
 	else if (str == R_SEND) lib = TIMBRE_LIB_ENDGAME;
@@ -420,7 +421,7 @@ bool MyMidiPlayer::is_track_playing(int num)
 	return false;
 }
 
-int MyMidiPlayer::get_current_track()
+int MyMidiPlayer::get_current_track() const
 {
 	if (current_track == -1) return -1;
 
@@ -507,7 +508,7 @@ bool MyMidiPlayer::init_device(bool timbre_load)
 	string	s;
 	string	driver_default = "default";
 
-	bool music = Audio::get_ptr()->is_music_enabled();
+	const bool music = Audio::get_ptr()->is_music_enabled();
 
 	if (!music) s = "no";
 	else s = "yes";
@@ -563,9 +564,8 @@ bool MyMidiPlayer::init_device(bool timbre_load)
 	else
 		std::cout << "Never" << std::endl;
 
-	bool sfx = false;
 #ifdef ENABLE_MIDISFX
-	sfx = Audio::get_ptr()->are_effects_enabled();
+	const bool sfx = Audio::get_ptr()->are_effects_enabled();
 
 	// Effects conversion
 	config->value("config/audio/effects/convert",s,"gs");
@@ -584,6 +584,8 @@ bool MyMidiPlayer::init_device(bool timbre_load)
 		effects_conversion = XMIDIFILE_CONVERT_GS127_TO_GS;
 		config->set("config/audio/effects/convert","gs",true);
 	}
+#else
+	const bool sfx = false;
 #endif
 
 	// no need for a MIDI device (for now)
@@ -637,7 +639,7 @@ bool MyMidiPlayer::init_device(bool timbre_load)
 // Check for true mt32, mt32emu or fakemt32
 // primarily for the mt32 background music tracks
 
-bool MyMidiPlayer::is_mt32()
+bool MyMidiPlayer::is_mt32() const
 {
 	return midi_driver && (midi_driver->isMT32() ||
 		get_music_conversion() == XMIDIFILE_CONVERT_NOCONVERSION ||
@@ -645,7 +647,7 @@ bool MyMidiPlayer::is_mt32()
 		!midi_driver->isFMSynth();
 }
 
-bool MyMidiPlayer::is_adlib()
+bool MyMidiPlayer::is_adlib() const
 {
 	return midi_driver && (midi_driver->isFMSynth());
 }
@@ -767,6 +769,10 @@ bool MyMidiPlayer::ogg_play_track(const std::string& filename, int num, bool rep
 			snprintf(outputstr, 255, "%02dbg.ogg", num);
 			ogg_name = outputstr;
 			}
+		else if (filename == EXULT_BG_FLX)
+			{
+			ogg_name = filename;
+			}
 		}
 	else if (Game::get_game_type() == SERPENT_ISLE)
 		{
@@ -794,6 +800,10 @@ bool MyMidiPlayer::ogg_play_track(const std::string& filename, int num, bool rep
 				ogg_name = outputstr;
 				}
 			}
+		else if (filename == EXULT_SI_FLX)
+			{
+			ogg_name = filename;
+			}
 		}
 	else
 		{
@@ -803,21 +813,30 @@ bool MyMidiPlayer::ogg_play_track(const std::string& filename, int num, bool rep
 		basepath = "<STATIC>/music/";
 		}
 
-	if (ogg_name.empty()) return false;
+	if (ogg_name.empty()) {
+		return false;
+	}
 
-	if (U7exists("<PATCH>/music/" + ogg_name))
-		ogg_name = get_system_path("<PATCH>/music/" + ogg_name);
-	else if (is_system_path_defined("<BUNDLE>") &&
-	         U7exists("<BUNDLE>/music/" + ogg_name))
-		ogg_name = get_system_path("<BUNDLE>/music/" + ogg_name);
-	else
-		ogg_name = get_system_path(basepath + ogg_name);
+	const bool flex_source = ogg_name == filename;
+	auto ds = [&ogg_name, &basepath, num, flex_source]() -> std::unique_ptr<IDataSource> {
+		if (flex_source) {
+			return open_music_flex(ogg_name, num);
+		}
+		if (U7exists("<PATCH>/music/" + ogg_name)) {
+			ogg_name = get_system_path("<PATCH>/music/" + ogg_name);
+		} else if (is_system_path_defined("<BUNDLE>") &&
+				U7exists("<BUNDLE>/music/" + ogg_name)) {
+			ogg_name = get_system_path("<BUNDLE>/music/" + ogg_name);
+		} else {
+			ogg_name = get_system_path(basepath + ogg_name);
+		}
+		return std::make_unique<IFileDataSource>(ogg_name);
+	}();
 
 #ifdef DEBUG
 	cout << "OGG audio: Music track " << ogg_name << endl;
 #endif
 
-	auto ds = std::make_unique<IFileDataSource>(ogg_name.c_str());
 	if (!ds->good()) {
 		return false;
 	}
@@ -853,7 +872,7 @@ void MyMidiPlayer::ogg_stop_track()
 	}
 }
 
-bool MyMidiPlayer::ogg_is_playing()
+bool MyMidiPlayer::ogg_is_playing() const
 {
 	if (ogg_instance_id != -1) {
 		Pentagram::AudioMixer *mixer = Pentagram::AudioMixer::get_instance();

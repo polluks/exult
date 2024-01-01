@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -79,9 +79,8 @@ void Gump_button::paint(
 		py = parent->get_y();
 	}
 
-	int prev_frame = get_framenum();
+	const int prev_frame = get_framenum();
 	set_frame(prev_frame + (is_pushed() ? 1 : 0));
 	paint_shape(x + px, y + py);
 	set_frame(prev_frame);
-
 }

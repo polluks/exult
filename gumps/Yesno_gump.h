@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,16 +23,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "Modal_gump.h"
 
-#include <SDL.h>
-
 class Yesno_button;
 
 /*
  *  A yes/no box.
  */
 class Yesno_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(Yesno_gump)
-
 protected:
 	static short yesx, yesnoy, nox; // Coords. of the buttons.
 	std::string text;           // Text of question.  It is drawn in

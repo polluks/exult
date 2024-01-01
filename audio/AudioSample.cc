@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2005 The Pentagram team
-Copyright (C) 2010-2013 The Exult Team
+Copyright (C) 2010-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,10 +25,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 namespace Pentagram {
 
-AudioSample::AudioSample(std::unique_ptr<uint8[]> buffer_, uint32 size_) : 
-		sample_rate(0), bits(0), stereo(false), 
-		frame_size(0), decompressor_size(0), decompressor_align(0), length(0), 
-		buffer_size(size_), buffer(std::move(buffer_)), refcount(1)
+AudioSample::AudioSample(std::unique_ptr<uint8[]> buffer_, uint32 size_) :
+		bits(0), frame_size(0), decompressor_size(0), decompressor_align(0),
+		length(0), buffer_size(size_), buffer(std::move(buffer_)), refcount(1),
+		sample_rate(0), stereo(false)
 {
 }
 AudioSample *AudioSample::createAudioSample(std::unique_ptr<uint8[]> data, uint32 size)

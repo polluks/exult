@@ -1,7 +1,7 @@
 /*
  *  combat.h - Combat scheduling.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -66,6 +66,7 @@ protected:
 	unsigned int summon_time;
 	unsigned int invisible_time;
 	unsigned int dex_points;    // Need these to attack.
+    unsigned int strike_blocked;  // # failures to get a clear path to strike.
 	int alignment;          // So we can tell if it changed.
 
 	void start_battle();        // Play music at start of battle.
@@ -74,6 +75,11 @@ protected:
 	bool be_invisible();
 	virtual void find_opponents();
 	// Find attacker of protected member.
+	std::list<Game_object_weak>::iterator find_weakest_opponent();
+	std::list<Game_object_weak>::iterator find_strongest_opponent();
+	std::list<Game_object_weak>::iterator find_nearest_opponent();
+	std::list<Game_object_weak>::iterator find_random_opponent();
+	std::list<Game_object_weak>::iterator find_attacked_opponent();
 	std::list<Game_object_weak>::iterator find_protected_attacker();
 	Game_object *find_foe(int mode);// Find a new opponent.
 	Game_object *find_foe();

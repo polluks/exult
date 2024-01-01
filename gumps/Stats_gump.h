@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -29,8 +29,6 @@ class Actor;
  *  A rectangular area showing a character's statistics:
  */
 class Stats_gump : public Gump {
-	UNREPLICATABLE_CLASS(Stats_gump)
-
 protected:
 	Actor *get_actor() {
 		return reinterpret_cast<Actor *>(container);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002  The Exult Team
+ *  Copyright (C) 2002-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -137,13 +137,13 @@ static void get_plural_name(
 string Game_object::get_name(
 ) const {
 	const Shape_info &info = get_info();
-	int qual = info.has_quality() && !info.is_npc() ? get_quality() : -1;
+	const int qual = info.has_quality() && !info.is_npc() ? get_quality() : -1;
 	const Frame_name_info *nminf = info.get_frame_name(get_framenum(), qual);
-	int shnum = get_shapenum();
+	const int shnum = get_shapenum();
 	const char *name;
 	const char *shpname = (shnum >= 0 && shnum < get_num_item_names()) ?
 	                      get_item_name(shnum) : nullptr;
-	int type = nminf ? nminf->get_type() : -255;
+	const int type = nminf ? nminf->get_type() : -255;
 	int msgid;
 	if (type < 0 && type != -255)   // This is a "catch all" default.
 		return "";  // None.
@@ -154,7 +154,7 @@ string Game_object::get_name(
 	else if (!info.has_quality() && !info.is_body_shape())
 		name = shpname;     // Use default name for these.
 	else {
-		int othermsg = nminf->get_othermsg();
+		const int othermsg = nminf->get_othermsg();
 		bool defname = false;
 		string msg;
 		string other;

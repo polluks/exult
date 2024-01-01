@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -42,12 +42,12 @@ static const int rowy[7] = {15, 29, 42, 73, 87, 93, 106};
  */
 CombatStats_gump::CombatStats_gump(int initx, int inity) :
 	Gump(nullptr, initx, inity, game->get_shape("gumps/cstats/1")) {
-	set_object_area(Rectangle(0, 0, 0, 0), 7, 95);
+	set_object_area(TileRect(0, 0, 0, 0), 7, 95);
 
 
 	party_size = gwin->get_party(party, 1);
 
-	int shnum = game->get_shape("gumps/cstats/1") + party_size - 1;
+	const int shnum = game->get_shape("gumps/cstats/1") + party_size - 1;
 	ShapeID::set_shape(shnum, 0);
 
 	int i;  // Blame MSVC
@@ -71,7 +71,7 @@ void CombatStats_gump::paint() {
 	Gump::paint();
 
 	if (gwin->failed_copy_protection()) {
-		int oinkx = 91;
+		const int oinkx = 91;
 		for (int i = 0; i < party_size; i++) {
 			sman->paint_text(2, "Oink", x + oinkx + i * coldx, y + rowy[1]);
 			sman->paint_text(2, "Oink", x + oinkx + i * coldx, y + rowy[2]);

@@ -1,6 +1,7 @@
 /* 
  * Copyright (C) 2001-2011 The ScummVM project
  * Copyright (C) 2005 The Pentagram Team
+ * Copyright (C) 2006-2022 The Exult Team
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -40,9 +41,10 @@ public:
 
 protected:
 	// Because GCC complains about casting from const to non-const...
-	void setInt(const char *name, int val);
-	void setNum(const char *name, double val);
-	void setStr(const char *name, const char *val);
+	int setInt(const char *name, int val);
+	int setNum(const char *name, double val);
+	int setStr(const char *name, const char *val);
+	int getStr(const char *name, char **pval);
 
 	// LowLevelMidiDriver implementation
 	int open() override;

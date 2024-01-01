@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,53 +23,33 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wparentheses"
-#if !defined(__llvm__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-#else
-#pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
-#endif
-#endif  // __GNUC__
-#include <gtk/gtk.h>
-#ifdef XWIN
-#include <gdk/gdkx.h>
-#endif
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif  // __GNUC__
-#include "gtk_redefines.h"
-
-#include <glib.h>
 #include "paledit.h"
+
+#include "shapefile.h"
 #include "u7drag.h"
 #include "utils.h"
-#include <iostream>
-#include <iomanip>
+
+#include <glib.h>
+
 #include <cctype>
 #include <cstdio>
 #include <cstring>
-#include "studio.h"
-#include "shapefile.h"
-#include "ignore_unused_variable_warning.h"
+#include <iomanip>
+#include <iostream>
 
-using   std::cout;
-using   std::endl;
-using   std::string;
-using   std::vector;
-using   std::ostream;
-using   std::ofstream;
-using   std::setw;
-using   std::ifstream;
-using   std::make_unique;
-using   EStudio::Prompt;
-using   EStudio::Alert;
+using EStudio::Alert;
+using EStudio::Prompt;
+using std::cout;
+using std::endl;
+using std::ifstream;
+using std::make_unique;
+using std::ofstream;
+using std::ostream;
+using std::setw;
+using std::string;
 
 /*
  *  Write out a single palette to a buffer.
@@ -77,12 +57,12 @@ using   EStudio::Alert;
 
 static void Write_palette(
     unsigned char *buf,     // 3*256 bytes.
-    GdkRgbCmap *pal         // Palette to write.
+    ExultRgbCmap *pal       // Palette to write.
 ) {
 	for (int i = 0; i < 256; i++) {
-		int r = (pal->colors[i] >> 16) & 255;
-		int g = (pal->colors[i] >> 8) & 255;
-		int b = pal->colors[i] & 255;
+		const int r = (pal->colors[i] >> 16) & 255;
+		const int g = (pal->colors[i] >> 8) & 255;
+		const int b = pal->colors[i] & 255;
 		buf[3 * i] = r / 4; // Range 0-63.
 		buf[3 * i + 1] = g / 4;
 		buf[3 * i + 2] = b / 4;
@@ -96,16 +76,44 @@ static void Write_palette(
 inline void Palette_edit::show(
     int x, int y, int w, int h  // Area to blit.
 ) {
-	int stride = draw->allocation.width;
-	gdk_draw_indexed_image(draw->window, drawgc, x, y, w, h,
-	                       GDK_RGB_DITHER_NORMAL,
-	                       image + y * stride + x,
-	                       stride, palettes[cur_pal]);
-	if (selected >= 0)      // Show selected.
+	GtkAllocation alloc = {0, 0, 0, 0};
+	gtk_widget_get_allocation(draw, &alloc);
+	if (drawgc != nullptr) {   // In expose Callback
+		const int bw = alloc.width  / 16;
+		const int bh = alloc.height / 16;
+		const int rw = alloc.width  % 16;
+		const int rh = alloc.height % 16;
+		// Two segments intersect iff neither is entirely right of the other
+		for (int ly = 0; ly < 16; ly++) {
+			const int yp = (ly * bh) + (ly <= rh ? ly : rh);
+			const int hp = bh + (ly <= rh ? 1 : 0);
+			if ((yp <= (y + h)) && (y <= (yp + hp))) {
+				for (int lx = 0; lx < 16; lx++) {
+					const int xp = (lx * bw) + (lx <= rw ? lx : rw);
+					const int wp = bw + (lx <= rw ? 1 : 0);
+					if ((xp <= (x + w)) && (x <= (xp + wp))) {
+						const guint32 color = palettes[cur_pal]->colors[lx + ly * 16];
+						cairo_set_source_rgb(drawgc,
+						                     ((color >> 16) & 255) / 255.0,
+						                     ((color >> 8) & 255) / 255.0,
+						                     (color & 255) / 255.0);
+						cairo_rectangle(drawgc, xp, yp, wp, hp);
+						cairo_fill(drawgc);
+					}
+				}
+			}
+		}
+	}
+	if ((selected >= 0) && (drawgc != nullptr)) {   // Show selected.
 		// Draw yellow box.
-		gdk_draw_rectangle(draw->window, drawgc, FALSE,
-		                   selected_box.x, selected_box.y,
-		                   selected_box.w, selected_box.h);
+		cairo_set_line_width(drawgc, 1.0);
+		cairo_set_source_rgb(drawgc,
+		                     ((drawfg >> 16) & 255) / 255.0,
+		                     ((drawfg >> 8) & 255) / 255.0,
+		                     (drawfg & 255) / 255.0);
+		cairo_rectangle(drawgc, selected_box.x, selected_box.y, selected_box.w, selected_box.h);
+		cairo_stroke(drawgc);
+	}
 }
 
 /*
@@ -128,13 +136,12 @@ void Palette_edit::select(
  *  Load/reload from file.
  */
 
-void Palette_edit::load(
+void Palette_edit::load_internal(
 ) {
 	// Free old.
-	for (auto it = palettes.begin();
-	        it != palettes.end(); ++it)
-		gdk_rgb_cmap_free(*it);
-	unsigned cnt = flex_info->size();
+	for (auto *palette : palettes)
+		delete palette;
+	const unsigned cnt = flex_info->size();
 	palettes.resize(cnt);       // Set size of list.
 	if (!cnt)           // No palettes?
 		new_palette();      // Create 1 blank palette.
@@ -142,13 +149,12 @@ void Palette_edit::load(
 		for (unsigned pnum = 0; pnum < cnt; pnum++) {
 			size_t len;
 			unsigned char *buf = flex_info->get(pnum, len);
-			guint32 colors[256];
+			palettes[pnum] = new ExultRgbCmap;
 			for (size_t i = 0; i < len / 3; i++)
-				colors[i] = (buf[3 * i] << 16) * 4 +
+				palettes[pnum]->colors[i] = (buf[3 * i] << 16) * 4 +
 				            (buf[3 * i + 1] << 8) * 4 + buf[3 * i + 2] * 4;
 			for (size_t i = len / 3; i < 256; i++)
-				colors[i] = 0;
-			palettes[pnum] = gdk_rgb_cmap_new(colors, 256);
+				palettes[pnum]->colors[i] = 0;
 		}
 	}
 }
@@ -159,36 +165,24 @@ void Palette_edit::load(
 
 void Palette_edit::render(
 ) {
-	int neww = draw->allocation.width;
-	int newh = draw->allocation.height;
+	GtkAllocation alloc = {0, 0, 0, 0};
+	gtk_widget_get_allocation(draw, &alloc);
+	const int neww = alloc.width;
+	const int newh = alloc.height;
 	// Changed size?
 	if (neww != width || newh != height) {
-		delete [] image;
 		width = neww;
 		height = newh;
-		image = new guchar[width * height];
 	}
 	// Figure cell size.
-	int eachw = width / 16;
-	int eachh = height / 16;
+	const int eachw = width / 16;
+	const int eachh = height / 16;
 	// Figure extra pixels.
-	int extraw = width % 16;
-	int extrah = height % 16;
-	int color = 0;          // Color index.
-	int cury = 0;
-	unsigned char *out = image;
-	for (int y = 0; y < 16; y++, color += 16) {
-		int stopy = cury + eachh + (y < extrah);
-		for (; cury < stopy; cury++)
-			for (int x = 0, c = color; x < 16; x++, c++) {
-				int cntx = eachw + (x < extraw);
-				while (cntx--)
-					*out++ = c;
-			}
-	}
+	const int extraw = width % 16;
+	const int extrah = height % 16;
 	if (selected >= 0) {    // Update selected box.
-		int selx = selected % 16;
-		int sely = selected / 16;
+		const int selx = selected % 16;
+		const int sely = selected / 16;
 		selected_box.x = selx * eachw;
 		selected_box.y = sely * eachh;
 		selected_box.w = eachw;
@@ -205,67 +199,7 @@ void Palette_edit::render(
 			selected_box.y += extrah;
 		select(selected);
 	}
-}
-
-/*
- *  Color box was closed.
- */
-
-int Palette_edit::color_closed(
-    GtkWidget *dlg,
-    GdkEvent *event,
-    gpointer data
-) {
-	ignore_unused_variable_warning(dlg, event);
-	cout << "color_closed" << endl;
-	auto *paled = static_cast<Palette_edit *>(data);
-	paled->colorsel = nullptr;
-	return FALSE;
-}
-
-/*
- *  'Cancel' was hit in the color selector.
- */
-
-void Palette_edit::color_cancel(
-    GtkWidget *dlg,
-    gpointer data
-) {
-	ignore_unused_variable_warning(dlg);
-	auto *paled = static_cast<Palette_edit *>(data);
-	if (paled->colorsel)
-		gtk_widget_destroy(GTK_WIDGET(paled->colorsel));
-	paled->colorsel = nullptr;
-}
-
-/*
- *  'Okay' was hit in the color selector.
- */
-
-void Palette_edit::color_okay(
-    GtkWidget *dlg,
-    gpointer data
-) {
-	ignore_unused_variable_warning(dlg);
-	auto *paled = static_cast<Palette_edit *>(data);
-	if (paled->colorsel) {
-		gdouble rgb[4];
-		gtk_color_selection_get_color(
-		    GTK_COLOR_SELECTION(paled->colorsel->colorsel), rgb);
-		auto r = static_cast<unsigned char>(rgb[0] * 256);
-		auto g = static_cast<unsigned char>(rgb[1] * 256);
-		auto b = static_cast<unsigned char>(rgb[2] * 256);
-		if (paled->selected >= 0)
-			paled->palettes[paled->cur_pal]->colors[
-			    paled->selected] =
-			        (r << 16) + (g << 8) + b;
-		gtk_widget_destroy(GTK_WIDGET(paled->colorsel));
-		// Send to flex file.
-		paled->update_flex(paled->cur_pal);
-		paled->render();
-		paled->show();
-	}
-	paled->colorsel = nullptr;
+	gtk_widget_queue_draw(draw);
 }
 
 /*
@@ -279,25 +213,30 @@ void Palette_edit::double_clicked(
 		return;         // Nothing selected.
 	char buf[150];          // Show new selection.
 	g_snprintf(buf, sizeof(buf), "Color %d (0x%02x)", selected, selected);
-	colorsel = GTK_COLOR_SELECTION_DIALOG(
-	               gtk_color_selection_dialog_new(buf));
-	// Set mouse click handler.
-	gtk_signal_connect(GTK_OBJECT(colorsel->ok_button), "clicked",
-	                   GTK_SIGNAL_FUNC(color_okay), this);
-	gtk_signal_connect(GTK_OBJECT(colorsel->cancel_button), "clicked",
-	                   GTK_SIGNAL_FUNC(color_cancel), this);
-	// Set delete handler.
-	gtk_signal_connect(GTK_OBJECT(colorsel), "delete_event",
-	                   GTK_SIGNAL_FUNC(color_closed), this);
+	colorsel = GTK_COLOR_CHOOSER_DIALOG(
+	               gtk_color_chooser_dialog_new(buf, nullptr));
 	// Get color.
-	guint32 c = palettes[cur_pal]->colors[selected];
-	gdouble rgb[3];
-	rgb[0] = ((c >> 16) & 0xff) / 256.0;
-	rgb[1] = ((c >>  8) & 0xff) / 256.0;
-	rgb[2] = ((c >>  0) & 0xff) / 256.0;
-	gtk_color_selection_set_color(GTK_COLOR_SELECTION(colorsel->colorsel),
-	                              rgb);
-	gtk_widget_show(GTK_WIDGET(colorsel));
+	const guint32 c = palettes[cur_pal]->colors[selected];
+	GdkRGBA  rgba;
+	rgba.red   = ((c >> 16) & 0xff) / 255.0;
+	rgba.green = ((c >>  8) & 0xff) / 255.0;
+	rgba.blue  = ((c >>  0) & 0xff) / 255.0;
+	rgba.alpha = 1.0;
+	gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(colorsel), &rgba);
+	if (gtk_dialog_run(GTK_DIALOG(colorsel)) == GTK_RESPONSE_OK) {
+		gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(colorsel), &rgba);
+		auto r = static_cast<unsigned char>(rgba.red   * 255.0);
+		auto g = static_cast<unsigned char>(rgba.green * 255.0);
+		auto b = static_cast<unsigned char>(rgba.blue  * 255.0);
+		if (selected >= 0)
+			palettes[cur_pal]->colors[selected] =
+			    (r << 16) + (g << 8) + b;
+		// Send to flex file.
+		update_flex(cur_pal);
+		render();
+	}
+	gtk_widget_destroy(GTK_WIDGET(colorsel));
+	colorsel = nullptr;
 }
 
 /*
@@ -309,13 +248,11 @@ gint Palette_edit::configure(
     GdkEventConfigure *event,
     gpointer data           // ->Palette_edit
 ) {
-	ignore_unused_variable_warning(event);
+	ignore_unused_variable_warning(event, widget);
 	auto *paled = static_cast<Palette_edit *>(data);
 	if (!paled->width) {    // First time?
-		paled->drawgc = gdk_gc_new(widget->window);
 		// Foreground = yellow.
-		gdk_rgb_gc_set_foreground(paled->drawgc,
-		                          (255 << 16) + (255 << 8));
+		paled->drawfg = (255 << 16) + (255 << 8);
 	}
 	paled->render();
 	return TRUE;
@@ -327,13 +264,16 @@ gint Palette_edit::configure(
 
 gint Palette_edit::expose(
     GtkWidget *widget,      // The view window.
-    GdkEventExpose *event,
+    cairo_t *cairo,
     gpointer data           // ->Palette_edit.
 ) {
 	ignore_unused_variable_warning(widget);
 	auto *paled = static_cast<Palette_edit *>(data);
-	paled->show(event->area.x, event->area.y, event->area.width,
-	            event->area.height);
+	paled->set_graphic_context(cairo);
+	GdkRectangle area = { 0, 0, 0, 0 };
+	gdk_cairo_get_clip_rectangle(cairo, &area);
+	paled->show(area.x, area.y, area.width, area.height);
+	paled->set_graphic_context(nullptr);
 	return TRUE;
 }
 
@@ -354,19 +294,19 @@ gint Palette_edit::mouse_press(
 
 	if (paled->colorsel)
 		return TRUE;      // Already editing a color.
-	int old_selected = paled->selected;
-	int width = paled->width;
-	int height = paled->height;
-	int eventx = static_cast<int>(event->x);
-	int eventy = static_cast<int>(event->y);
+	const int old_selected = paled->selected;
+	const int width = paled->width;
+	const int height = paled->height;
+	const int eventx = static_cast<int>(event->x);
+	const int eventy = static_cast<int>(event->y);
 	// Figure cell size.
-	int eachw = width / 16;
-	int eachh = height / 16;
+	const int eachw = width / 16;
+	const int eachh = height / 16;
 	// Figure extra pixels.
-	int extraw = width % 16;
-	int extrah = height % 16;
-	int extrax = extraw * (eachw + 1); // Total length of extra-sized boxes.
-	int extray = extrah * (eachh + 1);
+	const int extraw = width % 16;
+	const int extrah = height % 16;
+	const int extrax = extraw * (eachw + 1); // Total length of extra-sized boxes.
+	const int extray = extrah * (eachh + 1);
 	int selx;
 	int sely;         // Gets box indices.
 	if (eventx < extrax)
@@ -384,11 +324,10 @@ gint Palette_edit::mouse_press(
 			paled->double_clicked();
 	} else {
 		paled->render();
-		paled->show();
 	}
 	if (event->button == 3)
-		gtk_menu_popup(GTK_MENU(paled->create_popup()),
-		               nullptr, nullptr, nullptr, nullptr, event->button, event->time);
+		gtk_menu_popup_at_pointer(GTK_MENU(paled->create_popup()),
+		                          reinterpret_cast<GdkEvent *>(event));
 	return TRUE;
 }
 
@@ -409,21 +348,6 @@ void Palette_edit::drag_data_get(
 }
 
 /*
- *  Another app. has claimed the selection.
- */
-
-gint Palette_edit::selection_clear(
-    GtkWidget *widget,      // The view window.
-    GdkEventSelection *event,
-    gpointer data           // ->Palette_edit.
-) {
-	ignore_unused_variable_warning(widget, event, data);
-//	Palette_edit *paled = static_cast<Palette_edit *>(data);
-	cout << "SELECTION_CLEAR" << endl;
-	return TRUE;
-}
-
-/*
  *  Beginning of a drag.
  */
 
@@ -433,7 +357,7 @@ gint Palette_edit::drag_begin(
     gpointer data           // ->Palette_edit.
 ) {
 	ignore_unused_variable_warning(widget, context, data);
-	cout << "In DRAG_BEGIN" << endl;
+	cout << "In DRAG_BEGIN of Palette" << endl;
 	//Palette_edit *paled = static_cast<Palette_edit *>(data);
 	// Maybe someday.
 	return TRUE;
@@ -447,12 +371,11 @@ void Palette_edit::palnum_changed(
     GtkAdjustment *adj,     // The adjustment.
     gpointer data           // ->Shape_chooser.
 ) {
-	auto *ed = static_cast<Palette_edit *>(data);
-	gint newnum = static_cast<gint>(adj->value);
-	ed->show_palette(newnum);
-	ed->render();
-	ed->show();
-	ed->enable_controls();
+	auto *paled = static_cast<Palette_edit *>(data);
+	const gint newnum = static_cast<gint>(gtk_adjustment_get_value(adj));
+	paled->show_palette(newnum);
+	paled->render();
+	paled->enable_controls();
 }
 
 /*
@@ -463,7 +386,8 @@ on_exportbtn_clicked(GtkButton       *button,
                      gpointer         user_data) {
 	ignore_unused_variable_warning(button);
 	Create_file_selection("Export palette to text format",
-	                      "<PATCH>", nullptr, {},
+	                      "<PATCH>", nullptr,
+	                      {},
 	                      GTK_FILE_CHOOSER_ACTION_SAVE,
 	                      Palette_edit::export_palette,
 	                      user_data);
@@ -474,7 +398,8 @@ on_importbtn_clicked(GtkButton       *button,
                      gpointer         user_data) {
 	ignore_unused_variable_warning(button);
 	Create_file_selection("Import palette from text format",
-	                      "<STATIC>", nullptr, {},
+	                      "<STATIC>", nullptr,
+	                      {},
 	                      GTK_FILE_CHOOSER_ACTION_OPEN,
 	                      Palette_edit::import_palette,
 	                      user_data);
@@ -484,29 +409,29 @@ void
 on_insert_btn_clicked(GtkButton       *button,
                       gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	auto *ed = static_cast<Palette_edit *>(user_data);
-	ed->add_palette();
+	auto *paled = static_cast<Palette_edit *>(user_data);
+	paled->add_palette();
 }
 void
 on_remove_btn_clicked(GtkButton       *button,
                       gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	auto *ed = static_cast<Palette_edit *>(user_data);
-	ed->remove_palette();
+	auto *paled = static_cast<Palette_edit *>(user_data);
+	paled->remove_palette();
 }
 void
 on_up_btn_clicked(GtkButton       *button,
                   gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	auto *ed = static_cast<Palette_edit *>(user_data);
-	ed->move_palette(true);
+	auto *paled = static_cast<Palette_edit *>(user_data);
+	paled->move_palette(true);
 }
 void
 on_down_btn_clicked(GtkButton       *button,
                     gpointer         user_data) {
 	ignore_unused_variable_warning(button);
-	auto *ed = static_cast<Palette_edit *>(user_data);
-	ed->move_palette(false);
+	auto *paled = static_cast<Palette_edit *>(user_data);
+	paled->move_palette(false);
 }
 
 /*
@@ -517,100 +442,120 @@ GtkWidget *Palette_edit::create_controls(
 ) {
 	// Create main box.
 	GtkWidget *topframe = gtk_frame_new(nullptr);
+	widget_set_margins(topframe, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(topframe);
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+
+	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(vbox), FALSE);
 	gtk_widget_show(vbox);
 	gtk_container_add(GTK_CONTAINER(topframe), vbox);
 
-	GtkWidget *hbox0 = gtk_hbox_new(FALSE, 0);
+	GtkWidget *hbox0 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(hbox0), FALSE);
+	widget_set_margins(hbox0, 1*HMARGIN, 1*HMARGIN, 1*VMARGIN, 1*VMARGIN);
 	gtk_widget_show(hbox0);
-	gtk_box_pack_start(GTK_BOX(vbox), hbox0, TRUE, TRUE, 2);
+	gtk_box_pack_start(GTK_BOX(vbox), hbox0, TRUE, TRUE, 0);
 	/*
 	 *  The 'Edit' controls.
 	 */
 	GtkWidget *frame = gtk_frame_new("Edit");
+	widget_set_margins(frame, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(frame);
-	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 2);
-	GtkWidget *hbuttonbox = gtk_hbutton_box_new();
+	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 0);
+
+	GtkWidget *hbuttonbox = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
 	gtk_widget_show(hbuttonbox);
 	gtk_container_add(GTK_CONTAINER(frame), hbuttonbox);
 	gtk_button_box_set_layout(GTK_BUTTON_BOX(hbuttonbox),
 	                          GTK_BUTTONBOX_START);
-	gtk_button_box_set_spacing(GTK_BUTTON_BOX(hbuttonbox), 0);
+	gtk_box_set_spacing(GTK_BOX(hbuttonbox), 0);
 
 	insert_btn = gtk_button_new_with_label("New");
+	widget_set_margins(insert_btn, 2*HMARGIN, 1*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(insert_btn);
 	gtk_container_add(GTK_CONTAINER(hbuttonbox), insert_btn);
-	GTK_WIDGET_SET_FLAGS(insert_btn, GTK_CAN_DEFAULT);
+	gtk_widget_set_can_default(GTK_WIDGET(insert_btn), TRUE);
 
 	remove_btn = gtk_button_new_with_label("Remove");
+	widget_set_margins(remove_btn, 1*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(remove_btn);
 	gtk_container_add(GTK_CONTAINER(hbuttonbox), remove_btn);
-	GTK_WIDGET_SET_FLAGS(remove_btn, GTK_CAN_DEFAULT);
-	gtk_signal_connect(GTK_OBJECT(insert_btn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_insert_btn_clicked),
-	                   this);
-	gtk_signal_connect(GTK_OBJECT(remove_btn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_remove_btn_clicked),
-	                   this);
+	gtk_widget_set_can_default(GTK_WIDGET(remove_btn), TRUE);
+
+	g_signal_connect(G_OBJECT(insert_btn), "clicked",
+	                 G_CALLBACK(on_insert_btn_clicked),
+	                 this);
+	g_signal_connect(G_OBJECT(remove_btn), "clicked",
+	                 G_CALLBACK(on_remove_btn_clicked),
+	                 this);
 	/*
 	 *  The 'Move' controls.
 	 */
 	frame = gtk_frame_new("Move");
+	widget_set_margins(frame, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(frame);
-	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 2);
-	GtkWidget *bbox = gtk_hbox_new(TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 0);
+
+	GtkWidget *bbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(bbox), TRUE);
 	gtk_widget_show(bbox);
 	gtk_container_add(GTK_CONTAINER(frame), bbox);
+
 	down_btn = gtk_button_new();
+	widget_set_margins(down_btn, 2*HMARGIN, 1*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(down_btn);
 	gtk_box_pack_start(GTK_BOX(bbox), down_btn, FALSE, FALSE, 0);
-	GTK_WIDGET_SET_FLAGS(down_btn, GTK_CAN_DEFAULT);
-	GtkWidget *arrow = gtk_arrow_new(GTK_ARROW_DOWN, GTK_SHADOW_OUT);
-	gtk_widget_show(arrow);
-	gtk_container_add(GTK_CONTAINER(down_btn), arrow);
+	gtk_widget_set_can_default(GTK_WIDGET(down_btn), TRUE);
+	GtkWidget *arrow = gtk_image_new_from_icon_name("go-down", GTK_ICON_SIZE_BUTTON);
+	gtk_button_set_image(GTK_BUTTON(down_btn), arrow);
 
 	up_btn = gtk_button_new();
+	widget_set_margins(up_btn, 1*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(up_btn);
 	gtk_box_pack_start(GTK_BOX(bbox), up_btn, FALSE, FALSE, 0);
-	GTK_WIDGET_SET_FLAGS(up_btn, GTK_CAN_DEFAULT);
-	arrow = gtk_arrow_new(GTK_ARROW_UP, GTK_SHADOW_OUT);
-	gtk_widget_show(arrow);
-	gtk_container_add(GTK_CONTAINER(up_btn), arrow);
-	gtk_signal_connect(GTK_OBJECT(down_btn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_down_btn_clicked),
-	                   this);
-	gtk_signal_connect(GTK_OBJECT(up_btn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_up_btn_clicked),
-	                   this);
+	gtk_widget_set_can_default(GTK_WIDGET(up_btn), TRUE);
+	arrow = gtk_image_new_from_icon_name("go-up", GTK_ICON_SIZE_BUTTON);
+	gtk_button_set_image(GTK_BUTTON(up_btn), arrow);
+
+	g_signal_connect(G_OBJECT(down_btn), "clicked",
+	                 G_CALLBACK(on_down_btn_clicked),
+	                 this);
+	g_signal_connect(G_OBJECT(up_btn), "clicked",
+	                 G_CALLBACK(on_up_btn_clicked),
+	                 this);
 	/*
 	 *  The 'File' controls.
 	 */
 	frame = gtk_frame_new("File");
+	widget_set_margins(frame, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(frame);
-	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 2);
-	hbuttonbox = gtk_hbutton_box_new();
+	gtk_box_pack_start(GTK_BOX(hbox0), frame, FALSE, FALSE, 0);
+
+	hbuttonbox = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
 	gtk_widget_show(hbuttonbox);
 	gtk_container_add(GTK_CONTAINER(frame), hbuttonbox);
 	gtk_button_box_set_layout(GTK_BUTTON_BOX(hbuttonbox),
 	                          GTK_BUTTONBOX_START);
-	gtk_button_box_set_spacing(GTK_BUTTON_BOX(hbuttonbox), 0);
+	gtk_box_set_spacing(GTK_BOX(hbuttonbox), 0);
 
 	GtkWidget *importbtn = gtk_button_new_with_label("Import");
+	widget_set_margins(importbtn, 2*HMARGIN, 1*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(importbtn);
 	gtk_container_add(GTK_CONTAINER(hbuttonbox), importbtn);
-	GTK_WIDGET_SET_FLAGS(importbtn, GTK_CAN_DEFAULT);
+	gtk_widget_set_can_default(GTK_WIDGET(importbtn), TRUE);
 
 	GtkWidget *exportbtn = gtk_button_new_with_label("Export");
+	widget_set_margins(exportbtn, 1*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(exportbtn);
 	gtk_container_add(GTK_CONTAINER(hbuttonbox), exportbtn);
-	GTK_WIDGET_SET_FLAGS(exportbtn, GTK_CAN_DEFAULT);
-	gtk_signal_connect(GTK_OBJECT(importbtn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_importbtn_clicked),
-	                   this);
-	gtk_signal_connect(GTK_OBJECT(exportbtn), "clicked",
-	                   GTK_SIGNAL_FUNC(on_exportbtn_clicked),
-	                   this);
+	gtk_widget_set_can_default(GTK_WIDGET(exportbtn), TRUE);
+
+	g_signal_connect(G_OBJECT(importbtn), "clicked",
+	                 G_CALLBACK(on_importbtn_clicked),
+	                 this);
+	g_signal_connect(G_OBJECT(exportbtn), "clicked",
+	                 G_CALLBACK(on_exportbtn_clicked),
+	                 this);
 	return topframe;
 }
 
@@ -642,63 +587,71 @@ void Palette_edit::enable_controls(
 void Palette_edit::setup(
 ) {
 	// Put things in a vert. box.
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(vbox), FALSE);
 	gtk_widget_show(vbox);
 	set_widget(vbox);
+
 	// A frame looks nice.
 	GtkWidget *frame = gtk_frame_new(nullptr);
 	gtk_frame_set_shadow_type(GTK_FRAME(frame), GTK_SHADOW_IN);
+	widget_set_margins(frame, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(frame);
 	gtk_box_pack_start(GTK_BOX(vbox), frame, TRUE, TRUE, 0);
+
 	draw = gtk_drawing_area_new();  // Create drawing area window.
-//	gtk_drawing_area_size(GTK_DRAWING_AREA(draw), w, h);
+//	gtk_widget_set_size_request(draw, w, h);
 	// Indicate the events we want.
 	gtk_widget_set_events(draw, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK
-	                      | GDK_POINTER_MOTION_HINT_MASK |
-	                      GDK_BUTTON1_MOTION_MASK);
+	                      | GDK_BUTTON1_MOTION_MASK);
 	// Set "configure" handler.
-	gtk_signal_connect(GTK_OBJECT(draw), "configure_event",
-	                   GTK_SIGNAL_FUNC(configure), this);
-	// Set "expose" handler.
-	gtk_signal_connect(GTK_OBJECT(draw), "expose_event",
-	                   GTK_SIGNAL_FUNC(expose), this);
+	g_signal_connect(G_OBJECT(draw), "configure-event",
+	                 G_CALLBACK(configure), this);
+	// Set "expose-event" - "draw" handler.
+	g_signal_connect(G_OBJECT(draw), "draw",
+	                 G_CALLBACK(expose), this);
 	// Set mouse click handler.
-	gtk_signal_connect(GTK_OBJECT(draw), "button_press_event",
-	                   GTK_SIGNAL_FUNC(mouse_press), this);
+	g_signal_connect(G_OBJECT(draw), "button-press-event",
+	                 G_CALLBACK(mouse_press), this);
 	// Mouse motion.
-	gtk_signal_connect(GTK_OBJECT(draw), "drag_begin",
-	                   GTK_SIGNAL_FUNC(drag_begin), this);
-	gtk_signal_connect(GTK_OBJECT(draw), "drag_data_get",
-	                   GTK_SIGNAL_FUNC(drag_data_get), this);
-	gtk_signal_connect(GTK_OBJECT(draw), "selection_clear_event",
-	                   GTK_SIGNAL_FUNC(selection_clear), this);
+	g_signal_connect(G_OBJECT(draw), "drag-begin",
+	                 G_CALLBACK(drag_begin), this);
+	g_signal_connect(G_OBJECT(draw), "drag-data-get",
+	                 G_CALLBACK(drag_data_get), this);
 	gtk_container_add(GTK_CONTAINER(frame), draw);
+	widget_set_margins(draw, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(draw);
+
 	// At bottom, a status bar.
 	sbar = gtk_statusbar_new();
 	sbar_sel = gtk_statusbar_get_context_id(GTK_STATUSBAR(sbar),
 	                                        "selection");
 	// At the bottom, status bar & frame:
-	GtkWidget *hbox1 = gtk_hbox_new(FALSE, 0);
+	GtkWidget *hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	gtk_box_set_homogeneous(GTK_BOX(hbox1), FALSE);
 	gtk_box_pack_start(GTK_BOX(vbox), hbox1, FALSE, FALSE, 0);
 	gtk_widget_show(hbox1);
 	gtk_box_pack_start(GTK_BOX(hbox1), sbar, TRUE, TRUE, 0);
 	// Palette # to right of sbar.
 	GtkWidget *label = gtk_label_new("Palette #:");
-	gtk_box_pack_start(GTK_BOX(hbox1), label, FALSE, FALSE, 4);
+	widget_set_margins(label, 2*HMARGIN, 1*HMARGIN, 2*VMARGIN, 2*VMARGIN);
+	gtk_box_pack_start(GTK_BOX(hbox1), label, FALSE, FALSE, 0);
 	gtk_widget_show(label);
+
 	// A spin button for palette#.
 	palnum_adj = GTK_ADJUSTMENT(gtk_adjustment_new(0, 0,
 	                            palettes.size() - 1, 1,
 	                            2, 2));
 	pspin = gtk_spin_button_new(palnum_adj, 1, 0);
-	gtk_signal_connect(GTK_OBJECT(palnum_adj), "value_changed",
-	                   GTK_SIGNAL_FUNC(palnum_changed), this);
+	g_signal_connect(G_OBJECT(palnum_adj), "value-changed",
+	                 G_CALLBACK(palnum_changed), this);
+	widget_set_margins(pspin, 1*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_box_pack_start(GTK_BOX(hbox1), pspin, FALSE, FALSE, 0);
 	gtk_widget_show(pspin);
 
 	// Add edit controls to bottom.
 	gtk_box_pack_start(GTK_BOX(vbox), create_controls(), FALSE, FALSE, 0);
+	widget_set_margins(sbar, 2*HMARGIN, 2*HMARGIN, 2*VMARGIN, 2*VMARGIN);
 	gtk_widget_show(sbar);
 	enable_controls();
 }
@@ -709,13 +662,12 @@ void Palette_edit::setup(
 
 void Palette_edit::new_palette(
 ) {
-	guint32 colors[256];        // R, G, B, then all black.
-	memset(&colors[0], 0, sizeof(colors));
-	colors[0] = 255 << 16;
-	colors[1] = 255 << 8;
-	colors[2] = 255;
-	GdkRgbCmap *newpal = gdk_rgb_cmap_new(colors, 256);
-	int index = palettes.size();    // Index of new palette.
+	auto *newpal = new ExultRgbCmap;        // R, G, B, then all black.
+	memset(&newpal->colors[0], 0, 256 * sizeof(guint32));
+	newpal->colors[0] = 255 << 16;
+	newpal->colors[1] = 255 << 8;
+	newpal->colors[2] = 255;
+	const int index = palettes.size();    // Index of new palette.
 	palettes.push_back(newpal);
 	update_flex(index);     // Add to file.
 }
@@ -741,9 +693,9 @@ void Palette_edit::update_flex(
 Palette_edit::Palette_edit(
     Flex_file_info *flinfo      // Flex-file info.
 ) : Object_browser(nullptr, flinfo),
-	flex_info(flinfo), image(nullptr), width(0), height(0),
+	flex_info(flinfo), /* image(nullptr),*/ width(0), height(0),
 	cur_pal(0), colorsel(nullptr) {
-	load();             // Load from file.
+	load_internal();             // Load from file.
 	setup();
 }
 
@@ -753,11 +705,9 @@ Palette_edit::Palette_edit(
 
 Palette_edit::~Palette_edit(
 ) {
-	for (auto it = palettes.begin();
-	        it != palettes.end(); ++it)
-		gdk_rgb_cmap_free(*it);
+	for (auto *palette : palettes)
+		delete palette;
 	gtk_widget_destroy(get_widget());
-	delete [] image;
 }
 
 /*
@@ -781,7 +731,6 @@ void Palette_edit::unselect(
 		selected = -1;
 		if (need_render) {
 			render();
-			show();
 		}
 	}
 }
@@ -795,7 +744,7 @@ void Palette_edit::move_palette(
 ) {
 	if (cur_pal < 0)
 		return;
-	GdkRgbCmap *tmp;
+	ExultRgbCmap *tmp;
 	if (up) {
 		if (cur_pal > 0) {
 			tmp = palettes[cur_pal - 1];
@@ -825,8 +774,8 @@ void Update_range_upper(
     GtkAdjustment *adj,
     int new_upper
 ) {
-	adj->upper = new_upper;
-	gtk_signal_emit_by_name(GTK_OBJECT(adj), "changed");
+	gtk_adjustment_set_upper(adj, new_upper);
+	g_signal_emit_by_name(G_OBJECT(adj), "changed");
 }
 
 /*
@@ -855,7 +804,7 @@ void Palette_edit::remove_palette(
 	            "Do you really want to delete the palette you're viewing?",
 	            "Yes", "No") != 0)
 		return;
-	gdk_rgb_cmap_free(palettes[cur_pal]);
+	delete palettes[cur_pal];
 	palettes.erase(palettes.begin() + cur_pal);
 	flex_info->remove(cur_pal);
 	flex_info->set_modified();
@@ -865,7 +814,6 @@ void Palette_edit::remove_palette(
 	// This will update the display:
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(pspin), cur_pal);
 	render();           // Cur_pal may not have changed.
-	show();
 }
 
 /*
@@ -876,17 +824,17 @@ void Palette_edit::export_palette(
     const char *fname,
     gpointer user_data
 ) {
-	auto *ed = static_cast<Palette_edit *>(user_data);
+	auto *paled = static_cast<Palette_edit *>(user_data);
 	if (U7exists(fname)) {
 		char *msg = g_strdup_printf(
 		                "'%s' already exists.  Overwrite?", fname);
-		int answer = Prompt(msg, "Yes", "No");
+		const int answer = Prompt(msg, "Yes", "No");
 		g_free(msg);
 		if (answer != 0)
 			return;
 	}
 	// Write out current palette.
-	GdkRgbCmap *pal = ed->palettes[ed->cur_pal];
+	ExultRgbCmap *pal = paled->palettes[paled->cur_pal];
 	ofstream out(fname);        // OKAY that it's a 'text' file.
 	out << "GIMP Palette" << endl;
 	out << "# Exported from ExultStudio" << endl;
@@ -894,11 +842,11 @@ void Palette_edit::export_palette(
 	for (i = 255; i > 0; i--)
 		if (pal->colors[i] != 0)
 			break;
-	int last_color = i;
+	const int last_color = i;
 	for (i = 0; i <= last_color; i++) {
-		int r = (pal->colors[i] >> 16) & 255;
-		int g = (pal->colors[i] >> 8) & 255;
-		int b = pal->colors[i] & 255;
+		const int r = (pal->colors[i] >> 16) & 255;
+		const int g = (pal->colors[i] >> 8) & 255;
+		const int b = pal->colors[i] & 255;
 		out << setw(3) << r << ' ' << setw(3) << g << ' ' <<
 		    setw(3) << b << endl;
 	}
@@ -913,15 +861,15 @@ void Palette_edit::import_palette(
     const char *fname,
     gpointer user_data
 ) {
-	auto *ed = static_cast<Palette_edit *>(user_data);
+	auto *paled = static_cast<Palette_edit *>(user_data);
 	char *msg = g_strdup_printf(
 	                "Overwrite current palette from '%s'?", fname);
-	int answer = Prompt(msg, "Yes", "No");
+	const int answer = Prompt(msg, "Yes", "No");
 	g_free(msg);
 	if (answer != 0)
 		return;
 	// Read in current palette.
-	GdkRgbCmap *pal = ed->palettes[ed->cur_pal];
+	ExultRgbCmap *pal = paled->palettes[paled->cur_pal];
 	ifstream in(fname);     // OKAY that it's a 'text' file.
 	char buf[256];
 	in.getline(buf, sizeof(buf));   // Skip 1st line.
@@ -946,8 +894,7 @@ void Palette_edit::import_palette(
 	}
 	in.close();
 	// Add to file.
-	ed->update_flex(ed->cur_pal);
-	ed->render();
-	ed->show();
+	paled->update_flex(paled->cur_pal);
+	paled->render();
 }
 

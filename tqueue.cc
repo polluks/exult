@@ -1,7 +1,7 @@
 /*
  *  tqueue.cc - A queue of time-based events for animation.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,7 +24,16 @@
 
 #include "tqueue.h"
 #include <algorithm>
-#include <SDL_timer.h>
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 /*
  *  Remove all entries.
@@ -32,13 +41,10 @@
 
 void Time_queue::clear(
 ) {
-	Temporal_sequence::iterator it;
-	while ((it = data.begin()) != data.end()) {
-		Queue_entry ent = *it;
-		Time_sensitive *obj = ent.handler;
-		data.erase(it);
-		obj->dequeue();
+	for (auto& ent : data) {
+		ent.handler->dequeue();
 	}
+	data.clear();
 }
 
 /*
@@ -56,18 +62,8 @@ void Time_queue::add(
 		// Messy, but we need to fix time.
 		t -= SDL_GetTicks() - pause_time;
 	newent.set(t, obj, ud);
-	if (data.empty()) {
-		data.push_back(newent);
-		return;
-	}
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (newent < *it) {
-			data.insert(it, newent);
-			return;
-		}
-	}
-	data.push_back(newent);
+	auto insertionPoint = std::upper_bound(data.begin(), data.end(), newent);
+	data.insert(insertionPoint, newent);
 }
 
 bool    operator <(const Queue_entry &q1, const Queue_entry &q2) {
@@ -80,20 +76,17 @@ bool    operator <(const Queue_entry &q1, const Queue_entry &q2) {
  *  Output: 1 if found, else 0.
  */
 
-int Time_queue::remove(
+bool Time_queue::remove(
     Time_sensitive *obj
 ) {
-	if (data.empty())
-		return 0;
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (it->handler == obj) {
-			obj->queue_cnt--;
-			data.erase(it);
-			return 1;
-		}
+	auto toRemove = std::find_if(data.begin(), data.end(),
+			[obj](const auto& el) { return el.handler == obj; });
+	auto found = toRemove != data.end();
+	if (found) {
+		toRemove->handler->queue_cnt--;
+		data.erase(toRemove);
 	}
-	return 0;         // Not found.
+	return found;
 }
 
 /*
@@ -102,40 +95,33 @@ int Time_queue::remove(
  *  Output: 1 if found, else 0.
  */
 
-int Time_queue::remove(
+bool Time_queue::remove(
     Time_sensitive *obj,
     uintptr udata
 ) {
-	if (data.empty())
-		return 0;
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (it->handler == obj && it->udata == udata) {
-			obj->queue_cnt--;
-			data.erase(it);
-			return 1;
-		}
+	auto it = std::find_if(data.begin(), data.end(),
+			[&](const auto& el) { return el.handler == obj && el.udata == udata; }
+	);
+	const bool found = it != data.end();
+	if (found) {
+		obj->queue_cnt--;
+		data.erase(it);
 	}
-	return 0;         // Not found.
+	return found;
 }
 
 /*
  *  See if a given entry is in the queue.
  *
- *  Output: 1 if found, else 0.
+ *  Output: true if found, else false.
  */
 
-int Time_queue::find(
+bool Time_queue::find(
     Time_sensitive const *obj
 ) const {
-	if (data.empty())
-		return 0;
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (it->handler == obj)
-			return 1;
-	}
-	return 0;
+	return std::find_if(data.begin(), data.end(),
+			[&](const auto& el) {return el.handler==obj;})
+		!= data.end();
 }
 
 /*
@@ -148,18 +134,16 @@ long Time_queue::find_delay(
     Time_sensitive const *obj,
     uint32 curtime
 ) const {
-	if (data.empty())
+	auto found = std::find_if(data.begin(), data.end(),
+		[&](const auto& el){return obj == el.handler;});
+	if (found == data.end()) {
 		return -1;
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (it->handler == obj) {
-			if (pause_time) // Watch for case when paused.
-				curtime = pause_time;
-			long delay = it->time - curtime;
-			return delay >= 0 ? delay : 0;
-		}
 	}
-	return -1;
+	if (pause_time) { // Watch for case when paused.
+		curtime = pause_time;
+	}
+	const long delay = found->time - curtime;
+	return delay >= 0 ? delay : 0;
 }
 
 /*
@@ -170,13 +154,11 @@ long Time_queue::find_delay(
 void Time_queue::activate0(
     uint32 curtime      // Current time.
 ) {
-	if (data.empty())
-		return;
 	Queue_entry ent;
 	do {
 		ent = data.front();
 		Time_sensitive *obj = ent.handler;
-		uintptr udata = ent.udata;
+		const uintptr udata = ent.udata;
 		data.pop_front();   // Remove from chain.
 		obj->queue_cnt--;
 		obj->handle_event(curtime, udata);
@@ -195,14 +177,14 @@ void Time_queue::activate_always(
 		return;
 	Queue_entry ent;
 	for (auto it = data.begin();
-	        it != data.end() && !(curtime < (*it).time);) {
+	        it != data.end() && !(curtime < it->time);) {
 		auto next = it;
 		++next;         // Get ->next in case we erase.
 		ent = *it;
 		Time_sensitive *obj = ent.handler;
 		if (obj->always) {
 			obj->queue_cnt--;
-			uintptr udata = ent.udata;
+			const uintptr udata = ent.udata;
 			data.erase(it);
 			obj->handle_event(curtime, udata);
 		}
@@ -219,14 +201,13 @@ void Time_queue::resume(
 ) {
 	if (!paused || --paused > 0)    // Only unpause when stack empty.
 		return;         // Not paused.
-	int diff = curtime - pause_time;
+	const int diff = curtime - pause_time;
 	pause_time = 0;
 	if (diff < 0)           // Should not happen.
 		return;
-	for (auto it = data.begin();
-	        it != data.end(); ++it) {
-		if (!(*it).handler->always)
-			it->time += diff;   // Push entries ahead.
+	for (auto& it : data) {
+		if (!it.handler->always)
+			it.time += diff;   // Push entries ahead.
 	}
 }
 
@@ -234,18 +215,22 @@ void Time_queue::resume(
  *  Get next element in queue.
  */
 
-int Time_queue_iterator::operator()(
+bool Time_queue_iterator::operator()(
     Time_sensitive  *&obj,      // Main object.
     uintptr &data          // Data that was added with it.
 ) {
-	while (iter != tqueue->data.end() && this_obj &&
-	        (*iter).handler != this_obj)
-		++iter;
+	auto remain = iter;
+	iter = this_obj == nullptr
+		? remain
+		: std::find_if(iter, tqueue->data.end(), [&](const auto& el) {
+			return el.handler == this_obj;
+		}
+	);
 	if (iter == tqueue->data.end())
-		return 0;
-	obj = (*iter).handler;      // Return fields.
-	data = (*iter).udata;
+		return false;
+	obj = iter->handler;      // Return fields.
+	data = iter->udata;
 	++iter;             // On to the next.
-	return 1;
+	return true;
 }
 

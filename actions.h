@@ -1,7 +1,7 @@
 /*
  *  actions.h - Action controllers for actors.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -122,7 +122,7 @@ public:
 	Path_walking_actor_action(PathFinder *p = nullptr, int maxblk = 3, int pers = 0);
 	~Path_walking_actor_action() override;
 	static Path_walking_actor_action *create_path(Tile_coord const &src,
-	        Tile_coord const &dest, Pathfinder_client &cost);
+	        Tile_coord const &dest, Pathfinder_client const &cost);
 	// Handle time event.
 	int handle_event(Actor *actor) override;
 	bool open_door(Actor *actor, Game_object *door);

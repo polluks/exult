@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,8 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  A text gump is the base class for books and scrolls.
  */
 class Text_gump : public Gump {
-	UNREPLICATABLE_CLASS(Text_gump)
-
 protected:
 	char *text;         // The text.
 	int textlen;            // Length of text.
@@ -42,7 +40,7 @@ public:
 		delete [] text;
 	}
 	void add_text(const char *str); // Append text.
-	int paint_page(Rectangle const &box, int start);
+	int paint_page(TileRect const &box, int start);
 	// Next page of book/scroll.
 	int show_next_page();
 };

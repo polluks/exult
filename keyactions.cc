@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013 The Exult Team
+ *  Copyright (C) 2001-2022 The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -131,10 +131,10 @@ void ActionAbout(int const *params) {
 	scroll = new Scroll_gump();
 
 	scroll->add_text("Exult V" VERSION "\n");
-	scroll->add_text("(C) 1998-2020 Exult Team\n\n");
+	scroll->add_text("(C) 1998-2022 Exult Team\n\n");
 	scroll->add_text("Available under the terms of the ");
 	scroll->add_text("GNU General Public License\n\n");
-	scroll->add_text("http://exult.sourceforge.net\n");
+	scroll->add_text("http://exult.info\n");
 
 	scroll->paint();
 	do {
@@ -227,8 +227,8 @@ void ActionFullscreen(int const *params) {
 // params[1] = frame nr.
 // params[2] = quality
 void ActionUseItem(int const *params) {
-	int framenum = params[1] == -1 ? c_any_framenum : params[1];
-	int qual     = params[2] == -1 ? c_any_qual     : params[2];
+	const int framenum = params[1] == -1 ? c_any_framenum : params[1];
+	const int qual     = params[2] == -1 ? c_any_qual     : params[2];
 	Game_window::get_instance()->activate_item(params[0], framenum, qual);
 
 	Mouse::mouse->set_speed_cursor();
@@ -291,15 +291,14 @@ void ActionInventory(int const *params) {
 
 	if (params[0] == -1) {
 		Gump_manager *gump_man = gwin->get_gump_man();
-		int party_count = gwin->get_party_man()->get_count();
-		int shapenum;
+		const int party_count = gwin->get_party_man()->get_count();
 
 		for (int i = 0; i <= party_count; ++i) {
 			actor = Get_party_member(i);
 			if (!actor)
 				continue;
 
-			shapenum = actor->inventory_shapenum();
+			const int shapenum = actor->inventory_shapenum();
 			// Check if this actor's inventory page is open or not
 			if (!gump_man->find_gump(actor, shapenum) && actor->can_act_charmed()) {
 				gump_man->add_gump(actor, shapenum, true); //force showing inv.
@@ -340,9 +339,9 @@ void ActionTryKeys(int const *params) {
 		obj = gwin->find_object(x, y);
 	if (!obj)
 		return;
-	int qual = obj->get_quality();  // Key quality should match.
+	const int qual = obj->get_quality();  // Key quality should match.
 	Actor *party[10];       // Get ->party members.
-	int party_cnt = gwin->get_party(&party[0], 1);
+	const int party_cnt = gwin->get_party(&party[0], 1);
 	for (int i = 0; i < party_cnt; i++) {
 		Actor *act = party[i];
 		Game_object_vector keys;        // Get keys.
@@ -373,8 +372,8 @@ void ActionStats(int const *params) {
 
 	if (params[0] == -1) {
 		Gump_manager *gump_man = gwin->get_gump_man();
-		int party_count = gwin->get_party_man()->get_count();
-		int shapenum = game->get_shape("gumps/statsdisplay");
+		const int party_count = gwin->get_party_man()->get_count();
+		const int shapenum = game->get_shape("gumps/statsdisplay");
 
 		for (int i = 0; i <= party_count; ++i) {
 			actor = Get_party_member(i);
@@ -406,7 +405,7 @@ void ActionStats(int const *params) {
 void ActionCombatStats(int const *params) {
 	ignore_unused_variable_warning(params);
 	Game_window *gwin = Game_window::get_instance();
-	int cnt = gwin->get_party_man()->get_count();
+	const int cnt = gwin->get_party_man()->get_count();
 	gwin->get_gump_man()->add_gump(nullptr, game->get_shape("gumps/cstats/1") + cnt);
 }
 
@@ -462,7 +461,7 @@ void ActionSIIntro(int const *params) {
 // params[0] = -1,0 = won, 1 = lost
 void ActionEndgame(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	game->end_game(params[0] != 1);
+	game->end_game(params[0] != 1, true);
 	gwin->clear_screen(true);
 	gwin->get_pal()->set(0);
 	gwin->paint();
@@ -503,7 +502,7 @@ void ActionScrollDown(int const *params) {
 
 int get_walking_speed(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int parm = params ? params[0] : 0;
+	const int parm = params ? params[0] : 0;
 	int speed;
 	if (parm == 2)
 		speed = Mouse::slow_speed_factor;
@@ -517,56 +516,56 @@ int get_walking_speed(int const *params) {
 //  { ActionWalkWest, 0, "Walk west", normal_keys, NONE },
 void ActionWalkWest(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 - 50, gwin->get_height() / 2, speed);
 }
 
 //  { ActionWalkEast, 0, "Walk east", normal_keys, NONE },
 void ActionWalkEast(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 + 50, gwin->get_height() / 2, speed);
 }
 
 //  { ActionWalkNorth, 0, "Walk north", normal_keys, NONE },
 void ActionWalkNorth(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2, gwin->get_height() / 2 - 50, speed);
 }
 
 //  { ActionWalkSouth, 0, "Walk south", normal_keys, NONE },
 void ActionWalkSouth(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2, gwin->get_height() / 2 + 50, speed);
 }
 
 //  { ActionWalkNorthEast, 0, "Walk north-east", normal_keys, NONE },
 void ActionWalkNorthEast(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 + 50, gwin->get_height() / 2 - 50, speed);
 }
 
 //  { ActionWalkSouthEast, 0, "Walk south-east", normal_keys, NONE },
 void ActionWalkSouthEast(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 + 50, gwin->get_height() / 2 + 50, speed);
 }
 
 //  { ActionWalkNorthWest, 0, "Walk north-west", normal_keys, NONE },
 void ActionWalkNorthWest(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 - 50, gwin->get_height() / 2 - 50, speed);
 }
 
 //  { ActionWalkSouthWest, 0, "Walk south-west", normal_keys, NONE },
 void ActionWalkSouthWest(int const *params) {
 	Game_window *gwin = Game_window::get_instance();
-	int speed = get_walking_speed(params);
+	const int speed = get_walking_speed(params);
 	gwin->start_actor(gwin->get_width() / 2 - 50, gwin->get_height() / 2 + 50, speed);
 }
 
@@ -606,10 +605,10 @@ void ActionCreateShape(int const *params) {
 		cheat.create_last_shape();
 	} else {
 		Game_window *gwin = Game_window::get_instance();
-		int delta    = params[2] == -1 ? 1 : params[2];
-		int shapenum = params[0];
-		int qual     = params[2] == -1 ? c_any_qual : params[2];
-		int framenum = params[1] == -1 ? 0 : params[1];
+		const int delta    = params[2] == -1 ? 1 : params[2];
+		const int shapenum = params[0];
+		const int qual     = params[2] == -1 ? c_any_qual : params[2];
+		const int framenum = params[1] == -1 ? 0 : params[1];
 		gwin->get_main_actor()->add_quantity(delta, shapenum, qual, framenum);
 		gwin->get_effects()->center_text("Object created");
 	}
@@ -689,7 +688,7 @@ void ActionSkipLift(int const *params) {
 //  { ActionLevelup, 1, "Level-up party", cheat_keys, NONE },
 // params[0] = nr. of levels (or -1 for one)
 void ActionLevelup(int const *params) {
-	int cnt = params[0] == -1 ? 1 : params[0];
+	const int cnt = params[0] == -1 ? 1 : params[0];
 	for (int i = 0; i < cnt; i++)
 		cheat.levelup_party();
 }

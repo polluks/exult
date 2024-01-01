@@ -1,0 +1,69 @@
+<?xml version="1.0" standalone="no"?> <!--*- mode: xml -*-->
+<app-bundle>
+	<meta>
+		<prefix name="default">
+			${env:PREFIX}
+		</prefix>
+		<prefix name="source">
+			${env:SOURCE}
+		</prefix>
+		<destination overwrite="yes">
+			${prefix:source}
+		</destination>
+		<gtk>
+			gtk+-3.0
+		</gtk>
+		<run-install-name-tool/>
+	</meta>
+	<plist>
+		${project}/exult_studio_info.plist
+	</plist>
+	<main-binary>
+		${prefix:source}/mapedit/exult_studio
+	</main-binary>
+	<binary>
+		${prefix}/lib/gdk-pixbuf-2.0/${pkg:gdk-pixbuf-2.0:gdk_pixbuf_binary_version}/loaders/*.so
+	</binary>
+	<data dest="${bundle}/Contents/Resources">
+		${project}/exult_studio.icns
+	</data>
+	<data dest="${bundle}/Contents/Resources/data/exult.flx">
+		${prefix:source}/data/exult.flx
+	</data>
+	<data dest="${bundle}/Contents/Resources/data/exult_bg.flx">
+		${prefix:source}/data/exult_bg.flx
+	</data>
+	<data dest="${bundle}/Contents/Resources/data/exult_si.flx">
+		${prefix:source}/data/exult_si.flx
+	</data>
+	<data dest="${bundle}/Contents/Resources/data/exult_studio.glade">
+		${prefix:source}/mapedit/exult_studio.glade
+	</data>
+	<data>
+		${prefix:source}/data/estudio
+	</data>
+	<data dest="${bundle}/Contents/Resources/Documents/Exult_Studio.txt">
+		${prefix:source}/docs/exult_studio.txt
+	</data>
+	<data dest="${bundle}/Contents/Resources/Documents/AUTHORS.txt">
+		${prefix:source}/AUTHORS
+	</data>
+	<data dest="${bundle}/Contents/Resources/Documents/COPYING.txt">
+		${prefix:source}/COPYING
+	</data>
+	<data dest="${bundle}/Contents/Resources/Documents/README.txt">
+		${prefix:source}/README
+	</data>
+	<data dest="${bundle}/Contents/Resources/Documents/README.MacOSX.txt">
+		${prefix:source}/README.MacOSX
+	</data>
+	<data>
+		${prefix}/share/icons
+	</data>
+	<data>
+		${prefix}/share/glib-2.0/schemas/gschemas.compiled
+	</data>
+	<translations  name="gtk30">
+		${prefix}/share/locale/en
+	</translations>
+</app-bundle>

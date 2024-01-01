@@ -19,6 +19,8 @@
 
 //Tells the compiler the game type
 #game "blackgate"
+// Want to enforce braces around all statements
+#strictbraces "true"
 
 //Starts autonumbering at function number 0xC00.
 //I leave function numbers in the range 0xA00 to
@@ -41,6 +43,7 @@
 #include "headers/bg/bg_gflags2.uc"				//Black Gate global flags
 #include "headers/new_flags.uc"					//Brand new global flags
 
+#include "headers/bg/bg_structs.uc"				//standard structure definitions
 #include "headers/bg/bg_externals.uc"			//extern declarations for BG functions
 #include "headers/bg/bg_externals2.uc"			//extern declarations for BG functions
 
@@ -79,3 +82,9 @@
 
 //The Crown Jewels:
 #include "items/crown_jewels.uc"
+
+//Fixes gang planck blocking check
+#include "misc/is_obj_blocked.uc"
+
+//Fixing missing conversation branch with Tseramed
+#include "npcs/tseramed.uc"

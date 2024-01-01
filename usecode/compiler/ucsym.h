@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -46,8 +46,8 @@ class Uc_scope;
 class Basic_block;
 
 inline bool is_int_32bit(int val) {
-	int high = val >> 16;
-	return !(high == -1 || high == 0);
+	const int high = val >> 16;
+	return high != -1 && high != 0;
 }
 
 inline bool is_sint_32bit(int val) {
@@ -356,7 +356,7 @@ public:
  *  usecode variable -- this is left to Exult.
  */
 class Uc_struct_symbol : public Uc_symbol {
-	using Var_map = std::map<const char *, int, String_compare>;
+	using Var_map = std::map<std::string, int>;
 	Var_map vars;
 	int num_vars;           // # member variables.
 public:
@@ -383,7 +383,7 @@ public:
 		if (it == vars.end())
 			return -1;
 		else
-			return (*it).second;
+			return it->second;
 	}
 	bool is_dup(const char *nm);      // Already declared?
 };
@@ -487,7 +487,7 @@ public:
 	int get_intrinsic_num() {
 		return intrinsic_num;
 	}
-	int get_num_parms() {   // ++++Not valid yet.
+	size_t get_num_parms() {   // ++++Not valid yet.
 		return num_parms;
 	}
 	// Generate function/procedure call.
@@ -562,7 +562,7 @@ public:
 	int get_shape_num() {
 		return shape_num;
 	}
-	int get_num_parms() {
+	size_t get_num_parms() {
 		return parms.size();
 	}
 	void clear_externed() {
@@ -594,7 +594,7 @@ public:
 		auto it = nums_used.find(ucnum);
 		if (it == nums_used.end())  // Unused?  That's good.
 			return nullptr;
-		return (*it).second;
+		return it->second;
 	}
 	virtual bool has_ret() const {
 		return ret_type != no_ret;
@@ -645,7 +645,7 @@ public:
 		if (it == symbols.end())
 			return nullptr;
 		else
-			return (*it).second;
+			return it->second;
 	}
 	// Search upwards through scopes.
 	Uc_symbol *search_up(const char *nm);

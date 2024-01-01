@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -92,7 +92,7 @@ public:
 		return rendered_flats
 		       ? rendered_flats : render_flats();
 	}
-	void render_all(int cx, int cy);// Render (in terrain-editing mode).
+	void render_all(int cx, int cy, int pass);// Render terrain-editing mode.
 	// Write out to chunk.
 	int write_flats(unsigned char *chunk_data, bool v2_chunks);
 };

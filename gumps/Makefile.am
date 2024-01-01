@@ -1,11 +1,12 @@
-AM_CPPFLAGS = -I$(srcdir)/../headers -I$(srcdir)/.. -I$(srcdir)/../files \
-		-I$(srcdir)/../imagewin -I$(srcdir)/../shapes -I$(srcdir)/../objs \
-		-I$(srcdir)/../audio -I$(srcdir)/../audio/midi_drivers \
-		-I$(srcdir)/../conf -I$(srcdir)/../usecode -I$(srcdir)/../data \
-		-I$(srcdir)/../shapes/shapeinf \
+AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir) -I$(top_srcdir)/files \
+		-I$(top_srcdir)/imagewin -I$(top_srcdir)/shapes -I$(top_srcdir)/objs \
+		-I$(top_srcdir)/audio -I$(top_srcdir)/audio/midi_drivers \
+		-I$(top_srcdir)/conf -I$(top_srcdir)/usecode -I$(top_srcdir)/data \
+		-I$(top_srcdir)/shapes/shapeinf \
 		$(SDL_CFLAGS) $(VORBIS_CFLAGS) $(OGG_CFLAGS) $(INCDIRS)	\
-		$(WINDOWING_SYSTEM) $(DEBUG_FLAGS) $(CPPFLAGS)
+		$(WINDOWING_SYSTEM) $(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS)
 
+if BUILD_EXULT
 noinst_LTLIBRARIES = libgumps.la
 
 libgumps_la_SOURCES = \
@@ -51,10 +52,10 @@ libgumps_la_SOURCES = \
 	AudioOptions_gump.h	\
 	VideoOptions_gump.cc	\
 	VideoOptions_gump.h	\
-	GameplayOptions_gump.cc	\
-	GameplayOptions_gump.h	\
-	MiscOptions_gump.cc \
-	MiscOptions_gump.h \
+	GameDisplayOptions_gump.cc	\
+	GameDisplayOptions_gump.h	\
+	GameEngineOptions_gump.cc \
+	GameEngineOptions_gump.h \
 	Gump_ToggleButton.cc	\
 	Gump_ToggleButton.h	\
 	CombatStats_gump.cc	\
@@ -78,5 +79,6 @@ libgumps_la_SOURCES = \
 	ItemMenu_gump.h	\
 	InputOptions_gump.cc	\
 	InputOptions_gump.h
+endif
 
 CLEANFILES = *~

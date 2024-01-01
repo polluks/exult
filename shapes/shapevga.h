@@ -2,7 +2,7 @@
  *  shapevga.h - Handle the 'shapes.vga' file and associated info.
  *
  *  Copyright (C) 1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -55,13 +55,14 @@ public:
 	// Read additional data files.
 	void reload_info(Exult_Game game);
 	void fix_old_shape_info(Exult_Game game);
-	void read_info(Exult_Game game, bool editing = false);
+	// Returns true when some Shape data have been migrated.
+	bool read_info(Exult_Game game, bool editing = false);
 	void write_info(Exult_Game game);   // Write them back out.
 	Shape *new_shape(int shapenum) override;
 	Shape_info &get_info(int shapenum) {
 		auto it = info.find(shapenum);
 		if (it != info.end())
-			return (*it).second;
+			return it->second;
 		return zinfo;
 	}
 	bool has_info(int shapenum) {

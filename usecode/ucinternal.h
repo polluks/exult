@@ -5,7 +5,7 @@
  *  be included within .cc's in the 'usecode' directory.
  *
  *
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -242,6 +242,7 @@ class Usecode_internal : public Usecode_machine {
 	USECODE_INTRINSIC_DECL(find_nearby);
 	USECODE_INTRINSIC_DECL(give_last_created);
 	USECODE_INTRINSIC_DECL(is_dead);
+	USECODE_INTRINSIC_DECL(game_day);
 	USECODE_INTRINSIC_DECL(game_hour);
 	USECODE_INTRINSIC_DECL(game_minute);
 	USECODE_INTRINSIC_DECL(get_npc_number);
@@ -310,6 +311,7 @@ class Usecode_internal : public Usecode_machine {
 	USECODE_INTRINSIC_DECL(get_readied);
 	USECODE_INTRINSIC_DECL(restart_game);
 	USECODE_INTRINSIC_DECL(start_speech);
+	USECODE_INTRINSIC_DECL(start_blocking_speech);
 	USECODE_INTRINSIC_DECL(is_water);
 	USECODE_INTRINSIC_DECL(run_endgame);
 	USECODE_INTRINSIC_DECL(fire_projectile);
@@ -320,7 +322,9 @@ class Usecode_internal : public Usecode_machine {
 	USECODE_INTRINSIC_DECL(attack_avatar);
 	USECODE_INTRINSIC_DECL(path_run_usecode);
 	USECODE_INTRINSIC_DECL(close_gump);
+	USECODE_INTRINSIC_DECL(close_gump2);
 	USECODE_INTRINSIC_DECL(close_gumps);
+	USECODE_INTRINSIC_DECL(close_gumps2);
 	USECODE_INTRINSIC_DECL(in_gump_mode);
 	USECODE_INTRINSIC_DECL(set_light);
 	USECODE_INTRINSIC_DECL(set_time_palette);

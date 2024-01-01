@@ -1,7 +1,7 @@
 /*
  *  drag.cc - Dragging objects in Game_window.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -53,11 +53,9 @@ Dragging_info::Dragging_info(
 	old_foot(0, 0, 0, 0), old_lift(-1), quantity(obj->get_quantity()),
 	readied_index(-1), mousex(-1), mousey(-1), paintx(-1000), painty(-1000),
 	mouse_shape(Mouse::mouse->get_shape()), rect(0, 0, 0, 0),
-	save(nullptr), okay(true), possible_theft(false) {
+	okay(true), possible_theft(false) {
 	rect = gwin->get_shape_rect(obj.get());
 	rect.enlarge(8);        // Make a little bigger.
-	// Create buffer to backup background.
-	//save = gwin->get_win()->create_buffer(rect.w, rect.h);
 }
 
 /*
@@ -70,7 +68,7 @@ Dragging_info::Dragging_info(
 	old_foot(0, 0, 0, 0), old_lift(-1), quantity(0),
 	readied_index(-1), mousex(x), mousey(y), paintx(-1000), painty(-1000),
 	mouse_shape(Mouse::mouse->get_shape()), rect(0, 0, 0, 0),
-	save(nullptr), okay(false), possible_theft(false) {
+	okay(false), possible_theft(false) {
 	// First see if it's a gump.
 	gump = gumpman->find_gump(x, y);
 	Game_object *to_drag = nullptr;
@@ -116,15 +114,6 @@ Dragging_info::Dragging_info(
 }
 
 /*
- *  Delete dragging info.
- */
-
-Dragging_info::~Dragging_info(
-) {
-	delete save;
-}
-
-/*
  *  First motion.
  *
  *  Output: false if failed.
@@ -133,8 +122,8 @@ Dragging_info::~Dragging_info(
 bool Dragging_info::start(
     int x, int y            // Mouse position.
 ) {
-	int deltax = abs(x - mousex);
-	int deltay = abs(y - mousey);
+	const int deltax = abs(x - mousex);
+	const int deltay = abs(y - mousey);
 	if (deltax <= 2 && deltay <= 2)
 		return false;     // Wait for greater motion.
 	if (obj) {
@@ -196,10 +185,8 @@ bool Dragging_info::start(
 	//rect.enlarge(c_tilesize + obj ? 0 : c_tilesize/2);
 	rect.enlarge(deltax > deltay ? deltax : deltay);
 
-	Rectangle crect = gwin->clip_to_win(rect);
+	TileRect crect = gwin->clip_to_win(rect);
 	gwin->paint(crect);     // Paint over obj's. area.
-	// Create buffer to backup background.
-	//save = gwin->get_win()->create_buffer(rect.w, rect.h);
 	return true;
 }
 
@@ -217,13 +204,11 @@ bool Dragging_info::moved(
 	if (rect.w == 0) {
 		if (!start(x, y))
 			return false;
-	} else if (save)            // Not first time?  Restore beneath.
-		gwin->get_win()->put(save, rect.x, rect.y);
-	else
+	} else
 		gwin->add_dirty(gwin->clip_to_win(rect));
 	gwin->set_painted();
-	int deltax = x - mousex;
-	int deltay = y - mousey;
+	const int deltax = x - mousex;
+	const int deltay = y - mousey;
 	mousex = x;
 	mousey = y;
 	// Shift to new position.
@@ -244,8 +229,6 @@ void Dragging_info::paint(
 ) {
 	if (!rect.w)            // Not moved enough yet?
 		return;
-	if (save)           // Save background.
-		gwin->get_win()->get(save, rect.x, rect.y);
 	if (obj) {
 		if (obj->get_flag(Obj_flags::invisible))
 			obj->paint_invisible(paintx, painty);
@@ -310,7 +293,7 @@ static bool Check_weight(
 	owner = owner->get_outermost();
 	if (!owner->get_flag(Obj_flags::in_party))
 		return true;        // Not a party member, so okay.
-	int wt = owner->get_weight() + to_drop->get_weight();
+	const int wt = owner->get_weight() + to_drop->get_weight();
 	if (wt / 10 > owner->get_max_weight()) {
 		Mouse::mouse->flash_shape(Mouse::tooheavy);
 		Audio::get_ptr()->play_sound_effect(Audio::game_sfx(76));
@@ -377,7 +360,7 @@ bool Dragging_info::drop_on_gump(
 		// Failed.
 		if (to_drop != obj.get()) {
 			// Watch for partial drop.
-			int nq = to_drop->get_quantity();
+			const int nq = to_drop->get_quantity();
 			if (nq < quantity)
 				obj->modify_quantity(quantity - nq);
 		}
@@ -419,7 +402,7 @@ bool Dragging_info::drop_on_map(
 
 	int max_lift = cheat.in_hack_mover() ? 255 :
 	               gwin->get_main_actor()->get_lift() + 5;
-	int skip = gwin->get_render_skip_lift();
+	const int skip = gwin->get_render_skip_lift();
 	if (max_lift >= skip)       // Don't drop where we cannot see.
 		max_lift = skip - 1;
 	// Drop where we last painted it.
@@ -482,22 +465,22 @@ bool Dragging_info::drop(
     int x, int y            // Mouse position.
 ) {
 	// Get orig. loc. info.
-	int oldcx = old_pos.tx / c_tiles_per_chunk;
-	int oldcy = old_pos.ty / c_tiles_per_chunk;
+	const int oldcx = old_pos.tx / c_tiles_per_chunk;
+	const int oldcy = old_pos.ty / c_tiles_per_chunk;
 	Game_object *to_drop = obj.get(); // If quantity, split it off.
 	Game_object_shared to_drop_shared;
 	// Being liberal about taking stuff:
-	bool okay_to_move = to_drop->get_flag(Obj_flags::okay_to_take);
-	int old_top = old_pos.tz + obj->get_info().get_3d_height();
+	const bool okay_to_move = to_drop->get_flag(Obj_flags::okay_to_take);
+	const int old_top = old_pos.tz + obj->get_info().get_3d_height();
 	// First see if it's a gump.
 	Gump *on_gump = gumpman->find_gump(x, y);
 	// Don't prompt if within same gump
 	//or if alternate drop is enabled (ctrl inverts).
 
 	const Uint8 *keystate = SDL_GetKeyboardState(nullptr);
-	bool drop = (keystate[SDL_GetScancodeFromKey(SDLK_LCTRL)] || keystate[SDL_GetScancodeFromKey(SDLK_RCTRL)]) ?
+	const bool drop = (keystate[SDL_GetScancodeFromKey(SDLK_LCTRL)] || keystate[SDL_GetScancodeFromKey(SDLK_RCTRL)]) ?
 	            gwin->get_alternate_drop() : !gwin->get_alternate_drop();
-	bool temp = obj->get_flag(Obj_flags::is_temporary);
+	const bool temp = obj->get_flag(Obj_flags::is_temporary);
 
 	if (quantity > 1 && (!on_gump || on_gump != gump) && drop)
 		quantity = gumpman->prompt_for_number(0, quantity, 1, quantity);
@@ -592,7 +575,7 @@ bool Game_window::drop_dragged(
 ) {
 	if (!dragging)
 		return false;
-	bool handled = dragging->drop(x, y, moved);
+	const bool handled = dragging->drop(x, y, moved);
 	delete dragging;
 	dragging = nullptr;
 	return handled;
@@ -619,16 +602,16 @@ int Game_window::drop_at_lift(
 ) {
 	x += at_lift * 4 - 1;   // Take lift into account, round.
 	y += at_lift * 4 - 1;
-	int tx = (scrolltx + x / c_tilesize) % c_num_tiles;
-	int ty = (scrollty + y / c_tilesize) % c_num_tiles;
-	int cx = tx / c_tiles_per_chunk;
-	int cy = ty / c_tiles_per_chunk;
+	const int tx = (scrolltx + x / c_tilesize) % c_num_tiles;
+	const int ty = (scrollty + y / c_tilesize) % c_num_tiles;
+	const int cx = tx / c_tiles_per_chunk;
+	const int cy = ty / c_tiles_per_chunk;
 	Map_chunk *chunk = map->get_chunk(cx, cy);
 	int lift;           // Can we put it here?
 	const Shape_info &info = to_drop->get_info();
-	int frame = to_drop->get_framenum();
-	int xtiles = info.get_3d_xtiles(frame);
-	int ytiles = info.get_3d_ytiles(frame);
+	const int frame = to_drop->get_framenum();
+	const int xtiles = info.get_3d_xtiles(frame);
+	const int ytiles = info.get_3d_ytiles(frame);
 	int max_drop;
 	int move_flags;
 	if (cheat.in_hack_mover()) {
@@ -653,7 +636,7 @@ int Game_window::drop_at_lift(
 
 	to_drop->set_invalid();
 	to_drop->move(tx, ty, lift);
-	Rectangle rect = get_shape_rect(to_drop);
+	const TileRect rect = get_shape_rect(to_drop);
 	// Avoid dropping behind walls.
 	if (Is_inaccessible(this, to_drop, rect.x + 2, rect.y + 2) &&
 	        Is_inaccessible(this, to_drop,
@@ -664,7 +647,7 @@ int Game_window::drop_at_lift(
 	                        rect.x + rect.w - 3, rect.y + rect.h - 3) &&
 	        Is_inaccessible(this, to_drop,
 	                        rect.x + (rect.w >> 1), rect.y + (rect.h >> 1))) {
-        Game_object_shared keep; 
+        Game_object_shared keep;
 		to_drop->remove_this(&keep);
 		return -1;
 	}

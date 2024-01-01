@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -42,7 +42,7 @@ Jawbone_gump::Jawbone_gump(
     int initx, int inity        // Coords. on screen.
 ) : Gump(cont, initx, inity, game->get_shape("gumps/jawbone")),
 	jawbone(cont) {
-	set_object_area(Rectangle(0, 0, 138, 116), 10, 109);
+	set_object_area(TileRect(0, 0, 138, 116), 10, 109);
 }
 
 
@@ -74,8 +74,8 @@ void Jawbone_gump::paint() {
 void Jawbone_gump::paint_tooth(int index) {
 	ShapeID shape(game->get_shape("gumps/tooth"), index, SF_GUMPS_VGA);
 
-	int objx = toothx[index];
-	int objy = toothy[index];
+	const int objx = toothx[index];
+	const int objy = toothy[index];
 
 	shape.paint_shape(x + objx, y + objy);
 }
@@ -107,13 +107,13 @@ Game_object *Jawbone_gump::find_object(int mx, int my) {
 }
 
 bool Jawbone_gump::on_tooth(int sx, int sy, int index) {
-	ShapeID sid(game->get_shape("gumps/tooth"), index, SF_GUMPS_VGA);
+	const ShapeID sid(game->get_shape("gumps/tooth"), index, SF_GUMPS_VGA);
 	Shape_frame *shape = sid.get_shape();
 
-	int objx = toothx[index];
-	int objy = toothy[index];
+	const int objx = toothx[index];
+	const int objy = toothy[index];
 
-	Rectangle r = gwin->get_shape_rect(shape, 0, 0);
+	const TileRect r = gwin->get_shape_rect(shape, 0, 0);
 
 	return r.has_point(sx - objx, sy - objy) &&
 	        shape->has_point(sx - objx, sy - objy);
@@ -124,8 +124,8 @@ void Jawbone_gump::set_to_spot(Game_object *obj, int sx, int sy) {
 	Shape_frame *shape = obj->get_shape();
 
 	// Height and width
-	int w = shape->get_width();
-	int h = shape->get_height();
+	const int w = shape->get_width();
+	const int h = shape->get_height();
 
 	// Set object's position.
 	obj->set_shape_pos(sx + shape->get_xleft() - w / 2,

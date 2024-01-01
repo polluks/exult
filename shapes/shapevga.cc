@@ -2,7 +2,7 @@
  *  shapevga.cc - Handle the 'shapes.vga' file and associated info.
  *
  *  Copyright (C) 1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -68,23 +68,19 @@ using namespace std;
  *  given.
  */
 
-static bool U7open2(
-    ifstream &in,           // Stream to open.
+static std::unique_ptr<std::istream> U7open2(
     const char *pname,      // Patch name, or null.
     const char *fname,      // File name.
     bool editing
 ) {
 	ignore_unused_variable_warning(editing);
 	if (pname) {
-		U7open(in, pname);
-		return true;
+		return U7open_in(pname);
 	}
 	try {
-		U7open(in, fname);
-	} catch (const file_exception & /*f*/) {
-		return false;
-	}
-	return true;
+		return U7open_in(fname);
+	} catch (const file_exception & /*f*/) {}
+	return nullptr;
 }
 
 // Special case ID reader functors.
@@ -97,13 +93,13 @@ public:
 	int operator()(std::istream &in, int index, int version, bool binary) {
 		ignore_unused_variable_warning(index, version, binary);
 		if (in.peek() == '%') {
-			std::string key = ReadStr(in);
+			const std::string key = ReadStr(in);
 			// We need these for Exult, but not for ES.
 			// For now, a compromise/hack in that ES defines
 			// a version of this function which always returns
 			// -1, while Exult has another which forwards to
 			// Shapeinfo_lookup::get_skinvar
-			int id = get_skinvar(key);
+			const int id = get_skinvar(key);
 			return id < 0 ? -1 : id;
 		} else
 			return ReadInt(in);
@@ -143,7 +139,7 @@ public:
 		unsigned char ready = info.ready_type;
 		info.spell_flag = ready & 1;
 		ready >>= 3;
-		unsigned char spot = game == BLACK_GATE ? Ready_spot_from_BG(ready)
+		const unsigned char spot = game == BLACK_GATE ? Ready_spot_from_BG(ready)
 		            : Ready_spot_from_SI(ready);
 		info.ready_type = spot;
 		// Init alternate spots.
@@ -168,17 +164,6 @@ class Actor_flags_functor {
 public:
 	void operator()(std::istream &in, int version, bool patch,
 	                Exult_Game game, Shape_info &info) {
-		// We already have monster data by this point.
-		Monster_info *minf = info.monstinf;
-		if (minf) {
-			// Deprecating old Monster_info based flags for these powers:
-			if (minf->can_teleport())
-				info.actor_flags |= Shape_info::teleports;
-			if (minf->can_summon())
-				info.actor_flags |= Shape_info::summons;
-			if (minf->can_be_invisible())
-				info.actor_flags |= Shape_info::turns_invisible;
-		}
 		setflags(in, version, patch, game, info);
 	}
 };
@@ -326,10 +311,10 @@ void Shapes_vga_file::Read_Shapeinf_text_data_file(
 		Vector_reader_functor < Frame_usecode_info, Shape_info,
 		&Shape_info::frucinf > > (info),
 	};
-	int numsections = array_size(sections);
-	int numreaders = array_size(readers);
+	const int numsections = array_size(sections);
+	const int numreaders = array_size(readers);
 	assert(numsections == numreaders);
-	int flxres = game_type == BLACK_GATE ?
+	const int flxres = game_type == BLACK_GATE ?
 	             EXULT_BG_FLX_SHAPE_INFO_TXT : EXULT_SI_FLX_SHAPE_INFO_TXT;
 
 	Read_text_data_file("shape_info", readers, sections,
@@ -351,10 +336,10 @@ void Shapes_vga_file::Read_Bodies_text_data_file(
 		Class_reader_functor < Body_info, Shape_info,
 		&Shape_info::body > > (info)
 	};
-	int numsections = array_size(sections);
-	int numreaders = array_size(readers);
+	const int numsections = array_size(sections);
+	const int numreaders = array_size(readers);
 	assert(numsections == numreaders);
-	int flxres = game_type == BLACK_GATE ?
+	const int flxres = game_type == BLACK_GATE ?
 	             EXULT_BG_FLX_BODIES_TXT : EXULT_SI_FLX_BODIES_TXT;
 
 	Read_text_data_file("bodies", readers, sections,
@@ -376,10 +361,10 @@ void Shapes_vga_file::Read_Paperdoll_text_data_file(
 		Vector_reader_functor < Paperdoll_item, Shape_info,
 		&Shape_info::objpaperdoll > > (info),
 	};
-	int numsections = array_size(sections);
-	int numreaders = array_size(readers);
+	const int numsections = array_size(sections);
+	const int numreaders = array_size(readers);
 	assert(numsections == numreaders);
-	int flxres = game_type == BLACK_GATE ?
+	const int flxres = game_type == BLACK_GATE ?
 	             EXULT_BG_FLX_PAPERDOL_INFO_TXT : EXULT_SI_FLX_PAPERDOL_INFO_TXT;
 
 	Read_text_data_file("paperdol_info", readers, sections,
@@ -427,51 +412,58 @@ void Shapes_vga_file::reload_info(
  *  Output: 0 if error.
  */
 
-void Shapes_vga_file::read_info(
+bool Shapes_vga_file::read_info(
     Exult_Game game,        // Which game.
     bool editing            // True to allow files to not exist.
 ) {
 	if (info_read)
-		return;
+		return false;
 	info_read = true;
-	bool have_patch_path = is_system_path_defined("<PATCH>");
+	const bool have_patch_path = is_system_path_defined("<PATCH>");
 
 	// ShapeDims
 
 	// Starts at 0x96'th shape.
-	ifstream shpdims;
-	if (U7open2(shpdims, patch_name(PATCH_SHPDIMS), SHPDIMS, editing))
+	auto pShpdims = U7open2(patch_name(PATCH_SHPDIMS), SHPDIMS, editing);
+	if (pShpdims) {
+		auto& shpdims = *pShpdims;
 		for (size_t i = c_first_obj_shape;
 		        i < shapes.size() && !shpdims.eof(); i++) {
 			info[i].shpdims[0] = shpdims.get();
 			info[i].shpdims[1] = shpdims.get();
 		}
+	}
 
 	// WGTVOL
-	ifstream wgtvol;
-	if (U7open2(wgtvol, patch_name(PATCH_WGTVOL), WGTVOL, editing))
+	auto pWgtvol = U7open2(patch_name(PATCH_WGTVOL), WGTVOL, editing);
+	if (pWgtvol) {
+		auto& wgtvol = *pWgtvol;
 		for (size_t i = 0; i < shapes.size() && !wgtvol.eof(); i++) {
 			info[i].weight = wgtvol.get();
 			info[i].volume = wgtvol.get();
 		}
+	}
 
 	// TFA
-	ifstream tfa;
-	if (U7open2(tfa, patch_name(PATCH_TFA), TFA, editing))
+	auto pTfa = U7open2(patch_name(PATCH_TFA), TFA, editing);
+	if (pTfa) {
+		auto& tfa = *pTfa;
 		for (size_t i = 0; i < shapes.size() && !tfa.eof(); i++) {
 			tfa.read(reinterpret_cast<char *>(&info[i].tfa[0]), 3);
 			info[i].set_tfa_data();
 		}
+	}
 
 	if (game == BLACK_GATE || game == SERPENT_ISLE) {
 		// Animation data at the end of BG and SI TFA.DAT
-		ifstream stfa;
 		// We *should* blow up if TFA not there.
-		U7open(stfa, TFA);
+		auto pStfa = U7open_in(TFA);
+		if (!pStfa)
+		    throw file_open_exception(TFA);
+		auto& stfa = *pStfa;
 		stfa.seekg(3 * 1024);
 		unsigned char buf[512];
 		stfa.read(reinterpret_cast<char *>(buf), 512);
-		stfa.close();
 		unsigned char *ptr = buf;
 		for (int i = 0; i < 512; i++, ptr++) {
 			int val = *ptr;
@@ -489,9 +481,10 @@ void Shapes_vga_file::read_info(
 	}
 
 	// Load data about drawing the weapon in an actor's hand
-	ifstream wihh;
-	if (U7open2(wihh, patch_name(PATCH_WIHH), WIHH, editing)) {
-		size_t cnt = shapes.size();
+	auto pWihh = U7open2(patch_name(PATCH_WIHH), WIHH, editing);
+	if (pWihh) {
+		auto& wihh = *pWihh;
+		const size_t cnt = shapes.size();
 		unsigned short offsets[c_max_shapes];
 		for (size_t i = 0; i < cnt; i++)
 			offsets[i] = Read2(wihh);
@@ -515,18 +508,19 @@ void Shapes_vga_file::read_info(
 					info[i].weapon_offsets[j * 2 + 1] = y;
 				}
 			}
-		wihh.close();
 	}
 
-	ifstream occ;          // Read flags from occlude.dat.
-	if (U7open2(occ, patch_name(PATCH_OCCLUDE), OCCLUDE, editing)) {
+	// Read flags from occlude.dat.
+	auto pOcc = U7open2(patch_name(PATCH_OCCLUDE), OCCLUDE, editing);
+	if (pOcc) {
+		auto& occ = *pOcc;
 		unsigned char occbits[c_occsize];   // c_max_shapes bit flags.
 		// Ensure sensible defaults.
 		memset(&occbits[0], 0, sizeof(occbits));
 		occ.read(reinterpret_cast<char *>(occbits), sizeof(occbits));
 		for (int i = 0; i < occ.gcount(); i++) {
 			unsigned char bits = occbits[i];
-			int shnum = i * 8;  // Check each bit.
+			const int shnum = i * 8;  // Check each bit.
 			for (int b = 0; bits; b++, bits = bits >> 1)
 				if (bits & 1)
 					info[shnum + b].occludes_flag = true;
@@ -534,24 +528,24 @@ void Shapes_vga_file::read_info(
 	}
 
 	// Get 'equip.dat'.
-	ifstream mfile;
-	if (U7open2(mfile, patch_name(PATCH_EQUIP), EQUIP, editing)) {
+	auto pMfile = U7open2(patch_name(PATCH_EQUIP), EQUIP, editing);
+	if (pMfile) {
+		auto& mfile = *pMfile;
 		// Get # entries (with Exult extension).
-		int num_recs = Read_count(mfile);
+		const int num_recs = Read_count(mfile);
 		Monster_info::reserve_equip(num_recs);
 		for (int i = 0; i < num_recs; i++) {
 			Equip_record equip;
 			// 10 elements/record.
 			for (int elem = 0; elem < 10; elem++) {
-				int shnum = Read2(mfile);
-				unsigned prob = Read1(mfile);
-				unsigned quant = Read1(mfile);
+				const int shnum = Read2(mfile);
+				const unsigned prob = Read1(mfile);
+				const unsigned quant = Read1(mfile);
 				Read2(mfile);
 				equip.set(elem, shnum, prob, quant);
 			}
 			Monster_info::add_equip(equip);
 		}
-		mfile.close();
 	}
 
 	Functor_multidata_reader < Shape_info,
@@ -599,14 +593,40 @@ void Shapes_vga_file::read_info(
 	Read_Paperdoll_text_data_file(editing, game);
 
 	// Ensure valid ready spots for all shapes.
-	unsigned char defready = game == BLACK_GATE ? backpack : rhand;
+	const unsigned char defready = game == BLACK_GATE ? backpack : rhand;
 	zinfo.ready_type = defready;
-	for (auto it = info.begin();
-	        it != info.end(); ++it) {
-		Shape_info &inf = it->second;
+	for (auto& it : info) {
+		Shape_info &inf = it.second;
 		if (inf.ready_type == invalid_spot)
 			inf.ready_type = defready;
 	}
+	bool auto_modified = false;
+	for (auto &it : info) {
+		const int shnum = it.first;
+		Shape_info &inf = it.second;
+		if (inf.has_monster_info()) {
+			Monster_info *minf = inf.monstinf;
+			if (minf->can_teleport()) {
+				std::cerr << "Shape " << shnum << " is a monster that can teleport, teleport flag moved from Monster info ( monster.dat ) to Actor info ( shape_info.txt ) as NPC flags." << std::endl;
+				inf.set_actor_flag(Shape_info::teleports);
+				minf->set_can_teleport(false);
+				auto_modified = true;
+			}
+			if (minf->can_summon()) {
+				std::cerr << "Shape " << shnum << " is a monster that can summon, summon flag moved from Monster info ( monster.dat ) to Actor info ( shape_info.txt ) as NPC flags." << std::endl;
+				inf.set_actor_flag(Shape_info::summons);
+				minf->set_can_summon(false);
+				auto_modified = true;
+			}
+			if (minf->can_be_invisible()) {
+				std::cerr << "Shape " << shnum << " is a monster that can be invisible, invisible flag moved from Monster info ( monster.dat ) to Actor info ( shape_info.txt ) as NPC flags." << std::endl;
+				inf.set_actor_flag(Shape_info::turns_invisible);
+				minf->set_can_be_invisible(false);
+				auto_modified = true;
+			}
+		}
+	}
+	return auto_modified;
 }
 
 /*

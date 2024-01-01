@@ -1,7 +1,7 @@
 /*
  *  drag.cc - Dragging objects in Game_window.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,15 +41,14 @@ class Dragging_info : public Game_singletons {
 	Gump_button *button;
 	Tile_coord old_pos;     // Original pos. of object if it wasn't
 	//   in a container.
-	Rectangle old_foot;     // Original footprint.
+	TileRect old_foot;     // Original footprint.
 	int old_lift;           // Lift of obj OR its owner.
 	int quantity;           // Amount of object being moved.
 	int readied_index;      // If it was a 'readied' item.
 	// Last mouse, paint positions:
 	int mousex, mousey, paintx, painty;
 	Mouse::Mouse_shapes mouse_shape;// Save starting mouse shape.
-	Rectangle rect;         // Rectangle to repaint.
-	Image_buffer *save;     // Image below dragged object.
+	TileRect rect;         // Rectangle to repaint.
 	bool okay;          // True if drag constructed okay.
 	bool possible_theft;        // Moved enough to be 'theft'.
 
@@ -62,7 +61,6 @@ public:
 	// Create for dropping new object.
 	Dragging_info(Game_object_shared newobj);
 	Dragging_info(int x, int y);    // Create for given mouse position.
-	~Dragging_info();
 	bool moved(int x, int y);   // Mouse moved.
 	void paint();           // Paint object being dragged.
 	bool drop(int x, int y);    // Drop obj. at given position.

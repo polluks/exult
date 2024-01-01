@@ -2,8 +2,11 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#if !defined(__llvm__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#endif
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #endif  // __GNUC__
 }
 
@@ -14,12 +17,8 @@
  **	Written: 12/30/2000 - JSF
  **/
 
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif  // __GNUC__
-
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -36,13 +35,18 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#include <string>
 #include <cstring>
+#include <string>
 #include <vector>
 #include <set>
 #include "ucparse.h"
 #include "ucloc.h"
 #include "ucfun.h"
+#include "array_size.h"
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif  // __GNUC__
 
 using std::string;
 
@@ -124,32 +128,39 @@ static void Include
 		Uc_location::yyerror("No file in #include");
 		return;
 		}
-					// Check if file has already been included.
-	std::set<string>::iterator it = inclfiles.find(name);
+	// Check if file has already been included.
+	auto it = inclfiles.find(name);
 	if (it != inclfiles.end())
 		return;
 	locstack.push_back(new Uc_location());
 	bufstack.push_back(YY_CURRENT_BUFFER);
 	yyin = fopen(name, "r");
-					// Look in -I list if not found here.
-	for (std::vector<char *>::const_iterator it = include_dirs.begin();
-				!yyin && it != include_dirs.end(); ++it)
+	// Look in -I list if not found here.
+	if (yyin == nullptr)
 		{
-		string path(*it);
-		path += '/';
-		path += name;
-		yyin = fopen(path.c_str(), "r");
+		for (char *dir : include_dirs)
+			{
+			string path(dir);
+			path += '/';
+			path += name;
+			yyin = fopen(path.c_str(), "r");
+			if (yyin != nullptr)
+				{
+				break;
+				}
+			}
 		}
+
 	if (!yyin)
 		{
 		char msg[180];
-		sprintf(msg, "Can't open '%s'", name);
+		snprintf(msg, array_size(msg), "Can't open '%s'", name);
 		Uc_location::yyerror(msg);
 		exit(1);
 		}
-					// Add file to list of included files.
+	// Add file to list of included files.
 	inclfiles.insert(name);
-					// Set location to new file.
+	// Set location to new file.
 	Uc_location::set_cur(name, 0);
 	yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
 	}
@@ -175,8 +186,30 @@ static void Set_game
 		Uc_function::set_intrinsic_type(Uc_function::sib);
 	else
 		Uc_location::yyerror(
-			"Specify \"blackgate\", \"serpentisle\" or \"serpentbeta\" "
+			"Specify \"blackgate\", \"serpentisle\", or \"serpentbeta\" "
 				"with #game.");
+	}
+
+/*
+ *	Handle #strictbraces directive.
+ */
+
+static void Set_strict_mode
+	(
+	char *yytext			// Contains name.
+	)
+	{
+	char *ename;
+	char *name = Find_name(yytext, ename);
+	if (!name)
+		Uc_location::yyerror("No parameter in #strictbraces");
+	else if (strcmp(name, "true") == 0)
+		Uc_location::set_strict_mode(true);
+	else if (strcmp(name, "false") == 0)
+		Uc_location::set_strict_mode(false);
+	else
+		Uc_location::yyerror(
+			"Specify \"true\", or \"false\" with #strictbraces.");
 	}
 
 /*
@@ -192,7 +225,7 @@ static void Set_autonum
 	int fun_number = strtol(text, &name, 0);
 	if (fun_number<=0)
 		Uc_location::yyerror("Starting function number too low in #autonumber");
-	
+
 	Uc_function_symbol::set_last_num(fun_number - 1);
 	}
 
@@ -204,10 +237,11 @@ static void Set_autonum
 
 char *Handle_string
 	(
-	const char *from			// Ends with a '"'.
+	const char *from,			// Ends with a '"'.
+	size_t length
 	)
 	{
-	char *to = new char[1 + strlen(from)];	// (Bigger than needed.)
+	char *to = new char[length];	// (Bigger than needed.)
 	char *str = to;
 
 	while (*from && *from != '\"')
@@ -229,10 +263,51 @@ char *Handle_string
 		case '\'':
 		case '\\':
 			*to++ = *from; break;
+		case '{': {
+			// We know that this will be of the form \\{xxx}
+			// where xxx is one of dot, ea, ee, ng, st, or th.
+			const char *term = from;
+			while (*term != '\0' && *term != '}') {
+				++term;
+			}
+			if (*term != '}') {
+				// Just in case.
+				Uc_location::yyerror("Unterminated rune escape sequence in string. This is probably a stray '\\{' which should be fixed.");
+				*to++ = '{';
+				break;
+			}
+			std::string escape(from + 1, term);
+			if (escape == "dot") {
+				*to++ = '|';
+			} else if (escape == "ea") {
+				*to++ = '+';
+			} else if (escape == "ee") {
+				*to++ = ')';
+			} else if (escape == "ng") {
+				*to++ = '*';
+			} else if (escape == "st") {
+				*to++ = ',';
+			} else if (escape == "th") {
+				*to++ = '(';
+			} else {
+				if (escape.size() != 2 && escape.size() != 3) {
+					// Just in case.
+					char buf[150];
+					snprintf(buf, array_size(buf), "Invalid rune escape sequence '\\{%s}'. "
+					             "Valid escapes are: '\\{dot}', '\\{ea}', '\\{ee}', '\\{ng}', '\\{st}', '\\{th}'",
+								 escape.c_str());
+					Uc_location::yyerror(buf);
+					*to++ = '{';
+					break;
+				}
+			}
+			from = term;
+			break;
+		}
 		default:
 			{
 			char buf[150];
-			sprintf(buf, "Unknown escape sequence '\\%c'. If you are trying "
+			snprintf(buf, array_size(buf), "Unknown escape sequence '\\%c'. If you are trying "
 			             "to insert a literal backslash ('\\') into text, "
 			             "write it as '\\\\'.", *from);
 			Uc_location::yywarning(buf);
@@ -249,6 +324,9 @@ char *Handle_string
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
+#if !defined(__llvm__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#endif
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #if !defined(__llvm__) && !defined(__clang__)
@@ -268,6 +346,7 @@ char *Handle_string
 %s fun_id
 %s in_script
 %s in_loop
+%s in_conversation
 %s in_breakable
 
 %%
@@ -292,6 +371,7 @@ long	return UCC_LONG;
 const		return UCC_CONST;
 string		return STRING;
 enum		return ENUM;
+declare		return DECLARE_;
 extern		return EXTERN;
 true		return UCTRUE;
 false		return UCFALSE;
@@ -302,8 +382,13 @@ new			return NEW;
 delete		return DELETE;
 switch		return SWITCH;
 default		return DEFAULT;
+always		return ALWAYS;
+attend		return ATTEND;
+forever		return FOREVER;
+breakable	return BREAKABLE;
 
 converse	return CONVERSE;
+endconv		return ENDCONV;
 user_choice	return CHOICE;
 nested		return NESTED;
 say		return SAY;
@@ -327,26 +412,27 @@ catch		return CATCH;
 abort		return ABORT;
 throw		return THROW;
 ".original"	return ORIGINAL;
+nobreak		return NOBREAK;
 <fun_id>{
 "shape#"	return SHAPENUM;
 "object#"	return OBJECTNUM;
+"id#"	return IDNUM;
 }
-
-<in_breakable>{
-break		return BREAK;
-}
-<in_loop>{
 break		return BREAK;
 continue	return CONTINUE;
+
+<in_conversation>{
+fallthrough	return FALLTHROUGH;
 }
 					/* Script commands. */
 <in_script>{
+raw		return RAW;
 nop		return NOP;
+nop2		return NOP2;
 nohalt		return NOHALT;
 next		return NEXT;
 finish		return FINISH;
 resurrect	return RESURRECT;
-continue	return CONTINUE;
 reset	return RESET;
 repeat		return REPEAT;
 wait		return WAIT;
@@ -405,6 +491,9 @@ normal_damage	return NORMAL_DAMAGE;
 fire_damage		return FIRE_DAMAGE;
 magic_damage	return MAGIC_DAMAGE;
 lightning_damage	return LIGHTNING_DAMAGE;
+poison_damage	return POISON_DAMAGE;
+starvation_damage	return STARVATION_DAMAGE;
+freezing_damage	return FREEZING_DAMAGE;
 ethereal_damage	return ETHEREAL_DAMAGE;
 sonic_damage	return SONIC_DAMAGE;
 }
@@ -418,15 +507,16 @@ sonic_damage	return SONIC_DAMAGE;
 			yylval.strval = strdup(yytext);
 			return IDENTIFIER;
 			}
-\"([^"]|\\.)*\"		{
+\"([^"]|\\\{(dot|ea|ee|ng|st|th)\}|\\[^\{])*\"		{
 					// Remove ending quote.
-			yylval.strval = Handle_string(yytext + 1);
+			const char *strval = yytext + 1;
+			yylval.strval = Handle_string(strval, strlen(strval) + 1);
 			return STRING_LITERAL;
 			}
-\"([^"]|\\.)*\"\*		{
+\"([^"]|\\\{(dot|ea|ee|ng|st|th)\}|\\[^\{])*\"\*		{
 					// Remove ending quote and asterisk.
-			yylval.strval = strdup(yytext + 1);
-			yylval.strval[strlen(yylval.strval) - 2] = 0;
+			const char *strval = yytext + 1;
+			yylval.strval = Handle_string(strval, strlen(strval) + 1);
 			return STRING_PREFIX;
 			}
 [0-9]+			{
@@ -450,12 +540,14 @@ sonic_damage	return SONIC_DAMAGE;
 "*="			{ return MUL_EQ; }
 "/="			{ return DIV_EQ; }
 "%="			{ return MOD_EQ; }
+"&="			{ return AND_EQ; }
 
 "#"[ \t]+[0-9]+[ \t]+\"[^"]*\".*\n	{ Set_location(yytext + 2); Uc_location::increment_cur_line(); }
 "#line"[ \t]+[0-9]+[ \t]+\"[^"]*\".*\n	{ Set_location(yytext + 6); Uc_location::increment_cur_line(); }
 "#include"[ \t]+.*\n		{ Uc_location::increment_cur_line(); Include(yytext + 8); }
 "#game"[ \t]+.*\n		{ Set_game(yytext + 5); Uc_location::increment_cur_line(); }
 "#autonumber"[ \t]+"0x"[0-9a-fA-F]+.*\n	{ Set_autonum(yytext + 11); Uc_location::increment_cur_line(); }
+"#strictbraces"[ \t]+.*\n		{ Set_strict_mode(yytext + 13); Uc_location::increment_cur_line(); }
 
 \#[^\n]*	{ Uc_location::yyerror("Directives require a terminating new-line character before the end of file"); }
 \#[^\n]*\n	{ Uc_location::yywarning("Unknown directive is being ignored"); Uc_location::increment_cur_line(); }
@@ -482,7 +574,7 @@ sonic_damage	return SONIC_DAMAGE;
 				Uc_location *loc = locstack.back();
 				locstack.pop_back();
 				const char *nm = loc->get_source();
-				loc->set_cur(nm, loc->get_line());
+				Uc_location::set_cur(nm, loc->get_line());
 				delete loc;
 				// Close currently opened file.
 				if (yyin && yyin != stdin && bufstack.size()) fclose(yyin);
@@ -517,6 +609,14 @@ void end_loop()
 	{
 	yy_pop_state();
 	}
+void start_converse()
+	{
+	yy_push_state(in_conversation);
+	}
+void end_converse()
+	{
+	yy_pop_state();
+	}
 void start_breakable()
 	{
 	yy_push_state(in_breakable);
@@ -532,6 +632,16 @@ void start_fun_id()
 void end_fun_id()
 	{
 	yy_pop_state();
+	}
+bool can_break()
+	{
+	const int state = YYSTATE;
+	return state == in_loop || state == in_conversation || state == in_breakable;
+	}
+bool can_continue()
+	{
+	const int state = YYSTATE;
+	return state == in_loop || state == in_conversation;
 	}
 
 extern "C" int yywrap() { return 1; }		/* Stop at EOF. */

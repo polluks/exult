@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2006-2013 The Exult Team
+Copyright (C) 2006-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -31,12 +31,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vector>
 #include <cstring>
 
+#include "array_size.h"
 #include "ucclass.h"
 #include "ucsymtbl.h"
 #include "ucfun.h"
 #include "ucloc.h"
-
-using std::vector;
 
 int Uc_class::last_num = -1;
 
@@ -56,9 +55,8 @@ Uc_class::Uc_class(
 ) : name(nm), scope(&base->scope), num_vars(base->num_vars),
 	methods(base->methods), base_class(base) {
 	num = ++last_num;
-	for (auto it = methods.begin();
-	        it != methods.end(); ++it)
-		(*it)->set_inherited();
+	for (auto *method : methods)
+		method->set_inherited();
 }
 
 /*
@@ -143,17 +141,15 @@ void Uc_class::add_method(
 ) {
 	// If this is a duplicate inherited function,
 	// or an externed class method, override it.
-	for (auto it = methods.begin();
-	        it != methods.end(); ++it) {
-		Uc_function *method = *it;
+	for (auto *&method : methods) {
 		if (!strcmp(m->get_name(), method->get_name())) {
 			if (method->is_inherited() || method->is_externed()) {
 				m->set_method_num(method->get_method_num());
-				*it = m;
+				method = m;
 				return;
 			} else {
 				char buf[150];
-				sprintf(buf, "Duplicate decl. of virtual member function '%s'.", m->get_name());
+				snprintf(buf, array_size(buf), "Duplicate decl. of virtual member function '%s'.", m->get_name());
 				Uc_location::yyerror(buf);
 				return;
 			}
@@ -170,11 +166,9 @@ void Uc_class::add_method(
 void Uc_class::gen(
     std::ostream &out
 ) {
-	vector<Uc_function *>::iterator it;
-	for (it = methods.begin(); it != methods.end(); ++it) {
-		Uc_function *m = *it;
+	for (auto *m : methods) {
 		if (m->get_parent() == &scope)
-			m->gen(out);    // Generate function if its ours.
+		m->gen(out);    // Generate function if its ours.
 	}
 }
 
@@ -186,10 +180,8 @@ Usecode_symbol *Uc_class::create_sym(
 ) {
 	auto *cs = new Usecode_class_symbol(name.c_str(),
 	        Usecode_symbol::class_scope, num, num_vars);
-	vector<Uc_function *>::iterator it;
-	for (it = methods.begin(); it != methods.end(); ++it) {
-		Uc_function *m = *it;
-		cs->add_sym(m->create_sym());
+	for (auto *m : methods) {
+			cs->add_sym(m->create_sym());
 		cs->add_method_num(m->get_usecode_num());
 	}
 	return cs;

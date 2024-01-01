@@ -1,7 +1,7 @@
 /*
  *  miscinf.cc - Information about several previously-hardcoded shape data.
  *
- *  Copyright (C) 2006  The Exult Team
+ *  Copyright (C) 2006-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -98,7 +98,7 @@ public:
 		int ret;
 		if (src.peek() == '0') {
 			src.ignore(1);
-			char chr = src.peek();
+			const char chr = src.peek();
 			if (chr == 'x' || chr == 'X') {
 				src.ignore(1);
 				src >> hex;
@@ -127,8 +127,8 @@ public:
 	void parse_entry(int index, istream &src,
 	                 bool for_patch, int version) final {
 		ignore_unused_variable_warning(index, for_patch, version);
-		int key = ReadInt(src, 0);
-		int data = ReadInt(src);
+		const int key = ReadInt(src, 0);
+		const int data = ReadInt(src);
 		table[key] = data;
 	}
 };
@@ -142,7 +142,7 @@ public:
 	void parse_entry(int index, istream &src,
                      bool for_patch, int version) final {
 		ignore_unused_variable_warning(index, for_patch, version);
-		int key = ReadInt(src, 0);
+		const int key = ReadInt(src, 0);
 		table[key] = true;
 	}
 };
@@ -197,7 +197,7 @@ public:
 			src >> key;
 			auto it = shapevars.find(key);
 			if (it != shapevars.end()) {
-				data.second = (*it).second; // The shape #.
+				data.second = it->second; // The shape #.
 			} else {
 				return; // Invalid reference; bail out.
 			}
@@ -227,7 +227,7 @@ public:
 	void parse_entry(int index, istream &src,
 	                 bool for_patch, int version) final {
 		ignore_unused_variable_warning(index, for_patch, version);
-		bool fmale = ReadInt(src, 0) != 0;
+		const bool fmale = ReadInt(src, 0) != 0;
 		Base_Avatar_info entry;
 		entry.shape_num = ReadInt(src);
 		entry.face_shape = ReadInt(src);
@@ -260,10 +260,10 @@ public:
 	int ReadVar(istream &src) {
 		src.ignore(1);
 		if (src.peek() == '%') {
-			string key = ReadStr(src, 0);
+			const string key = ReadStr(src, 0);
 			auto it = shapevars.find(key);
 			if (it != shapevars.end()) {
-				return (*it).second;    // The var value.
+				return it->second;    // The var value.
 			}
 			return -1;  // Invalid reference; bail out.
 		}
@@ -288,7 +288,7 @@ public:
 		entry.face_frame = ReadInt(src);
 		entry.alter_face_shape = ReadInt(src);
 		entry.alter_face_frame = ReadInt(src);
-		entry.copy_info = !(version == 2 && !src.eof() && ReadInt(src) == 0);
+		entry.copy_info = version != 2 || src.eof() || ReadInt(src) != 0;
 		if (for_patch && !table.empty()) {
 			unsigned int i;
 			int found = -1;
@@ -319,9 +319,9 @@ public:
 	                 bool for_patch, int version) final {
 		ignore_unused_variable_warning(index, for_patch, version);
 		Usecode_function_data entry;
-		int type = ReadInt(src, 0);
+		const int type = ReadInt(src, 0);
 		if (src.peek() == ':') {
-			string name = ReadStr(src);
+			const string name = ReadStr(src);
 			entry.fun_id = usecode->find_function(name.c_str(), true);
 		} else {
 			entry.fun_id = ReadInt(src);
@@ -385,11 +385,12 @@ void Shapeinfo_lookup::Read_data_file(
 	} else {
 		try {
 			snprintf(buf, 50, "<STATIC>/%s.txt", fname);
-			ifstream in;
-			U7open(in, buf, false);
+			auto pIn = U7open_in(buf, false);
+			if (!pIn)
+				throw file_open_exception(buf);
+			auto& in = *pIn;
 			static_version = Read_text_msg_file_sections(in,
 			                 static_strings, sections, numsections);
-			in.close();
 		} catch (std::exception const&) {
 			if (!Game::is_editing()) {
 				throw;
@@ -400,11 +401,12 @@ void Shapeinfo_lookup::Read_data_file(
 	patch_strings.resize(numsections);
 	snprintf(buf, 50, "<PATCH>/%s.txt", fname);
 	if (U7exists(buf)) {
-		ifstream in;
-		U7open(in, buf, false);
+		auto pIn = U7open_in(buf, false);
+		if (!pIn)
+			throw file_open_exception(buf);
+		auto& in = *pIn;
 		patch_version = Read_text_msg_file_sections(in, patch_strings,
 		                sections, numsections);
-		in.close();
 	}
 
 	for (size_t i = 0; i < static_strings.size(); i++) {
@@ -533,7 +535,7 @@ Base_Avatar_info *Shapeinfo_lookup::GetBaseAvInfo(bool sex) {
 	setup_avatar_data();
 	auto it = avdata->def_av_info.find(sex);
 	if (it != avdata->def_av_info.end()) {
-		return &((*it).second);
+		return &(it->second);
 	}
 	return nullptr;
 }
@@ -542,7 +544,7 @@ int Shapeinfo_lookup::get_skinvar(const string& key) {
 	setup_shape_files();
 	auto it = data->skinvars.find(key);
 	if (it != data->skinvars.end()) {
-		return (*it).second;    // The shape #.
+		return it->second;    // The shape #.
 	}
 	return -1;  // Invalid reference; bail out.
 }
@@ -570,7 +572,7 @@ vector<Skin_data> *Shapeinfo_lookup::GetSkinList() {
 Skin_data *Shapeinfo_lookup::GetSkinInfo(int skin, bool sex) {
 	setup_avatar_data();
 	for (auto& elem : avdata->skins_table) {
-		if (elem.skin_id == skin && elem.is_female == sex){ 
+		if (elem.skin_id == skin && elem.is_female == sex){
 			return &elem;
 		}
 	}
@@ -593,8 +595,8 @@ Skin_data *Shapeinfo_lookup::GetSkinInfoSafe(int skin, bool sex, bool sishapes) 
 }
 
 Skin_data *Shapeinfo_lookup::GetSkinInfoSafe(Actor *npc) {
-	int skin = npc->get_skin_color();
-	bool sex = npc->get_type_flag(Actor::tf_sex);
+	const int skin = npc->get_skin_color();
+	const bool sex = npc->get_type_flag(Actor::tf_sex);
 	return GetSkinInfoSafe(skin, sex, Shape_manager::get_instance()->have_si_shapes());
 }
 

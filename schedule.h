@@ -1,7 +1,7 @@
 /*
  *  Schedule.h - Schedules for characters.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,14 +28,9 @@
 #include <vector>
 #include "ignore_unused_variable_warning.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#define Rectangle RECTX
-#endif
-
 class Game_object;
 class Actor;
-class Rectangle;
+class TileRect;
 class Actor_action;
 class Usecode_value;
 
@@ -225,8 +220,8 @@ public:
 		: Schedule(n), which(dir), loc(pos), phase(0)
 	{  }
 	// Create common schedules:
-	static Pace_schedule *create_horiz(Actor *n);
-	static Pace_schedule *create_vert(Actor *n);
+	static std::unique_ptr<Pace_schedule> create_horiz(Actor *n);
+	static std::unique_ptr<Pace_schedule> create_vert(Actor *n);
 	static void pace(Actor *npc, char &which, int &phase, Tile_coord &blocked, int delay);
 	void now_what() override;    // Now what should NPC do?
 };
@@ -379,6 +374,7 @@ public:
 class Farmer_schedule : public Tool_schedule {
 	Game_object_weak crop;
 	int grow_cnt;
+  	int frame_group0;		// First in group of 3 that's being cut.
 	enum {
 	    start,
 	    find_crop,
@@ -388,7 +384,7 @@ class Farmer_schedule : public Tool_schedule {
 	} state;
 public:
 	Farmer_schedule(Actor *n) : Tool_schedule(n, 618),
-		grow_cnt(0), state(start)
+		grow_cnt(0), frame_group0(-1), state(start)
 	{  }
 	void now_what() override;    // Now what should NPC do?
 };
@@ -447,6 +443,7 @@ public:
 	void set_bed(Game_object *b) override;
 	void im_dormant() override;  // Just went dormant.
 	static bool is_bed_occupied(Game_object *bed, Actor *npc);
+	static bool sleep_interrupted;
 };
 
 /*
@@ -707,7 +704,7 @@ class Walk_to_schedule : public Schedule {
 	int retries;            // # failures at finding path.
 	int legs;           // # times restarted walk.
 	// Set to walk off screen.
-	void walk_off_screen(Rectangle &screen, Tile_coord &goal);
+	void walk_off_screen(TileRect &screen, Tile_coord &goal);
 public:
 	Walk_to_schedule(Actor *n, Tile_coord const &d, int new_sched,
 	                 int delay = -1);

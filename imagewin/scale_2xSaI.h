@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2009 Exult Team
+ *  Copyright (C) 2009-2022 Exult Team
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -147,8 +147,8 @@ void Scale_2xSaI(
 	int next1_yoff = sline_pixels;
 	int next2_yoff = 2 * sline_pixels;
 	// Figure threshholds for counters.
-	int ybeforelast = sheight - 2 - srcy;
-	int xbeforelast = sline_pixels - 2 - srcx;
+	const int ybeforelast = sheight - 2 - srcy;
+	const int xbeforelast = sline_pixels - 2 - srcx;
 	for (int y = 0; y < srch; y++, prev1_yoff = sline_pixels) {
 		if (y >= ybeforelast) { // Last/next-to-last row?
 			if (y == ybeforelast)
@@ -332,7 +332,7 @@ void Scale_2xSaI(
 		srcPtr += sline_pixels;
 		dstPtr += 2 * dline_pixels;
 		prev1_yoff = 1;
-	};
+	}
 }
 
 
@@ -356,10 +356,10 @@ void Scale_Super2xSaI(
 		srcw = sline_pixels - srcx;
 	}
 
-	int ybeforelast1 = sheight - 1 - srcy;
-	int ybeforelast2 = sheight - 2 - srcy;
-	int xbeforelast1 = sline_pixels - 1 - srcx;
-	int xbeforelast2 = sline_pixels - 2 - srcx;
+	const int ybeforelast1 = sheight - 1 - srcy;
+	const int ybeforelast2 = sheight - 2 - srcy;
+	const int xbeforelast1 = sline_pixels - 1 - srcx;
+	const int xbeforelast2 = sline_pixels - 2 - srcx;
 
 	for (int y = 0; y < srch; y++) {
 		Source_pixel *bP = srcPtr;
@@ -537,7 +537,7 @@ void Scale_Super2xSaI(
 		}
 		srcPtr += sline_pixels;
 		dstPtr += 2 * dline_pixels;
-	};
+	}
 }
 
 
@@ -583,10 +583,10 @@ void Scale_SuperEagle(
 		srcw = sline_pixels - srcx;
 	}
 
-	int ybeforelast1 = sheight - 1 - srcy;
-	int ybeforelast2 = sheight - 2 - srcy;
-	int xbeforelast1 = sline_pixels - 1 - srcx;
-	int xbeforelast2 = sline_pixels - 2 - srcx;
+	const int ybeforelast1 = sheight - 1 - srcy;
+	const int ybeforelast2 = sheight - 2 - srcy;
+	const int xbeforelast1 = sline_pixels - 1 - srcx;
+	const int xbeforelast2 = sline_pixels - 2 - srcx;
 
 	for (int y = 0; y < srch; y++) {
 		Source_pixel *bP = srcPtr;
@@ -779,7 +779,7 @@ void Scale_SuperEagle(
 		}
 		srcPtr += sline_pixels;
 		dstPtr += 2 * dline_pixels;
-	};
+	}
 }
 
 

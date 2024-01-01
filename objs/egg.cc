@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
+
+#include <memory>
 
 #include "Audio.h"
 #include "monsters.h"
@@ -58,7 +60,7 @@ using std::rand;
 using std::ostream;
 using std::string;
 
-Egg_object *Egg_object::editing = nullptr;
+Game_object_shared Egg_object::editing;
 
 /*
  *  Timer for a missile egg (type-6 egg).
@@ -79,7 +81,7 @@ public:
 		if (winfo) {
 			range = winfo->get_range();
 		}
-		int crit = e->get_criteria();
+		const int crit = e->get_criteria();
 		chk_range = crit == Egg_object::party_near || crit == Egg_object::avatar_near;
 	}
 	void handle_event(unsigned long curtime, uintptr udata) override;
@@ -93,7 +95,7 @@ void Missile_launcher::handle_event(
     unsigned long curtime,
     uintptr udata
 ) {
-	Tile_coord src = egg->get_tile();
+	const Tile_coord src = egg->get_tile();
 	// Is egg a ways off the screen?
 	if (!gwin->get_win_tile_rect().enlarge(10).has_world_point(src.tx, src.ty))
 		return;         // Return w'out adding back to queue.
@@ -104,31 +106,32 @@ void Missile_launcher::handle_event(
 			return;
 		}
 	}
-	Projectile_effect *proj = nullptr;
+	std::unique_ptr<Projectile_effect> proj{nullptr};
 	if (dir < 8) {          // Direction given?
 		// Get adjacent tile in direction.
-		Tile_coord adj = src.get_neighbor(dir % 8);
+		const Tile_coord adj = src.get_neighbor(dir % 8);
 		// Make it go (range) tiles.
-		int dx = adj.tx - src.tx;
-		int dy = adj.ty - src.ty;
+		const int dx = adj.tx - src.tx;
+		const int dy = adj.ty - src.ty;
 		Tile_coord dest = src;
 		dest.tx += range * dx;
 		dest.ty += range * dy;
-		proj = new Projectile_effect(egg, dest, weapon, shapenum, shapenum);
+		proj = std::make_unique<Projectile_effect>(egg,
+				dest, weapon, shapenum, shapenum);
 	} else {            // Target a party member.
 		Actor *party[9];
-		int psize = gwin->get_party(party, 1);
+		const int psize = gwin->get_party(party, 1);
 		int cnt = psize;
-		int n = rand() % psize; // Pick one at random.
+		const int n = rand() % psize; // Pick one at random.
 		// Find one we can hit.
 		for (int i = n; !proj && cnt; cnt--, i = (i + 1) % psize)
 			if (Fast_pathfinder_client::is_straight_path(src,
 			        party[i]->get_tile()))
-				proj = new Projectile_effect(
+				proj = std::make_unique<Projectile_effect>(
 				    src, party[i], weapon, shapenum, shapenum);
 	}
 	if (proj)
-		eman->add_effect(proj);
+		eman->add_effect(std::move(proj));
 	if (chk_range)
 		gwin->get_tqueue()->add(curtime + (delay > 0 ? delay : 1), this, udata);
 }
@@ -189,15 +192,15 @@ class Monster_egg : public Egg_object {
 	unsigned char mframe;
 	unsigned char sched, align, cnt;
 	void create_monster() const {
-		Tile_coord dest = Map_chunk::find_spot(
+		const Tile_coord dest = Map_chunk::find_spot(
 		                      get_tile(), 5, mshape, 0, 1);
 		if (dest.tx != -1) {
-			Game_object_shared new_monster =
+			const Game_object_shared new_monster =
 			    Monster_actor::create(mshape, dest, sched, align);
 			Game_object *monster = new_monster.get();
 			monster->change_frame(mframe);
 			gwin->add_dirty(monster);
-			gwin->add_nearby_npc(static_cast<Monster_actor *>(monster));
+			gwin->add_nearby_npc(monster->as_npc());
 		}
 	}
 public:
@@ -227,7 +230,7 @@ public:
 			while (num--)
 				create_monster();
 		} else {        // Create item.
-			Game_object_shared nobj = get_map()->create_ireg_object(info,
+			const Game_object_shared nobj = get_map()->create_ireg_object(info,
 			                    mshape, mframe, get_tx(), get_ty(), get_lift());
 			if (nobj->is_egg())
 				chunk->add_egg(nobj->as_egg());
@@ -250,8 +253,12 @@ public:
 	            unsigned char prob, uint16 d1, uint16 d2, const char *fnm)
 		: Egg_object(shnum, frnum, tx, ty, tz, itype, prob, d1, d2),
 		  fun(d2) {
-		set_quality(d1 & 0xff);
+		Game_object::set_quality(d1 & 0xff);
 		Usecode_egg::set_str1(fnm);
+	}
+	void set_quality(int q) override{
+		Game_object::set_quality(q & 0xff);
+		data1 = (data1 & 0xFF00) | get_quality();
 	}
 	void set_str1(const char *s) override {
 		fun_name = s ? s : "";
@@ -262,10 +269,10 @@ public:
 		return fun_name.c_str();
 	}
 	int get_usecode() const override {
-	    return fun;
+		return fun;
 	}
 	bool set_usecode(int funid, const char *nm = nullptr) override {
-	    fun = funid;
+		fun = funid;
 		fun_name = nm;
 		return true;
 	}
@@ -359,11 +366,15 @@ public:
 		if (type == intermap)
 			mapnum = d1 & 0xff;
 		else
-			set_quality(d1 & 0xff); // Teleport egg.
-		int schunk = d1 >> 8;
+			Game_object::set_quality(d1 & 0xff); // Teleport egg.
+		const int schunk = d1 >> 8;
 		destx = (schunk % 12) * c_tiles_per_schunk + (d2 & 0xff);
 		desty = (schunk / 12) * c_tiles_per_schunk + (d2 >> 8);
 		destz = d3 & 0xff;
+	}
+	void set_quality(int q) override{
+		Game_object::set_quality(q & 0xff);
+		data1 = (data1 & 0xFF00) | get_quality();
 	}
 	void hatch_now(Game_object *obj, bool must) override {
 		ignore_unused_variable_warning(must);
@@ -421,8 +432,7 @@ public:
 		Egg_vector eggs;
 		find_nearby_eggs(eggs, 275, dist);
 		find_nearby_eggs(eggs, 200, dist);
-		for (auto it = eggs.begin(); it != eggs.end(); ++it) {
-			Egg_object *egg = *it;
+		for (auto *egg : eggs) {
 			if (egg != this &&
 			        egg->criteria == external_criteria &&
 			        // Attempting to fix problem in Silver Seed
@@ -438,7 +448,11 @@ public:
 	         unsigned int tz, unsigned short itype,
 	         unsigned char prob, uint16 d1, uint16 d2)
 		: Egg_object(shnum, frnum, tx, ty, tz, itype, prob, d1, d2) {
-		set_quality(d1 & 0xff);
+		Game_object::set_quality(d1 & 0xff);
+	}
+	void set_quality(int q) override{
+		Game_object::set_quality(q & 0xff);
+		data1 = (data1 & 0xFF00) | get_quality();
 	}
 };
 
@@ -456,11 +470,11 @@ Egg_object_shared Egg_object::create_egg(
     unsigned int ty,
     unsigned int tz
 ) {
-	unsigned short type = entry[4] + 256 * entry[5];
-	int prob = entry[6];        // Probability (1-100).
-	int data1 = entry[7] + 256 * entry[8];
-	int data2 = entry[10] + 256 * entry[11];
-	int data3 = entlen >= 14 ? (entry[12] + 256 * entry[13]) : 0;
+	const unsigned short type = entry[4] + 256 * entry[5];
+	const int prob = entry[6];        // Probability (1-100).
+	const int data1 = entry[7] + 256 * entry[8];
+	const int data2 = entry[10] + 256 * entry[11];
+	const int data3 = entlen >= 14 ? (entry[12] + 256 * entry[13]) : 0;
 	return create_egg(animated, shnum, frnum, tx, ty, tz, type, prob,
 	                  data1, data2, data3);
 }
@@ -564,21 +578,21 @@ Egg_object::Egg_object(
     short d1, short d2, short d3
 ) : Egglike_game_object(shapenum, framenum, tilex, tiley, lft),
 	probability(prob), data1(d1), data2(d2), data3(d3),
-	area(Rectangle(0, 0, 0, 0)), animator(nullptr) {
+	area(TileRect(0, 0, 0, 0)), animator(nullptr) {
 	type = itype & 0xf;
 	// Teleport destination?
 	if (type == teleport && framenum == 6 && shapenum == 275)
 		type = path;        // (Mountains N. of Vesper).
 	criteria = (itype & (7 << 4)) >> 4;
 	distance = (itype >> 10) & 0x1f;
-	unsigned char noct = (itype >> 7) & 1;
-	unsigned char do_once = (itype >> 8) & 1;
+	const unsigned char noct = (itype >> 7) & 1;
+	const unsigned char do_once = (itype >> 8) & 1;
 	// Missile eggs can be rehatched
-	unsigned char htch = (type == missile) ? 0 : ((itype >> 9) & 1);
+	const unsigned char htch = (type == missile) ? 0 : ((itype >> 9) & 1);
 	solid_area = (criteria == something_on || criteria == cached_in ||
 	              // Teleports need solid area.
 	              type == teleport || type == intermap) ? 1 : 0;
-	unsigned char ar = (itype >> 15) & 1;
+	const unsigned char ar = (itype >> 15) & 1;
 	flags = (noct << nocturnal) + (do_once << once) +
 	        (htch << hatched) + (ar << auto_reset);
 	// Party_near & auto_reset don't mix
@@ -597,7 +611,7 @@ inline void Egg_object::init_field(
 	type = ty;
 	probability = 100;
 	data1 = data2 = 0;
-	area = Rectangle(0, 0, 0, 0);
+	area = TileRect(0, 0, 0, 0);
 	criteria = party_footpad;
 	distance = 0;
 	solid_area = 0;
@@ -635,26 +649,26 @@ Egg_object::~Egg_object(
 void Egg_object::set_area(
 ) {
 	if (!probability || type == path) { // No chance of normal activation?
-		area = Rectangle(0, 0, 0, 0);
+		area = TileRect(0, 0, 0, 0);
 		return;
 	}
-	Tile_coord t = get_tile();  // Get absolute tile coords.
+	const Tile_coord t = get_tile();  // Get absolute tile coords.
 	switch (criteria) {     // Set up active area.
 	case cached_in:         // Make it really large.
-		area = Rectangle(t.tx - 32, t.ty - 32, 64, 64);
+		area = TileRect(t.tx - 32, t.ty - 32, 64, 64);
 		break;
 	case avatar_footpad:
 	case party_footpad: {
 		const Shape_info &info = get_info();
-		int frame = get_framenum();
-		int xtiles = info.get_3d_xtiles(frame);
-		int ytiles = info.get_3d_ytiles(frame);
-		area = Rectangle(t.tx - xtiles + 1, t.ty - ytiles + 1,
+		const int frame = get_framenum();
+		const int xtiles = info.get_3d_xtiles(frame);
+		const int ytiles = info.get_3d_ytiles(frame);
+		area = TileRect(t.tx - xtiles + 1, t.ty - ytiles + 1,
 		                 xtiles, ytiles);
 		break;
 	}
 	case avatar_far:        // Make it 1 tile bigger each dir.
-		area = Rectangle(t.tx - distance - 1, t.ty - distance - 1,
+		area = TileRect(t.tx - distance - 1, t.ty - distance - 1,
 		                 2 * distance + 3, 2 * distance + 3);
 		break;
 	default: {
@@ -665,13 +679,13 @@ void Egg_object::set_area(
 			if (criteria == external_criteria)
 				width += 2;
 		}
-		area = Rectangle(t.tx - distance, t.ty - distance,
+		area = TileRect(t.tx - distance, t.ty - distance,
 		                 width, width);
 		break;
 	}
 	}
 	// Don't go outside the world.
-	Rectangle world(0, 0, c_num_chunks * c_tiles_per_chunk,
+	const TileRect world(0, 0, c_num_chunks * c_tiles_per_chunk,
 	                c_num_chunks * c_tiles_per_chunk);
 	area = area.intersect(world);
 }
@@ -718,13 +732,13 @@ bool Egg_object::is_active(
 		return false;     // For now... Already hatched.
 	if (flags & (1 << static_cast<int>(nocturnal))) {
 		// Nocturnal.
-		int hour = gclock->get_hour();
-		if (!(hour >= 21 || hour <= 4))
+		const int hour = gclock->get_hour();
+		if (hour < 21 && hour > 4)
 			return false; // It's not night.
 	}
 	auto cri = static_cast<Egg_criteria>(get_criteria());
 
-	int deltaz = tz - get_lift();
+	const int deltaz = tz - get_lift();
 	switch (cri) {
 	case cached_in: {       // Anywhere in square.
 		// This seems to be true for SI in general. It has the side effect
@@ -771,7 +785,7 @@ bool Egg_object::is_active(
 	case avatar_far: {      // New tile is outside, old is inside.
 		if (obj != gwin->get_main_actor() || !area.has_world_point(tx, ty))
 			return false;
-		Rectangle inside(area.x + 1, area.y + 1,
+		const TileRect inside(area.x + 1, area.y + 1,
 		                 area.w - 2, area.h - 2);
 		return inside.has_world_point(from_tx, from_ty) &&
 		       !inside.has_world_point(tx, ty);
@@ -786,8 +800,11 @@ bool Egg_object::is_active(
 				   obj->as_actor();
 		else
 			return area.has_world_point(tx, ty) && deltaz == 0 &&
-			       obj->get_flag(Obj_flags::in_party);;
+			       obj->get_flag(Obj_flags::in_party);
 	case something_on:
+		// force close gumps when gumps pause game
+		if (!gumpman->gumps_dont_pause_game())
+			gumpman->close_all_gumps();
 		return          // Guessing.  At SI end, deltaz == -1.
 		    deltaz / 4 == 0 && area.has_world_point(tx, ty) && !obj->as_actor();
 	case external_criteria:
@@ -851,10 +868,10 @@ bool Egg_object::edit(
 #ifdef USE_EXULTSTUDIO
 	if (client_socket >= 0 &&   // Talking to ExultStudio?
 	        cheat.in_map_editor()) {
-		editing = nullptr;
-		Tile_coord t = get_tile();
+		editing.reset();
+		const Tile_coord t = get_tile();
 		// Usecode function name.
-		string str1 = get_str1();
+		const char *str1 = get_str1();
 		if (Egg_object_out(client_socket, this, t.tx, t.ty, t.tz,
 		                   get_shapenum(), get_framenum(),
 		                   type, criteria, probability, distance,
@@ -862,7 +879,7 @@ bool Egg_object::edit(
 		                   (flags >> hatched) & 1, (flags >> auto_reset) & 1,
 		                   data1, data2, data3, str1) != -1) {
 			cout << "Sent egg data to ExultStudio" << endl;
-			editing = this;
+			editing = shared_from_this();
 		} else
 			cout << "Error sending egg data to ExultStudio" << endl;
 		return true;
@@ -908,11 +925,12 @@ void Egg_object::update_from_studio(
 		cout << "Error decoding egg" << endl;
 		return;
 	}
-	if (oldegg && oldegg != editing) {
+	if (oldegg && oldegg != editing.get()) {
 		cout << "Egg from ExultStudio is not being edited" << endl;
 		return;
 	}
-	editing = nullptr;
+	// Keeps NPC alive until end of function
+	const Game_object_shared keep = std::move(editing);
 	if (!oldegg) {          // Creating a new one?  Get loc.
 		if (!Get_click(x, y, Mouse::hand, nullptr)) {
 			if (client_socket >= 0)
@@ -962,8 +980,8 @@ void Egg_object::update_from_studio(
 		}
 
 	const Shape_info &info = ShapeID::get_info(shape);
-	bool anim = info.is_animated() || info.has_sfx();
-	Egg_object_shared egg = create_egg(anim, shape, frame, tx, ty, tz, type,
+	const bool anim = info.is_animated() || info.has_sfx();
+	const Egg_object_shared egg = create_egg(anim, shape, frame, tx, ty, tz, type,
 	                             probability, data1, data2, data3, str1.c_str());
 	if (!oldegg) {
 		int lift;       // Try to drop at increasing hts.
@@ -974,14 +992,13 @@ void Egg_object::update_from_studio(
 			if (client_socket >= 0)
 				Exult_server::Send_data(client_socket,
 				                        Exult_server::cancel);
-			egg = nullptr;
 			return;
 		}
 		if (client_socket >= 0)
 			Exult_server::Send_data(client_socket,
 			                        Exult_server::user_responded);
 	} else {
-		Tile_coord pos = oldegg->get_tile();
+		const Tile_coord pos = oldegg->get_tile();
 		egg->move(pos.tx, pos.ty, pos.tz);
 	}
 	gwin->add_dirty(egg.get());
@@ -1023,7 +1040,7 @@ void Egg_object::hatch(
 
 	  Prevent the Serpent Staff egg from hatching only once
 	*/
-	Tile_coord eggpos = get_tile();
+	const Tile_coord eggpos = get_tile();
 	if (GAME_SI && eggpos.tx == 1287 && eggpos.ty == 2568 && eggpos.tz == 0) {
 		flags &= ~(1 << static_cast<int>(hatched));
 	}
@@ -1041,15 +1058,18 @@ void Egg_object::hatch(
 	/* end hack */
 
 
-	int roll = must ? 0 : 1 + rand() % 100;
+	const int roll = must ? 0 : 1 + rand() % 100;
 	if (roll <= probability) {
 		// Time to hatch the egg.
 		// Watch it in case it gets deleted.
-		Game_object_weak watch = weak_from_this();;
+		const Game_object_weak watch = weak_from_this();
 		hatch_now(obj, must);
+		if (watch.expired()) {
+			// We have been deleted, so just leave.
+			return;
+		}
 		if (flags & (1 << static_cast<int>(once))) {
-		    if (!watch.expired())
-			    remove_this(nullptr);
+		    remove_this(nullptr);
 			return;
 		}
 	}
@@ -1086,7 +1106,7 @@ void Egg_object::set_weather(
 ) {
 	if (!len)           // Means continuous.
 		len = 6000;     // Confirmed from originals.
-	int cur = eman->get_weather();
+	const int cur = eman->get_weather();
 	cout << "Current weather is " << cur << "; setting " << weather
 	     << endl;
 	// Experimenting.
@@ -1098,21 +1118,21 @@ void Egg_object::set_weather(
 		eman->remove_weather_effects();
 		break;
 	case 1:     // Snow.
-		eman->add_effect(new Snowstorm_effect(len, 0, egg));
+		eman->add_effect(std::make_unique<Snowstorm_effect>(len, 0, egg));
 		break;
 	case 2:     // Storm.
-		eman->add_effect(new Storm_effect(len, 0, egg));
+		eman->add_effect(std::make_unique<Storm_effect>(len, 0, egg));
 		break;
 	case 3:     // (On Ambrosia).
 		eman->remove_weather_effects();
-		eman->add_effect(new Sparkle_effect(len, 0, egg));
+		eman->add_effect(std::make_unique<Sparkle_effect>(len, 0, egg));
 		break;
 	case 4:     // Fog.
-		eman->add_effect(new Fog_effect(len, 0, egg));
+		eman->add_effect(std::make_unique<Fog_effect>(len, 0, egg));
 		break;
 	case 5:     // Overcast.
 	case 6:     // Clouds.
-		eman->add_effect(new Clouds_effect(len, 0, egg, weather));
+		eman->add_effect(std::make_unique<Clouds_effect>(len, 0, egg, weather));
 		break;
 	default:
 		break;
@@ -1131,8 +1151,8 @@ void Egg_object::move(
     int newmap
 ) {
 	// Figure new chunk.
-	int newcx = newtx / c_tiles_per_chunk;
-	int newcy = newty / c_tiles_per_chunk;
+	const int newcx = newtx / c_tiles_per_chunk;
+	const int newcy = newty / c_tiles_per_chunk;
 	Game_map *eggmap = newmap >= 0 ? gwin->get_map(newmap) : get_map();
 	if (!eggmap) eggmap = gmap;
 	Map_chunk *newchunk = eggmap->get_chunk_safely(newcx, newcy);
@@ -1173,7 +1193,7 @@ void Egg_object::write_ireg(
     ODataSource *out
 ) {
 	unsigned char buf[30];      // 12-14 byte entry.
-	int sz = data3 > 0 ? 14 : 12;
+	const int sz = data3 > 0 ? 14 : 12;
 	uint8 *ptr = write_common_ireg(sz, buf);
 	unsigned short tword = type & 0xf; // Set up 'type' word.
 	tword |= ((criteria & 7) << 4);
@@ -1230,7 +1250,7 @@ bool Field_object::field_effect(
 	if (!actor)
 		return false;
 	bool del = false;       // Only delete poison, sleep fields.
-	int frame = get_framenum();
+	const int frame = get_framenum();
 	switch (type) {
 	case poison_field:
 		if (rand() % 2 && !actor->get_flag(Obj_flags::poisoned)) {
@@ -1263,10 +1283,9 @@ bool Field_object::field_effect(
 		return false;
 	}
 
-	Field_frame_animator *ani;
-	if (!del && (ani = dynamic_cast<Field_frame_animator *>(animator)) != nullptr)
+	if (!del && animator)
 		// Tell animator to keep checking.
-		ani->activated = true;
+		animator->activate_animator();
 	return del;
 }
 
@@ -1298,11 +1317,11 @@ void Field_object::activate(
 	Actor_vector npcs;      // Find all nearby NPC's.
 	gwin->get_nearby_npcs(npcs);
 	npcs.push_back(gwin->get_main_actor()); // Include Avatar.
-	Rectangle eggfoot = get_footprint();
+	const TileRect eggfoot = get_footprint();
 	// Clear flag to check.
-	static_cast<Field_frame_animator *>(animator)->activated = false;
-	for (auto it = npcs.begin(); it != npcs.end(); ++it) {
-		Actor *actor = *it;
+	if (animator)
+		animator->deactivate_animator();
+	for (auto *actor : npcs) {
 		if (actor->is_dead() || Game_object::distance(actor) > 4)
 			continue;
 		if (actor->get_footprint().intersects(eggfoot))
@@ -1387,7 +1406,7 @@ void Mirror_object::hatch(Game_object *obj, bool must) {
 bool Mirror_object::is_active(Game_object *obj, int tx, int ty, int tz, int from_tx, int from_ty) {
 	ignore_unused_variable_warning(obj, tx, ty, tz, from_tx, from_ty);
 	// These are broken, so dont touch
-	int frnum = get_framenum();
+	const int frnum = get_framenum();
 	if (frnum % 3 == 2)  return false;
 	if (frnum >= 3 && GAME_BG)  // Demon mirror in FOV.
 		return false;
@@ -1398,13 +1417,13 @@ bool Mirror_object::is_active(Game_object *obj, int tx, int ty, int tz, int from
 // Set up active area.
 void Mirror_object::set_area() {
 	// These are broken, so dont touch
-	if ((get_framenum() % 3) == 2) area = Rectangle(0, 0, 0, 0);
+	if ((get_framenum() % 3) == 2) area = TileRect(0, 0, 0, 0);
 
-	Tile_coord t = get_tile();  // Get absolute tile coords.
+	const Tile_coord t = get_tile();  // Get absolute tile coords.
 
 	// To left or above?
-	if (get_shapenum() == 268) area = Rectangle(t.tx - 1, t.ty - 3, 6, 6);
-	else  area = Rectangle(t.tx - 3 , t.ty - 1, 6, 6);
+	if (get_shapenum() == 268) area = TileRect(t.tx - 1, t.ty - 3, 6, 6);
+	else  area = TileRect(t.tx - 3 , t.ty - 1, 6, 6);
 }
 
 void Mirror_object::paint() {

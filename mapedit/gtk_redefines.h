@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2016 - Marzo Sette Torres Junior
+ * Copyright (C) 2016-2018 - Marzo Sette Torres Junior
+ * Copyright (C) 2021-2022 - The Exult Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,21 +23,39 @@
 #ifndef INCL_GTK_REDEFINES
 #define INCL_GTK_REDEFINES  1
 
-namespace {
-	template <typename T1, typename T2> 
-	struct gtk_cast_internal { 
-		static T1 *cast(T2 *obj) {
-			return reinterpret_cast<T1 *>(obj);
-		}
-	}; 
+#include <cstring>
+#include <type_traits>
 
-	template <typename T> 
-	struct gtk_cast_internal<T, T> { 
-		static T *cast(T *obj) {
-			return obj;
-		}
-	};
- }
+// Do casts from pointers without too much undefined behavior.
+template <typename To, typename From>
+To safe_pointer_cast(From pointer) {
+	// NOLINTNEXTLINE(bugprone-sizeof-expression)
+	constexpr const size_t SizeFrom = sizeof(From);
+	// NOLINTNEXTLINE(bugprone-sizeof-expression)
+	constexpr const size_t SizeTo = sizeof(To);
+	static_assert(std::is_pointer<From>::value && std::is_pointer<To>::value && SizeFrom == SizeTo, "Pointer sizes do not match");
+	To output;
+	std::memcpy(static_cast<void*>(&output),
+				static_cast<void*>(&pointer),
+				SizeFrom);
+	return output;
+}
+
+namespace {
+template <typename T1, typename T2>
+struct gtk_cast_internal {
+	static T1 *cast(T2 *obj) {
+		return safe_pointer_cast<T1 *>(obj);
+	}
+};
+
+template <typename T>
+struct gtk_cast_internal<T, T> {
+	static T *cast(T *obj) {
+		return obj;
+	}
+};
+}
 
 template <typename T1, typename T2>
 inline T1 *gtk_cast(T2 *obj) {
@@ -46,9 +65,13 @@ inline T1 *gtk_cast(T2 *obj) {
 #if defined(_G_TYPE_CIC) || defined(_G_TYPE_CCC)
 #  undef _G_TYPE_CIC
 #  undef _G_TYPE_CCC
+#  undef _G_TYPE_CIT
+#  undef _G_TYPE_CIFT
 #  ifndef G_DISABLE_CAST_CHECKS
 #    define _G_TYPE_CIC(ip, gt, ct)     gtk_cast<ct>(g_type_check_instance_cast(gtk_cast<GTypeInstance>((ip)), gt))
 #    define _G_TYPE_CCC(cp, gt, ct)     gtk_cast<ct>(g_type_check_class_cast(gtk_cast<GTypeClass>((cp)), gt))
+#    define _G_TYPE_CIT(ip, gt)                     (g_type_check_instance_is_a(gtk_cast<GTypeInstance>((ip)), gt))
+#    define _G_TYPE_CIFT(ip, ft)                    (g_type_check_instance_is_fundamentally_a(gtk_cast<GTypeInstance>((ip)), ft))
 #  else /* G_DISABLE_CAST_CHECKS */
 #    define _G_TYPE_CIC(ip, gt, ct)     gtk_cast<ct>((ip))
 #    define _G_TYPE_CCC(cp, gt, ct)     gtk_cast<ct>((cp))
@@ -62,14 +85,14 @@ inline T1 *gtk_cast(T2 *obj) {
 
 #ifdef G_CALLBACK
 #  undef G_CALLBACK
-#  define G_CALLBACK(f)       (reinterpret_cast<GCallback>((f)))
+#  define G_CALLBACK(f)       (safe_pointer_cast<GCallback>((f)))
 #endif /* G_CALLBACK */
 
 #ifdef G_TYPE_MAKE_FUNDAMENTAL
 #  undef G_TYPE_MAKE_FUNDAMENTAL
-#define	G_TYPE_MAKE_FUNDAMENTAL(x)      (static_cast<GType>((x) << G_TYPE_FUNDAMENTAL_SHIFT))
+#define G_TYPE_MAKE_FUNDAMENTAL(x)      (static_cast<GType>((x) << G_TYPE_FUNDAMENTAL_SHIFT))
 #endif /* G_TYPE_MAKE_FUNDAMENTAL */
- 
+
 #if defined(g_list_previous) || defined(g_list_next)
 #  undef g_list_previous
 #  undef g_list_next
@@ -77,41 +100,20 @@ inline T1 *gtk_cast(T2 *obj) {
 #define g_list_next(list)               ((list) ? (gtk_cast<GList>((list))->next) : nullptr)
 #endif /* defined(g_list_previous) || defined(g_list_next) */
 
-#if defined(gtk_menu_append) || defined(gtk_menu_prepend) || defined(gtk_menu_insert)
-#  undef gtk_menu_append
-#  undef gtk_menu_prepend
-#  undef gtk_menu_insert
-#  define gtk_menu_append(menu,child)     gtk_menu_shell_append (gtk_cast<GtkMenuShell>((menu)),(child))
-#  define gtk_menu_prepend(menu,child)    gtk_menu_shell_prepend(gtk_cast<GtkMenuShell>((menu)),(child))
-#  define gtk_menu_insert(menu,child,pos) gtk_menu_shell_insert (gtk_cast<GtkMenuShell>((menu)),(child),(pos))
-#endif /* defined(gtk_menu_append) || defined(gtk_menu_prepend) || defined(gtk_menu_insert) */
-
 #ifdef g_signal_connect
 #  undef g_signal_connect
 #define g_signal_connect(instance, detailed_signal, c_handler, data) \
-    g_signal_connect_data ((instance), (detailed_signal), (c_handler), (data), nullptr, static_cast<GConnectFlags>(0))
+	g_signal_connect_data ((instance), (detailed_signal), (c_handler), (data), nullptr, static_cast<GConnectFlags>(0))
 #endif /* g_signal_connect */
 
 #ifdef g_utf8_next_char
 #  undef g_utf8_next_char
-#define g_utf8_next_char(p)   ((p) + g_utf8_skip[*reinterpret_cast<const guchar *>((p))])
+#define g_utf8_next_char(p)   ((p) + g_utf8_skip[*safe_pointer_cast<const guchar *>((p))])
 #endif /* g_utf8_next_char */
 
 #ifdef G_LOG_DOMAIN
 #  undef G_LOG_DOMAIN
 #  define G_LOG_DOMAIN    nullptr
-#endif
-
-#ifdef	gtk_signal_connect
-#  undef gtk_signal_connect
-#  define gtk_signal_connect(object,name,func,func_data)                                 \
-    gtk_signal_connect_full((object), (name), (func), nullptr, (func_data), nullptr, 0, 0)
-#endif
-
-#ifdef gtk_signal_connect_object
-#undef gtk_signal_connect_object
-#  define gtk_signal_connect_object(object,name,func,slot_object)                        \
-    gtk_signal_connect_full ((object), (name), (func), nullptr, (slot_object), nullptr, 1, 0)
 #endif
 
 #endif

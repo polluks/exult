@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2003-2013 The Exult Team
+Copyright (C) 2003-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,13 +27,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 class Gump_button;
 
 class AudioOptions_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(AudioOptions_gump)
-
 private:
 	enum button_ids {
 	    id_first = 0,
 	    id_ok = id_first,
 	    id_cancel,
+	    id_help,
 	    id_audio_enabled,
 	    id_sample_rate,
 	    id_speaker_type,
@@ -50,6 +49,12 @@ private:
 	    id_count
 	};
 	std::array<std::unique_ptr<Gump_button>, id_count> buttons;
+
+	typedef enum _audio_speech_state {
+		speech_off,
+		speech_on,
+		speech_on_with_subtitles
+	} audio_speech_state;
 
 	bool speaker_type; // only mono and stereo atm
 	bool o_speaker_type;
@@ -70,7 +75,7 @@ private:
 #ifdef ENABLE_MIDISFX
 	int sfx_conversion;
 #endif
-	int speech_enabled;
+	audio_speech_state speech_option;
 
 	// Auxiliary variables for digital SFX packages:
 	int nsfxopts, nsfxpacks;
@@ -100,12 +105,14 @@ public:
 	void toggle(Gump_button *btn, int state);
 	void rebuild_buttons();
 	void rebuild_midi_buttons();
+	void rebuild_midi_driver_buttons();
 	void rebuild_mididriveroption_buttons();
 	void rebuild_sfx_buttons();
 
 	void load_settings();
 	void save_settings();
 	void cancel();
+	void help();
 
 	void toggle_audio_enabled(int state) {
 		audio_enabled = state;
@@ -123,6 +130,8 @@ public:
 	}
 	void toggle_music_digital(int state) {
 		midi_ogg_enabled = state;
+		rebuild_midi_driver_buttons();
+		paint();
 	}
 	void toggle_midi_driver(int state) {
 		midi_driver = state;
@@ -145,7 +154,7 @@ public:
 	}
 	void toggle_sfx_pack(int state);
 	void toggle_speech_enabled(int state) {
-		speech_enabled = state;
+		speech_option = static_cast<audio_speech_state>(state);
 	}
 };
 

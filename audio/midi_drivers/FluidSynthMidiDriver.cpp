@@ -1,6 +1,7 @@
-/* 
+/*
  * Copyright (C) 2001-2005 The ScummVM project
  * Copyright (C) 2005 The Pentagram Team
+ * Copyright (C) 2006-2022 The Exult Team
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -27,36 +28,25 @@
 
 //#include <cstring>
 
-const MidiDriver::MidiDriverDesc FluidSynthMidiDriver::desc = 
+const MidiDriver::MidiDriverDesc FluidSynthMidiDriver::desc =
 		MidiDriver::MidiDriverDesc ("FluidSynth", createInstance);
 
 // MidiDriver method implementations
 
-void FluidSynthMidiDriver::setInt(const char *name, int val) {
-	//char *name2 = strdup(name);
-	char *name2 = const_cast<char*>(name);
-
-	fluid_settings_setint(_settings, name2, val);
-	//std::free(name2);
+int FluidSynthMidiDriver::setInt(const char *name, int val) {
+	return fluid_settings_setint(_settings, name, val);
 }
 
-void FluidSynthMidiDriver::setNum(const char *name, double val) {
-	//char *name2 = strdup(name);
-	char *name2 = const_cast<char*>(name);
-
-	fluid_settings_setnum(_settings, name2, val);
-	//std::free(name2);
+int FluidSynthMidiDriver::setNum(const char *name, double val) {
+	return fluid_settings_setnum(_settings, name, val);
 }
 
-void FluidSynthMidiDriver::setStr(const char *name, const char *val) {
-	//char *name2 = strdup(name);
-	//char *val2 = strdup(val);
-	char *name2 = const_cast<char*>(name);
-	char *val2 = const_cast<char*>(val);
+int FluidSynthMidiDriver::setStr(const char *name, const char *val) {
+	return fluid_settings_setstr(_settings, name, val);
+}
 
-	fluid_settings_setstr(_settings, name2, val2);
-	//std::free(name2);
-	//std::free(val2);
+int FluidSynthMidiDriver::getStr(const char *name, char **pval) {
+	return fluid_settings_dupstr(_settings, name, pval);
 }
 
 int FluidSynthMidiDriver::open() {
@@ -66,25 +56,68 @@ int FluidSynthMidiDriver::open() {
 		return -1;
 	}
 
-	std::string sfsetting = "fluidsynth_soundfont";
+	const std::string sfsetting = "fluidsynth_soundfont";
 	std::vector<std::string> soundfonts;
 	std::string soundfont;
 	for (size_t i = 0; i < 10; i++) {
-		std::string settingkey = sfsetting + static_cast<char>(i + '0');
+		const std::string settingkey = sfsetting + static_cast<char>(i + '0');
 		soundfont = getConfigSetting(settingkey, "");
-		if (!soundfont.empty())
+		if (!soundfont.empty()) {
+			std::string options[] = {"", "<BUNDLE>", "<DATA>"};
+			for (auto& d : options) {
+				std::string f;
+				if (!d.empty()) {
+					if (!is_system_path_defined(d)) {
+						continue;
+					}
+					f = get_system_path(d);
+					f += '/';
+					f += soundfont;
+				} else {
+					f = soundfont;
+				}
+				if (U7exists(f.c_str()))
+					soundfont = std::move(f);
+			}
 			soundfonts.push_back(soundfont);
+		}
 	}
 	soundfont = getConfigSetting(sfsetting, "");
-	if (!soundfont.empty())
+	if (!soundfont.empty()) {
+		std::string options[] = {"", "<BUNDLE>", "<DATA>"};
+		for (auto& d : options) {
+			std::string f;
+			if (!d.empty()) {
+				if (!is_system_path_defined(d)) {
+					continue;
+				}
+				f = get_system_path(d);
+				f += '/';
+				f += soundfont;
+			} else {
+				f = soundfont;
+			}
+			if (U7exists(f.c_str()))
+				soundfont = std::move(f);
+		}
 		soundfonts.push_back(soundfont);
-
-	if (soundfonts.empty()) {
-		perr << "FluidSynth requires a 'fluidsynth_soundfont' setting" << std::endl;
-		return -2;
 	}
 
 	_settings = new_fluid_settings();
+
+	if (soundfonts.empty()) {
+		char *default_soundfont;
+		if (getStr("synth.default-soundfont", &default_soundfont) == FLUID_OK &&
+		    default_soundfont && default_soundfont[0] != 0) {
+			soundfonts.emplace_back(default_soundfont);
+			free(default_soundfont);
+			perr << "Setting 'fluidsynth_soundfont' missing in 'exult.cfg': enabling FluidSynth with FluidSynth default SoundFont" << std::endl;
+		}
+		else {
+			perr << "Setting 'fluidsynth_soundfont' missing in 'exult.cfg' and Fluidsynth without a default SoundFont: not enabling Fluidsynth" << std::endl;
+			return -2;
+		}
+	}
 
 	// The default gain setting is ridiculously low, but we can't set it
 	// too high either or sound will be clipped. This may need tuning...
@@ -102,17 +135,17 @@ int FluidSynthMidiDriver::open() {
 	// fluid_synth_set_chorus_on(_synth, 0);
 
 	int numloaded = 0;
-	for (auto it = soundfonts.begin(); it != soundfonts.end(); ++it)
+	for (auto& soundfont : soundfonts)
 	{
-		int soundFont = fluid_synth_sfload(_synth, it->c_str(), 1);
+		const int soundFont = fluid_synth_sfload(_synth, soundfont.c_str(), 1);
 		if (soundFont == -1) {
-			perr << "Failed loading custom sound font '" << *it << "'" << std::endl;
+			perr << "Failed loading custom sound font '" << soundfont << "'" << std::endl;
 		} else {
-			perr << "Loaded custom sound font '" << *it << "'" << std::endl;
+			perr << "Loaded custom sound font '" << soundfont << "'" << std::endl;
 			_soundFont.push(soundFont);
 			numloaded++;
 		}
-		
+
 	}
 	if (numloaded == 0) {
 		perr << "Failed to load any custom sound fonts; giving up." << std::endl;
@@ -123,11 +156,11 @@ int FluidSynthMidiDriver::open() {
 }
 
 void FluidSynthMidiDriver::close() {
-	while (!_soundFont.empty()) {
-		int soundfont = _soundFont.top();
+	//-- Do not sfunload the SoundFonts, this causes messages :
+	//--   fluidsynth: warning: No preset found on channel # [bank=# prog=#]
+	//-- And delete_fluid_synth unloads the SoundFonts anyway.
+	while (!_soundFont.empty())
 		_soundFont.pop();
-		fluid_synth_sfunload(_synth, soundfont, 1);
-	}
 
 	delete_fluid_synth(_synth);
 	_synth = nullptr;
@@ -137,8 +170,8 @@ void FluidSynthMidiDriver::close() {
 
 void FluidSynthMidiDriver::send(uint32 b) {
 	//uint8 param3 = static_cast<uint8>((b >> 24) & 0xFF);
-	uint32 param2 = static_cast<uint8>((b >> 16) & 0xFF);
-	uint32 param1 = static_cast<uint8>((b >>  8) & 0xFF);
+	const uint32 param2 = static_cast<uint8>((b >> 16) & 0xFF);
+	const uint32 param1 = static_cast<uint8>((b >>  8) & 0xFF);
 	auto cmd     = static_cast<uint8>(b & 0xF0);
 	auto chan    = static_cast<uint8>(b & 0x0F);
 

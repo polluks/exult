@@ -1,7 +1,7 @@
 /*
  *  Gump_manager.h - Object that manages all available gumps
  *
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,7 +23,16 @@
 
 #include "singles.h"
 #include "mouse.h"
-#include "SDL_events.h"
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 class Gump;
 class Game_object;

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -47,16 +47,16 @@ Sign_gump::Sign_gump(
 	}
 
 	if (shapenum == game->get_shape("gumps/woodsign")) {
-		set_object_area(Rectangle(0, 4, 196, 92));
+		set_object_area(TileRect(0, 4, 196, 92));
 	} else if (shapenum == game->get_shape("gumps/tombstone")) {
-		set_object_area(Rectangle(0, 8, 200, 112));
+		set_object_area(TileRect(0, 8, 200, 112));
 	} else if (shapenum == game->get_shape("gumps/goldsign")) {
 		if (Game::get_game_type() == BLACK_GATE)
-			set_object_area(Rectangle(0, 4, 232, 96));
+			set_object_area(TileRect(0, 4, 232, 96));
 		else            // SI
-			set_object_area(Rectangle(4, 4, 312, 96));
+			set_object_area(TileRect(4, 4, 312, 96));
 	} else if (shapenum == game->get_shape("gumps/scroll"))
-		set_object_area(Rectangle(48, 30, 146, 118));
+		set_object_area(TileRect(48, 30, 146, 118));
 	lines = new std::string[num_lines];
 }
 
@@ -123,9 +123,9 @@ void Sign_gump::paint(
 	else if (get_shapenum() == game->get_shape("gumps/tombstone"))
 		font = 3;
 	// Get height of 1 line.
-	int lheight = sman->get_text_height(font);
+	const int lheight = sman->get_text_height(font);
 	// Get space between lines.
-	int lspace = (object_area.h - num_lines * lheight) / (num_lines + 1);
+	const int lspace = (object_area.h - num_lines * lheight) / (num_lines + 1);
 	// Paint the gump itself.
 	paint_shape(x, y);
 	int ypos = y + object_area.y;   // Where to paint next line.

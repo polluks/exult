@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,8 +33,8 @@ using std::endl;
 static  string  close_tag(const string &s);
 
 XMLnode::~XMLnode() {
-	for (auto i = nodelist.begin(); i != nodelist.end(); ++i)
-		delete *i;
+	for (auto *node : nodelist)
+		delete node;
 }
 
 const string    &XMLnode::reference(const string &h, bool &exists) {
@@ -51,11 +51,10 @@ const string    &XMLnode::reference(const string &h, bool &exists) {
 
 		string k;
 		k = h.substr(h.find('/') + 1);
-		string k2 = k.substr(0, k.find('/'));
-		for (auto it = nodelist.begin();
-		        it != nodelist.end(); ++it) {
-			if ((*it)->id == k2)
-				return (*it)->reference(k, exists);
+		const string k2 = k.substr(0, k.find('/'));
+		for (auto *node : nodelist) {
+			if (node->id == k2)
+				return node->reference(k, exists);
 		}
 	}
 
@@ -77,11 +76,10 @@ const XMLnode *XMLnode::subtree(const string &h) const {
 
 		string k;
 		k = h.substr(h.find('/') + 1);
-		string k2 = k.substr(0, k.find('/'));
-		for (auto it = nodelist.begin();
-		        it != nodelist.end(); ++it) {
-			if ((*it)->id == k2)
-				return (*it)->subtree(k);
+		const string k2 = k.substr(0, k.find('/'));
+		for (auto *node : nodelist) {
+			if (node->id == k2)
+				return node->subtree(k);
 		}
 	}
 
@@ -94,28 +92,28 @@ string  XMLnode::dump(int depth) {
 
 	s += "<";
 	s += id;
-	s += ">\n";
+	s += ">";
 	if (id[id.length() - 1] != '/') {
-		for (auto it = nodelist.begin(); it != nodelist.end(); ++it) {
-			s += (**it).dump(depth + 1);
+		for (auto *node : nodelist) {
+			s += "\n";
+			s += node->dump(depth + 2);
 		}
 
 		if (content.length()) {
-			s += string(depth, ' ');
 			s += encode_entity(content);
 		}
 		if (id[0] == '?') {
 			return s;
 		}
-		if (content.length())
+		if (!content.length()) {
 			s += "\n";
+			s += string(depth, ' ');
+		}
 
 		if (!no_close) {
-			s += string(depth, ' ');
-
 			s += "</";
 			s += close_tag(id);
-			s += ">\n";
+			s += ">";
 		}
 	}
 
@@ -139,8 +137,8 @@ void XMLnode::dump(ostream &o, const string &indentstr, const unsigned int depth
 			o << endl;
 
 			// ... then walk through them outputting them all ...
-			for (auto it = nodelist.begin(); it != nodelist.end(); ++it)
-				(*it)->dump(o, indentstr, depth + 1);
+			for (auto* node : nodelist)
+				node->dump(o, indentstr, depth + 1);
 		}
 		// ... else, if we have content in this output it.
 		else if (content.length())
@@ -175,10 +173,10 @@ void    XMLnode::xmlassign(const string &key, const string &value) {
 	}
 	string k;
 	k = key.substr(key.find('/') + 1);
-	string k2 = k.substr(0, k.find('/'));
-	for (auto it = nodelist.begin(); it != nodelist.end(); ++it) {
-		if ((*it)->id == k2) {
-			(**it).xmlassign(k, value);
+	const string k2 = k.substr(0, k.find('/'));
+	for (auto* node : nodelist) {
+		if (node->id == k2) {
+			node->xmlassign(k, value);
 			return;
 		}
 	}
@@ -186,7 +184,7 @@ void    XMLnode::xmlassign(const string &key, const string &value) {
 	// No match, so create a new node and do recursion
 	auto *t = new XMLnode(k2);
 	nodelist.push_back(t);
-	(*t).xmlassign(k, value);
+	t->xmlassign(k, value);
 }
 
 
@@ -196,8 +194,8 @@ void XMLnode::remove(const std::string &key, bool valueonly) {
 		if (id == key) {
 			content = std::string();
 			if (!valueonly) {
-				for (auto i = nodelist.begin(); i != nodelist.end(); ++i)
-					delete *i;
+				for (auto* node : nodelist)
+					delete node;
 				nodelist.clear();
 			}
 			return;
@@ -205,7 +203,7 @@ void XMLnode::remove(const std::string &key, bool valueonly) {
 	} else {
 		string k;
 		k = key.substr(key.find('/') + 1);
-		string k2 = k.substr(0, k.find('/'));
+		const string k2 = k.substr(0, k.find('/'));
 		for (auto it = nodelist.begin(); it != nodelist.end(); ++it) {
 			XMLnode *node = (*it);
 			if (node->id == k2) {
@@ -227,20 +225,19 @@ void    XMLnode::listkeys(const string &key, vector<string> &vs, bool longformat
 	string s(key);
 	s += "/";
 
-	for (auto it = nodelist.begin();
-	        it != nodelist.end(); ++it) {
+	for (auto *node : nodelist) {
 		if (!longformat)
-			vs.push_back((*it)->id);
+			vs.push_back(node->id);
 		else
-			vs.push_back(s + (*it)->id);
+			vs.push_back(s + node->id);
 	}
 }
 
 string  encode_entity(const string &s) {
 	string  ret;
 
-	for (string::const_iterator it = s.begin(); it != s.end(); ++it) {
-		switch (*it) {
+	for (const char ch : s) {
+		switch (ch) {
 		case '<':
 			ret += "&lt;";
 			break;
@@ -257,21 +254,21 @@ string  encode_entity(const string &s) {
 			ret += "&amp;";
 			break;
 		default:
-			ret += *it;
+			ret += ch;
 		}
 	}
 	return ret;
 }
 
 static  string  decode_entity(const string &s, std::size_t &pos) {
-	std::size_t         old_pos = pos;
-	string::size_type   entity_name_len = s.find_first_of("; \t\r\n", pos) - pos - 1;
+	const std::size_t         old_pos = pos;
+	const string::size_type   entity_name_len = s.find_first_of("; \t\r\n", pos) - pos - 1;
 
 	/* Call me paranoid... but I don't think having an end-of-line or similar
 	    inside a &...; expression is 'good', valid though it may be. */
 	assert(s[pos + entity_name_len + 1] == ';');
 
-	string              entity_name = s.substr(pos + 1, entity_name_len);
+	const string              entity_name = s.substr(pos + 1, entity_name_len);
 
 	pos += entity_name_len + 2;
 
@@ -372,15 +369,15 @@ bool XMLnode::searchpairs(KeyTypeList &ktl, const string &basekey, const string 
 		/* If we've found it, return every key->value pair under this key,
 		    then return true, since we've found the key we were looking for. */
 		if (basekey == currkey + id) {
-			for (auto i = nodelist.begin(); i != nodelist.end(); ++i)
-				if ((*i)->id[0] != '!')
-					(*i)->selectpairs(ktl, "");
+			for (auto *node : nodelist)
+				if (node->id[0] != '!')
+					node->selectpairs(ktl, "");
 			return true;
 		}
 		/* Else, keep searching for the key under it's subnodes */
 		else
-			for (auto i = nodelist.begin(); i != nodelist.end(); ++i)
-				if ((*i)->searchpairs(ktl, basekey, currkey + id + '/', pos))
+			for (auto* node : nodelist)
+				if (node->searchpairs(ktl, basekey, currkey + id + '/', pos))
 					return true;
 	}
 	return false;
@@ -390,8 +387,8 @@ bool XMLnode::searchpairs(KeyTypeList &ktl, const string &basekey, const string 
 void XMLnode::selectpairs(KeyTypeList &ktl, const std::string &currkey) {
 	ktl.push_back(KeyType(currkey + id, content));
 
-	for (auto i = nodelist.begin(); i != nodelist.end(); ++i)
-		(*i)->selectpairs(ktl, currkey + id + '/');
+	for (auto* node : nodelist)
+		node->selectpairs(ktl, currkey + id + '/');
 }
 
 

@@ -2,7 +2,7 @@
  *  objs.h - Game objects.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,13 +44,17 @@ class Barge_object;
 class Game_window;
 class Npc_actor;
 class PathFinder;
-class Rectangle;
 class Schedule;
+class TileRect;
 class Usecode_machine;
 class Vga_file;
 class ODataSource;
 class Game_map;
 class Object_client;
+class Spellbook_object;
+class Virtue_stone_object;
+class Dead_body;
+class Ordering_info;
 
 template<class T>
 class T_Object_list;
@@ -67,9 +71,9 @@ using Game_object_shared_vector = std::vector<Game_object_shared>;
  *  position within its chunk.
  */
 class Game_object : public ShapeID,
-	  			  public std::enable_shared_from_this<Game_object> {
+					public std::enable_shared_from_this<Game_object> {
 protected:
-	static Game_object *editing;    // Obj. being edited by ExultStudio.
+	static Game_object_shared editing;    // Obj. being edited by ExultStudio.
 	Map_chunk *chunk = nullptr;       // Chunk we're in, or nullptr.
 	unsigned char tx, ty;       // (X,Y) of shape within chunk, or if
 	//   in a container, coords. within
@@ -141,7 +145,7 @@ public:
 	int get_quality() const {
 		return quality;
 	}
-	void set_quality(int q) {
+	virtual void set_quality(int q) {
 		quality = q;
 	}
 	int get_quantity() const;   // Like # of coins.
@@ -166,7 +170,7 @@ public:
 		return prev;
 	}
 	// Compare for render order.
-	static int compare(class Ordering_info &inf1, Game_object *obj2);
+	static int compare(Ordering_info &inf1, Game_object *obj2);
 	int lt(Game_object &obj2);  // Is this less than another in pos.?
 	void set_invalid() {    // Set to invalid position.
 		chunk = nullptr;
@@ -260,7 +264,7 @@ public:
 	                                 int dist = 24) {
 		return find_closest(pos, &shapenum, 1, dist);
 	}
-	Rectangle get_footprint();  // Get tile footprint.
+	TileRect get_footprint();  // Get tile footprint.
 	Block get_block() const;
 	bool blocks(Tile_coord const &tile) const;    // Do we block a given tile?
 	// Find object blocking given tile.
@@ -335,6 +339,15 @@ public:
 		return nullptr;
 	}
 	virtual Egg_object *as_egg() {
+		return nullptr;
+	}
+	virtual Spellbook_object *as_spellbook() {
+		return nullptr;
+	}
+	virtual Virtue_stone_object *as_virtstone() {
+		return nullptr;
+	}
+	virtual Dead_body *as_body() {
 		return nullptr;
 	}
 	virtual int is_egg() const { // An egg?

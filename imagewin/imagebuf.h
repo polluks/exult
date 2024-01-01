@@ -6,6 +6,7 @@
 
 /*
 Copyright (C) 1998 Jeffrey S. Freedman
+Copyright (C) 2000-2022 The Exult Team
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Library General Public
@@ -31,8 +32,6 @@ Boston, MA  02111-1307, USA.
 #include <memory>
 
 // Table for translating palette vals.:
-//using Xform_palette = unsigned char *; // Should be 256-bytes.
-
 /*
  *  This class represents a single transparent color by providing a
  *  palette for its effect on all the other colors.
@@ -40,13 +39,6 @@ Boston, MA  02111-1307, USA.
 class Xform_palette {
 public:
 	unsigned char colors[256];  // For transforming 8-bit colors.
-	unsigned char r, g, b, a;   // Actual colour and alpha.
-	void set_color(int cr, int cg, int cb, int ca) {
-		r = cr;
-		g = cg;
-		b = cb;
-		a = ca;
-	}
 	unsigned char operator[](int i) const {
 		return colors[i];
 	}
@@ -146,8 +138,8 @@ public:
 	}
 	// Is rect. visible within clip?
 	bool is_visible(int x, int y, int w, int h) {
-		return !(x >= clipx + clipw || y >= clipy + cliph ||
-		          x + w <= clipx || y + h <= clipy);
+		return x < clipx + clipw && y < clipy + cliph &&
+		          x + w > clipx && y + h > clipy;
 	}
 	/*
 	 *  16-bit color methods.  Default is to ignore them.

@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,18 +23,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#include "studio.h"
 #include "ucbrowse.h"
+
+#include "headers/array_size.h"
 #include "ucsymtbl.h"
 #include "utils.h"
-#include "ignore_unused_variable_warning.h"
 
 using std::ifstream;
 using std::string;
-using std::vector;
 
 /*  Columns in our table. */
 enum { NAME_COL, NUM_COL, TYPE_COL, N_COLS };
@@ -57,7 +56,7 @@ const char *ExultStudio::browse_usecode(
 		ucbrowsewin->setup_list();
 	}
 	ucbrowsewin->show(true);
-	while (GTK_WIDGET_VISIBLE(ucbrowsewin->get_win()))  // Spin.
+	while (gtk_widget_get_visible(GTK_WIDGET(ucbrowsewin->get_win())))  // Spin.
 		gtk_main_iteration();   // (Blocks).
 	const char *choice = ucbrowsewin->get_choice();
 	return choice;
@@ -71,8 +70,8 @@ C_EXPORT void on_usecodes_ok_clicked(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->okay();
 }
 
@@ -86,8 +85,8 @@ C_EXPORT void on_usecodes_treeview_row_activated(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(path, column, user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(treeview)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(treeview))), "user_data"));
 	ucb->okay();
 }
 
@@ -99,8 +98,8 @@ C_EXPORT void on_usecodes_cancel_clicked(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->cancel();
 }
 
@@ -114,7 +113,7 @@ C_EXPORT gboolean on_usecodes_dialog_delete_event(
 ) {
 	ignore_unused_variable_warning(event, user_data);
 	auto *ucb = static_cast<Usecode_browser *>(
-	                       gtk_object_get_user_data(GTK_OBJECT(widget)));
+	                g_object_get_data(G_OBJECT(widget), "user_data"));
 
 	ucb->cancel();
 	return TRUE;
@@ -128,8 +127,8 @@ C_EXPORT void on_view_uc_classes_toggled(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->setup_list();
 }
 C_EXPORT void on_view_uc_functions_toggled(
@@ -137,8 +136,8 @@ C_EXPORT void on_view_uc_functions_toggled(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->setup_list();
 }
 C_EXPORT void on_view_uc_shapes_toggled(
@@ -146,8 +145,8 @@ C_EXPORT void on_view_uc_shapes_toggled(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->setup_list();
 }
 
@@ -156,8 +155,8 @@ C_EXPORT void on_view_uc_objects_toggled(
     gpointer user_data
 ) {
 	ignore_unused_variable_warning(user_data);
-	auto *ucb = static_cast<Usecode_browser *>(gtk_object_get_user_data(
-	                           GTK_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn)))));
+	auto *ucb = static_cast<Usecode_browser *>(g_object_get_data(
+	                G_OBJECT(gtk_widget_get_toplevel(GTK_WIDGET(btn))), "user_data"));
 	ucb->setup_list();
 }
 
@@ -170,7 +169,7 @@ static gint ucbrowser_compare_func(
     GtkTreeIter  *b,
     gpointer      userdata
 ) {
-	gint colnum = *static_cast<gint*>(userdata);
+	const gint colnum = *static_cast<gint *>(userdata);
 	gint ret = 0;
 	gchar *name1 = nullptr;
 	gchar *name2 = nullptr;
@@ -189,7 +188,7 @@ static gint ucbrowser_compare_func(
 
 extern "C" {
 	void gint_deleter(gpointer data) {
-		gint *ptr = static_cast<gint*>(data);
+		gint *ptr = static_cast<gint *>(data);
 		delete ptr;
 	}
 }
@@ -201,7 +200,7 @@ Usecode_browser::Usecode_browser(
 ) {
 	ExultStudio *studio = ExultStudio::get_instance();
 	win = studio->get_widget("usecodes_dialog");
-	gtk_object_set_user_data(GTK_OBJECT(win), this);
+	g_object_set_data(G_OBJECT(win), "user_data", this);
 	string ucname = get_system_path("<PATCH>/usecode");
 	if (!U7exists(ucname.c_str())) {
 		ucname = get_system_path("<STATIC>/usecode");
@@ -219,16 +218,16 @@ Usecode_browser::Usecode_browser(
 	            G_TYPE_STRING);     // Type:  function, class.
 	// Create view, and set our model.
 	tree = studio->get_widget("usecodes_treeview");
-	gtk_tree_view_set_model(GTK_TREE_VIEW(tree), GTK_TREE_MODEL(model));;
+	gtk_tree_view_set_model(GTK_TREE_VIEW(tree), GTK_TREE_MODEL(model));
 	// Set up sorting.
 	GtkTreeSortable *sortable = GTK_TREE_SORTABLE(model);
 	gint *iname = new gint(NAME_COL);
 	gint *inum = new gint(NUM_COL);
-	gint *itype = new gint (TYPE_COL);
+	gint *itype = new gint(TYPE_COL);
 	gtk_tree_sortable_set_sort_func(sortable, SORTID_NAME,
 	                                ucbrowser_compare_func, iname, gint_deleter);
 	gtk_tree_sortable_set_sort_func(sortable, SORTID_NUM,
-	                                ucbrowser_compare_func, inum , gint_deleter);
+	                                ucbrowser_compare_func, inum, gint_deleter);
 	gtk_tree_sortable_set_sort_func(sortable, SORTID_TYPE,
 	                                ucbrowser_compare_func, itype, gint_deleter);
 	// Create each column.
@@ -314,28 +313,29 @@ void Usecode_browser::setup_list(
 ) {
 	ExultStudio *studio = ExultStudio::get_instance();
 	const char *ucfile = studio->get_text_entry("usecodes_file");
-	ifstream in;
-	U7open(in, ucfile);
+	auto pIn = U7open_in(ucfile);
+	if (!pIn) {
+		EStudio::Alert("Error opening '%s'.", ucfile);
+		return;
+	}
+	auto& in = *pIn;
 	Usecode_symbol_table symtbl;
-	unsigned int magic = Read4(in);     // Test for symbol table.
 	if (!in.good()) {
 		EStudio::Alert("Error reading '%s'.", ucfile);
 		return;
 	}
-	if (magic != UCSYMTBL_MAGIC0 || (magic = Read4(in))
-	        != UCSYMTBL_MAGIC1)
+	// Test for symbol table.
+	if (Read4(in) != UCSYMTBL_MAGIC0 || Read4(in) != UCSYMTBL_MAGIC1)
 		return;
 	symtbl.read(in);
 	gtk_tree_store_clear(model);
-	bool show_funs = studio->get_toggle("view_uc_functions");
-	bool show_classes = studio->get_toggle("view_uc_classes");
-	bool show_shapes = studio->get_toggle("view_uc_shapes");
-	bool show_objects = studio->get_toggle("view_uc_objects");
+	const bool show_funs = studio->get_toggle("view_uc_functions");
+	const bool show_classes = studio->get_toggle("view_uc_classes");
+	const bool show_shapes = studio->get_toggle("view_uc_shapes");
+	const bool show_objects = studio->get_toggle("view_uc_objects");
 	const Usecode_symbol_table::Syms_vector &syms = symtbl.get_symbols();
-	Usecode_symbol_table::Syms_vector::const_iterator siter;
-	for (siter = syms.begin(); siter != syms.end(); ++siter) {
-		Usecode_symbol *sym = *siter;
-		Usecode_symbol::Symbol_kind kind = sym->get_kind();
+	for (auto *sym : syms) {
+		const Usecode_symbol::Symbol_kind kind = sym->get_kind();
 		const char *kindstr = nullptr;
 		const char *nm = sym->get_name();
 		if (!nm[0])
@@ -365,7 +365,7 @@ void Usecode_browser::setup_list(
 			continue;
 		}
 		char num[20];
-		sprintf(num, "%05xH", sym->get_val());
+		snprintf(num, array_size(num), "%05xH", sym->get_val());
 		GtkTreeIter iter;
 		gtk_tree_store_append(model, &iter, nullptr);
 		gtk_tree_store_set(model, &iter, NAME_COL, nm,

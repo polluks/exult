@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013 The Exult Team
+ *  Copyright (C) 2001-2022 The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,16 @@
 #ifndef KEYS_H
 #define KEYS_H
 
-#include "SDL_events.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "game.h"
 
 #include <vector>

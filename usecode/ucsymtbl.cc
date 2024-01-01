@@ -1,7 +1,7 @@
 /*
  *  ucsymtbl.cc - Usecode symbol table
  *
- *  Copyright (C) 2006  The Exult Team
+ *  Copyright (C) 2006-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,9 +33,7 @@ const int curvers = 0;
  *  Cleanup.
  */
 Usecode_scope_symbol::~Usecode_scope_symbol() {
-	for (auto it = symbols.begin(); it != symbols.end();
-	        ++it) {
-		Usecode_symbol *sym = *it;
+	for (auto *sym : symbols) {
 		delete sym;
 	}
 }
@@ -44,16 +42,16 @@ Usecode_scope_symbol::~Usecode_scope_symbol() {
  *  Read from a file.
  */
 void Usecode_scope_symbol::read(istream &in) {
-	int cnt = Read4(in);
-	(void)Read4(in);    // Version.
-	int oldsize = symbols.size();
+	const int cnt = Read4(in);
+	Read4(in);    // Version.
+	const int oldsize = symbols.size();
 	symbols.reserve(oldsize + cnt);
 	for (int i = 0; i < cnt; ++i) {
 		char nm[256];
 		in.getline(nm, sizeof(nm), 0);
 		auto kind =
 		    static_cast<Usecode_symbol::Symbol_kind>(Read2(in));
-		int val = Read4(in);
+		const int val = Read4(in);
 		Usecode_symbol *sym;
 		if (kind == Usecode_symbol::class_scope) {
 			auto *s = new Usecode_class_symbol(nm, kind, val);
@@ -86,9 +84,7 @@ void Usecode_scope_symbol::read(istream &in) {
 void Usecode_scope_symbol::write(ostream &out) {
 	Write4(out, symbols.size());
 	Write4(out, curvers);
-	for (auto it = symbols.begin(); it != symbols.end();
-	        ++it) {
-		Usecode_symbol *sym = *it;
+	for (auto *sym : symbols) {
 		const char *nm = sym->get_name();
 		out.write(nm, strlen(nm) + 1);
 		Write2(out, static_cast<int>(sym->get_kind()));
@@ -104,7 +100,7 @@ void Usecode_scope_symbol::write(ostream &out) {
  *  Add a symbol.
  */
 void Usecode_scope_symbol::add_sym(Usecode_symbol *sym) {
-	int oldsize = symbols.size();
+	const int oldsize = symbols.size();
 	symbols.push_back(sym);
 	if (!by_name.empty())
 		setup_by_name(oldsize);
@@ -148,7 +144,7 @@ Usecode_symbol *Usecode_scope_symbol::operator[](const char *nm) {
 	if (it == by_name.end())
 		return nullptr;
 	else
-		return (*it).second;
+		return it->second;
 }
 
 Usecode_symbol *Usecode_scope_symbol::operator[](int val) {
@@ -158,7 +154,7 @@ Usecode_symbol *Usecode_scope_symbol::operator[](int val) {
 	if (it == by_val.end())
 		return nullptr;
 	else
-		return (*it).second;
+		return it->second;
 }
 
 Usecode_class_symbol *Usecode_scope_symbol::get_class(const char *nm) {
@@ -168,7 +164,7 @@ Usecode_class_symbol *Usecode_scope_symbol::get_class(const char *nm) {
 	if (it == class_names.end())
 		return nullptr;
 	else
-		return (*it).second;
+		return it->second;
 }
 
 /*
@@ -182,7 +178,7 @@ int Usecode_scope_symbol::get_high_shape_fun(int val) {
 	if (it == shape_funs.end())
 		return -1;
 	else
-		return (*it).second;
+		return it->second;
 }
 
 /*
@@ -195,7 +191,7 @@ bool Usecode_scope_symbol::is_object_fun(int val) {
 	// Symbol not found; default to original behavior
 	if (it == by_val.end())
 		return val < 0x800;
-	Usecode_symbol *sym = (*it).second;
+	Usecode_symbol *sym = it->second;
 	return sym &&
 	        (sym->get_kind() == shape_fun || sym->get_kind() == object_fun);
 }
@@ -205,7 +201,7 @@ bool Usecode_scope_symbol::is_object_fun(int val) {
  */
 void Usecode_class_symbol::read(istream &in) {
 	Usecode_scope_symbol::read(in);
-	int num_methods = Read2(in);
+	const int num_methods = Read2(in);
 	methods.resize(num_methods);
 	for (int i = 0; i < num_methods; ++i)
 		methods[i] = Read2(in);
@@ -217,17 +213,16 @@ void Usecode_class_symbol::read(istream &in) {
  */
 void Usecode_class_symbol::write(ostream &out) {
 	Usecode_scope_symbol::write(out);
-	int num_methods = methods.size();
+	const int num_methods = methods.size();
 	Write2(out, num_methods);
-	for (auto it = methods.begin(); it != methods.end();
-	        ++it)
-		Write2(out, *it);
+	for (const int method : methods)
+		Write2(out, method);
 	Write2(out, num_vars);
 }
 
 bool Usecode_symbol_table::has_symbol_table(std::istream &in) {
-	uint32 magic = Read4(in);   // Test for symbol table.
-	if (magic == UCSYMTBL_MAGIC0 && (magic = Read4(in)) == UCSYMTBL_MAGIC1)
+	// Test for symbol table.
+	if (Read4(in) == UCSYMTBL_MAGIC0 && Read4(in) == UCSYMTBL_MAGIC1)
 		return true;
 	else {
 		in.seekg(0);

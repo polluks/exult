@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2011-2013 The Exult Team
+Copyright (C) 2011-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -40,7 +40,6 @@ class Itemmenu_gump : public Modal_gump {
 	};
 
 public:
-	UNREPLICATABLE_CLASS(Itemmenu_gump)
 	Itemmenu_gump(Game_object_map_xy *mobjxy, int cx, int cy);
 	Itemmenu_gump(Game_object *obj, int ox, int oy, int cx, int cy);
 	~Itemmenu_gump() override;

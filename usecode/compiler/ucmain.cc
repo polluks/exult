@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -63,7 +63,8 @@ int main(
 	const char *src;
 	char outbuf[256];
 	char *outname = nullptr;
-	static const char *optstring = "o:I:s";
+	bool want_sym_table = true;
+	static const char *optstring = "o:I:sb";
 	Uc_function::Intrinsic_type ty = Uc_function::unset;
 	opterr = 0;         // Don't let getopt() print errs.
 	int optchr;
@@ -77,6 +78,9 @@ int main(
 			break;
 		case 's':
 			ty = Uc_function::si;
+			break;
+		case 'b':
+			want_sym_table = false;
 			break;
 		}
 	char *env = getenv("UCC_INCLUDE");
@@ -104,7 +108,7 @@ int main(
 	Uc_function::set_intrinsic_type(ty);
 	yyparse();
 	if (yyin != stdin) fclose(yyin);
-	int errs = Uc_location::get_num_errors();
+	const int errs = Uc_location::get_num_errors();
 	if (errs > 0)           // Check for errors.
 		return errs;
 	// Open output.
@@ -113,17 +117,18 @@ int main(
 		std::cout << "Could not open output file '" << outname << "'!" << std::endl;
 		return 1;
 	}
-	Write4(out, UCSYMTBL_MAGIC0);   // Start with symbol table.
-	Write4(out, UCSYMTBL_MAGIC1);
-	std::vector<Uc_design_unit *>::iterator it;
-	auto *symtbl = new Usecode_symbol_table;
-	for (it = units.begin(); it != units.end(); ++it) {
-		symtbl->add_sym((*it)->create_sym());
+	if (want_sym_table) {
+		Write4(out, UCSYMTBL_MAGIC0);   // Start with symbol table.
+		Write4(out, UCSYMTBL_MAGIC1);
+		auto *symtbl = new Usecode_symbol_table;
+		for (auto *unit : units) {
+			symtbl->add_sym(unit->create_sym());
+		}
+		symtbl->write(out);
+		delete symtbl;
 	}
-	symtbl->write(out);
-	delete symtbl;
-	for (it = units.begin(); it != units.end(); ++it) {
-		(*it)->gen(out);    // Generate function.
+	for (auto *unit : units) {
+		unit->gen(out);    // Generate function.
 	}
 	return Uc_location::get_num_errors();
 }

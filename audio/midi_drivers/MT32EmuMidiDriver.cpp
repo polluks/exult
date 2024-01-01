@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2003  The Pentagram Team
+Copyright (C) 2010-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -22,7 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifdef USE_MT32EMU_MIDI
 
 #include "ignore_unused_variable_warning.h"
-#include "mt32emu/mt32emu.h"
 
 #include <cstring>
 
@@ -79,8 +79,11 @@ static const ROMImage *getROM(
 
 int MT32EmuMidiDriver::open() {
 	// Must be stereo
-	if (!stereo)
+	if (!stereo) {
+		std::cerr << "Audio output is not stereo. MT32Emu cannot be used."
+				  << std::endl;
 		return 1;
+	}
 
 	// Make sure dir exists; this is the dir where data will be saved.
 	U7mkdir("<SAVEHOME>/data", 0755);
@@ -94,21 +97,24 @@ int MT32EmuMidiDriver::open() {
 		FileStream part1;
 		FileStream part2;
 		if (openROMFile(part1, "MT32A.BIN", false) && openROMFile(part2, "MT32B.BIN", false)) {
-			std::ofstream out;
-			if (U7open(out, "<SAVEHOME>/data/MT32_CONTROL.ROM", false)) {
+			auto pOut = U7open_out("<SAVEHOME>/data/MT32_CONTROL.ROM", false);
+			if (pOut) {
+				auto& out = *pOut;
 				const Bit8u *data1 = part1.getData();
 				const Bit8u *data2 = part2.getData();
 				for (size_t ii = 0; ii < std::min(part1.getSize(), part2.getSize()); ii++) {
 					out.put(static_cast<char>(data1[ii]));
 					out.put(static_cast<char>(data2[ii]));
 				}
-				out.close();
 				controlROMImage = getROM(controlROMFile, "MT32_CONTROL.ROM");
 			}
 		}
 	}
-	if (!controlROMImage)
-		return 1;
+	if (!controlROMImage) {
+		std::cerr << "Failed to open Control rom file. MT32Emu cannot be used."
+				  << std::endl;
+		return 2;
+	}
 
 	FileStream pcmROMFile;
 	const ROMImage *pcmROMImage;
@@ -116,18 +122,38 @@ int MT32EmuMidiDriver::open() {
 	if (!pcmROMImage)
 		pcmROMImage = getROM(pcmROMFile, "MT32_PCM.ROM");
 	if (!pcmROMImage) {
+		std::cerr << "Failed to open PCM rom file. MT32Emu cannot be used."
+				  << std::endl;
 		ROMImage::freeROMImage(controlROMImage);
-		return 1;
+		return 3;
 	}
 
 	mt32 = new Synth(nullptr);
 
 	if (!mt32->open(*controlROMImage, *pcmROMImage)) {
+		std::cerr << "Failed to open emulated MT32. MT32Emu cannot be used."
+				  << std::endl;
 		ROMImage::freeROMImage(controlROMImage);
 		ROMImage::freeROMImage(pcmROMImage);
 		delete mt32;
 		mt32 = nullptr;
-		return 1;
+		return 4;
+	}
+	if (mt32->getStereoOutputSampleRate() != sample_rate) {
+		if (SampleRateConverter::getSupportedOutputSampleRate(sample_rate)
+			== 0) {
+			std::cerr << "LibMT32Emu was not compiled with a Sample Rate "
+						 "Converter. MT32Emu cannot be used."
+					  << std::endl;
+			delete mt32;
+			mt32 = nullptr;
+			ROMImage::freeROMImage(controlROMImage);
+			ROMImage::freeROMImage(pcmROMImage);
+			return 5;
+		}
+
+		mt32src = new SampleRateConverter(
+				*mt32, sample_rate, SamplerateConversionQuality_GOOD);
 	}
 
 	ROMImage::freeROMImage(controlROMImage);
@@ -136,6 +162,10 @@ int MT32EmuMidiDriver::open() {
 }
 
 void MT32EmuMidiDriver::close() {
+	if (mt32src) {
+		delete mt32src;
+		mt32src = nullptr;
+	}
 	if (mt32) {
 		mt32->close();
 		delete mt32;
@@ -165,6 +195,9 @@ void MT32EmuMidiDriver::lowLevelProduceSamples(
 	sint16 *samples,
 	uint32 num_samples
 ) {
+	if (mt32src)
+		mt32src->getOutputSamples(samples, num_samples);
+		else
 	mt32->render(samples,num_samples);
 }
 

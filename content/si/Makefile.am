@@ -20,8 +20,13 @@ si_DATA = \
 
 sipatchdir = $(sidir)/curecantra/patch
 
-sipatch_DATA = \
+nodist_sipatch_DATA = \
 	usecode	
+
+EXTRA_DIST = \
+	Makefile.mingw	\
+	$(USECODE_OBJECTS)	\
+	$(si_DATA)
 
 CLEANFILES = \
 	usecode	

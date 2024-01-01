@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,8 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  A scroll:
  */
 class Scroll_gump : public Text_gump {
-	UNREPLICATABLE_CLASS(Scroll_gump)
-
 public:
 	Scroll_gump(int fnt = 4, int gump = -1);
 	// Paint it and its contents.

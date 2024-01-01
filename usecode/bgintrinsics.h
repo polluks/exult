@@ -3,7 +3,7 @@
  *
  *  Note:   This is used in the virtual machine and the Usecode compiler.
  *
- *  Copyright (C) 2001  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -163,7 +163,7 @@
 	USECODE_INTRINSIC_PTR(fade_palette),                  // 0x8c
 	USECODE_INTRINSIC_PTR(get_party_list2),               // 0x8d
 	USECODE_INTRINSIC_PTR(in_combat),                     // 0x8e
-	USECODE_INTRINSIC_PTR(start_speech),                  // 0x8f - Same as 0x74?
+	USECODE_INTRINSIC_PTR(start_blocking_speech),         // 0x8f
 	USECODE_INTRINSIC_PTR(is_water),                      // 0x90
 	USECODE_INTRINSIC_PTR(reset_conv_face),               // 0x91
 	USECODE_INTRINSIC_PTR(set_camera),                    // 0x92
@@ -237,9 +237,9 @@
 	USECODE_INTRINSIC_PTR(create_barge_object),           // 0xd5
 	USECODE_INTRINSIC_PTR(in_usecode_path),               // 0xd6
 	USECODE_INTRINSIC_PTR(fade_palette_sleep),            // 0xd7
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xd8
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xd9
-	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xda
+	USECODE_INTRINSIC_PTR(close_gumps2),                  // 0xd8
+	USECODE_INTRINSIC_PTR(close_gump2),                   // 0xd9
+	USECODE_INTRINSIC_PTR(game_day),                       // 0xda (Exult)
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdb
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdc
 	USECODE_INTRINSIC_PTR(UNKNOWN),                       // 0xdd

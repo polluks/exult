@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2010 The Exult team
+Copyright (C) 2010-2022 The Exult team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define OggAudioSample_H
 
 #include "AudioSample.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
 #include <vorbis/vorbisfile.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 #include <memory>
 
 namespace Pentagram {

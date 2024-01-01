@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,15 +23,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#include "studio.h"
-#include "servemsg.h"
-#include "objserial.h"
 #include "exult_constants.h"
+#include "objserial.h"
+#include "servemsg.h"
 #include "shapefile.h"
-#include "ignore_unused_variable_warning.h"
+#include "studio.h"
 
 using std::cout;
 using std::endl;
@@ -102,7 +101,7 @@ void ExultStudio::open_barge_window(
 		                GTK_STATUSBAR(get_widget("barge_status")), "Barge Editor");
 	}
 	// Init. barge address to null.
-	gtk_object_set_user_data(GTK_OBJECT(bargewin), nullptr);
+	g_object_set_data(G_OBJECT(bargewin), "user_data", nullptr);
 	// Make 'apply' sensitive.
 	gtk_widget_set_sensitive(get_widget("barge_apply_btn"), true);
 	remove_statusbar("barge_status", barge_ctx, barge_status_id);
@@ -150,7 +149,7 @@ int ExultStudio::init_barge_window(
 		return 0;
 	}
 	// Store address with window.
-	gtk_object_set_user_data(GTK_OBJECT(bargewin), addr);
+	g_object_set_data(G_OBJECT(bargewin), "user_data", addr);
 	set_spin("barge_xtiles", xtiles);
 	set_spin("barge_ytiles", ytiles);
 	set_optmenu("barge_dir", dir);
@@ -183,15 +182,16 @@ int ExultStudio::save_barge_window(
 ) {
 	cout << "In save_barge_window()" << endl;
 	// Get barge (null if creating new).
-	auto *addr = static_cast<Barge_object*>(gtk_object_get_user_data(GTK_OBJECT(bargewin)));
-	int tx = -1;
-	int ty = -1;
-	int tz = -1;  // +++++For now.
-	int shape = -1;
-	int frame = -1; // For now.
-	int dir = get_optmenu("barge_dir");
-	int xtiles = get_spin("barge_xtiles");
-	int ytiles = get_spin("barge_ytiles");
+	auto *addr = static_cast<Barge_object *>(
+	                 g_object_get_data(G_OBJECT(bargewin), "user_data"));
+	const int tx = -1;
+	const int ty = -1;
+	const int tz = -1;  // +++++For now.
+	const int shape = -1;
+	const int frame = -1; // For now.
+	const int dir = get_optmenu("barge_dir");
+	const int xtiles = get_spin("barge_xtiles");
+	const int ytiles = get_spin("barge_ytiles");
 	if (Barge_object_out(server_socket, addr, tx, ty, tz,
 	                     shape, frame, xtiles, ytiles, dir) == -1) {
 		cout << "Error sending barge data to server" << endl;

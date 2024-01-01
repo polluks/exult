@@ -11,39 +11,17 @@
 		E700E0531A6E4215006C8BE4 /* framing.c in Sources */ = {isa = PBXBuildFile; fileRef = E700E0511A6E4215006C8BE4 /* framing.c */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		E700E0331A6E41C5006C8BE4 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "include/$(PRODUCT_NAME)";
-			dstSubfolderSpec = 16;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		E700E0351A6E41C5006C8BE4 /* liblibogg.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblibogg.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		E700E0351A6E41C5006C8BE4 /* libogg.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libogg.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		E700E0501A6E4215006C8BE4 /* bitwise.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bitwise.c; path = libogg/src/bitwise.c; sourceTree = "<group>"; };
 		E700E0511A6E4215006C8BE4 /* framing.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = framing.c; path = libogg/src/framing.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		E700E0321A6E41C5006C8BE4 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		E700E02C1A6E41C5006C8BE4 = {
 			isa = PBXGroup;
 			children = (
-				E700E04F1A6E41F7006C8BE4 /* src */,
+				E700E04F1A6E41F7006C8BE4 /* Sources */,
 				E700E0361A6E41C5006C8BE4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -51,38 +29,36 @@
 		E700E0361A6E41C5006C8BE4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E700E0351A6E41C5006C8BE4 /* liblibogg.a */,
+				E700E0351A6E41C5006C8BE4 /* libogg.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E700E04F1A6E41F7006C8BE4 /* src */ = {
+		E700E04F1A6E41F7006C8BE4 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
 				E700E0501A6E4215006C8BE4 /* bitwise.c */,
 				E700E0511A6E4215006C8BE4 /* framing.c */,
 			);
-			name = src;
+			name = Sources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		E700E0341A6E41C5006C8BE4 /* libogg */ = {
+		E700E0341A6E41C5006C8BE4 /* ogg */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E700E0491A6E41C5006C8BE4 /* Build configuration list for PBXNativeTarget "libogg" */;
+			buildConfigurationList = E700E0491A6E41C5006C8BE4 /* Build configuration list for PBXNativeTarget "ogg" */;
 			buildPhases = (
 				E700E0311A6E41C5006C8BE4 /* Sources */,
-				E700E0321A6E41C5006C8BE4 /* Frameworks */,
-				E700E0331A6E41C5006C8BE4 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = libogg;
+			name = ogg;
 			productName = libogg;
-			productReference = E700E0351A6E41C5006C8BE4 /* liblibogg.a */;
+			productReference = E700E0351A6E41C5006C8BE4 /* libogg.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 /* End PBXNativeTarget section */
@@ -91,13 +67,7 @@
 		E700E02D1A6E41C5006C8BE4 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1100;
-				ORGANIZATIONNAME = "Chaoji Li";
-				TargetAttributes = {
-					E700E0341A6E41C5006C8BE4 = {
-						CreatedOnToolsVersion = 6.1;
-					};
-				};
+				LastUpgradeCheck = 1320;
 			};
 			buildConfigurationList = E700E0301A6E41C5006C8BE4 /* Build configuration list for PBXProject "libogg" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -108,11 +78,10 @@
 				Base,
 			);
 			mainGroup = E700E02C1A6E41C5006C8BE4;
-			productRefGroup = E700E0361A6E41C5006C8BE4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E700E0341A6E41C5006C8BE4 /* libogg */,
+				E700E0341A6E41C5006C8BE4 /* ogg */,
 			);
 		};
 /* End PBXProject section */
@@ -152,6 +121,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -178,11 +148,9 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					./libogg/include,
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
-				MTL_ENABLE_DEBUG_INFO = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 			};
@@ -210,6 +178,7 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
@@ -229,11 +198,9 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					./libogg/include,
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				SDKROOT = iphoneos;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -242,6 +209,9 @@
 		E700E04A1A6E41C5006C8BE4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
+				CLANG_CXX_LIBRARY = "compiler-default";
+				GCC_C_LANGUAGE_STANDARD = "compiler-default";
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -251,6 +221,9 @@
 		E700E04B1A6E41C5006C8BE4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
+				CLANG_CXX_LIBRARY = "compiler-default";
+				GCC_C_LANGUAGE_STANDARD = "compiler-default";
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -269,7 +242,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E700E0491A6E41C5006C8BE4 /* Build configuration list for PBXNativeTarget "libogg" */ = {
+		E700E0491A6E41C5006C8BE4 /* Build configuration list for PBXNativeTarget "ogg" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E700E04A1A6E41C5006C8BE4 /* Debug */,

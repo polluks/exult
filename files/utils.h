@@ -2,7 +2,7 @@
  *  utils.h - Common utility routines.
  *
  *  Copyright (C) 1998-1999  Jeffrey S. Freedman
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,11 +22,13 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <functional>
 #include <iostream>
 #include <string>
 #include <cstring>
 #include <iosfwd>
 #include <limits>
+#include <memory>
 #include <dirent.h>
 
 #include "common_types.h"
@@ -264,8 +266,8 @@ inline uint8 MRead1(
 inline uint16 MRead2(
     uint8 *& in
 ) {
-	uint16 b0 = MRead1(in);
-	uint16 b1 = MRead1(in);
+	const uint16 b0 = MRead1(in);
+	const uint16 b1 = MRead1(in);
 	return (b1 << 8) | b0;
 }
 
@@ -389,19 +391,41 @@ inline void WriteNhigh(
 		Write1(out, static_cast<uint8>(val >>(8 * i)));
 }
 
-bool U7open(
-    std::ifstream &in,          // Input stream to open.
-    const char *fname,          // May be converted to upper-case.
-    bool is_text = false            // Should the file be opened in text mode
-);
-bool U7open(
-    std::ofstream &out,         // Output stream to open.
+/*
+ *  Get file size without undefined behavior.
+ */
+inline size_t get_file_size(std::istream& in) {
+	const auto start = in.tellg();
+	in.seekg(0);
+	in.ignore(std::numeric_limits<std::streamsize>::max());
+	const size_t len = in.gcount();
+	in.seekg(start);
+	return len;
+}
+
+// Sets factories for creating istreams/ostreams.  Intended to be called once during initialization before using
+// any U7open...() calls and is not guaranteed to be thread-safe.
+using U7IstreamFactory = std::function<std::unique_ptr<std::istream>(const char* s, std::ios_base::openmode mode)>;
+using U7OstreamFactory = std::function<std::unique_ptr<std::ostream>(const char* s, std::ios_base::openmode mode)>;
+void U7set_istream_factory(U7IstreamFactory factory);
+void U7set_ostream_factory(U7OstreamFactory factory);
+
+// Manually sets the home directory rather than trying to infer it from the environment.
+// Intended to be called once during initialization before using U7open...() calls and is not guaranteed
+// to be thread-safe.
+void U7set_home(std::string home);
+
+std::unique_ptr<std::istream> U7open_in(
     const char *fname,          // May be converted to upper-case.
     bool is_text = false            // Should the file be opened in text mode
 );
 
-bool U7open_static(
-    std::ifstream &in,      // Input stream to open.
+std::unique_ptr<std::ostream> U7open_out(
+    const char *fname,          // May be converted to upper-case.
+    bool is_text = false            // Should the file be opened in text mode
+);
+
+std::unique_ptr<std::istream> U7open_static(
     const char *fname,      // May be converted to upper-case.
     bool is_text            // Should file be opened in text mode
 );
@@ -431,6 +455,9 @@ void cleanup_output(const char *prefix = "std");
 #endif
 void setup_data_dir(const std::string &data_path, const char *runpath);
 void setup_program_paths();
+#if defined(MACOSX) || defined(__IPHONEOS__)
+void setup_app_bundle_resource();
+#endif
 
 int U7chdir(
     const char *dirname

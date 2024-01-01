@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2011-2013 The Exult Team
+Copyright (C) 2011-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,7 +20,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define SHORTCUTBAR_GUMP_H
 
 
-#include "SDL.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "gamewin.h"
 #include "objs.h"
 #include "misc_buttons.h"
@@ -52,7 +61,7 @@ struct ShortcutBarButtonItem {
 	const char *name;
 	ShortcutBarButtonItemType type;
 	ShapeID *shapeId;
-	Rectangle rect; // Shortcut bar button click area
+	TileRect rect; // Shortcut bar button click area
 	int mx, my;		// Coordinates where shape is to be drawn
 	bool pushed;
 	bool translucent;

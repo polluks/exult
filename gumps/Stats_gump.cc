@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -93,7 +93,7 @@ void Stats_extra_gump::paint(
 	nm += buf;
 	sman->paint_text(2, nm.c_str(), x + namex +
 	                 (namew - sman->get_text_width(2, nm.c_str())) / 2, y + namey);
-	int cnt = atts.size();
+	const int cnt = atts.size();
 	for (int i = 0; i < cnt; ++i) {
 		std::string attnm(atts[i].first);
 		attnm += ':';
@@ -114,7 +114,7 @@ static int Show_atts(
     int framenum
 ) {
 	Shape_manager *sman = Shape_manager::get_instance();
-	ShapeID sid(game->get_shape("gumps/statatts"), framenum, SF_GUMPS_VGA);
+	const ShapeID sid(game->get_shape("gumps/statatts"), framenum, SF_GUMPS_VGA);
 	Shape_frame *s = sid.get_shape();
 	sman->paint_shape(x + s->get_xleft(),
 	                  y + s->get_ybelow(), s, true);
@@ -128,7 +128,7 @@ Stats_gump::Stats_gump(
     Container_game_object *cont,
     int initx, int inity
 ) : Gump(cont, initx, inity, game->get_shape("gumps/statsdisplay")) {
-	set_object_area(Rectangle(0, 0, 0, 0), 6, 136);
+	set_object_area(TileRect(0, 0, 0, 0), 6, 136);
 }
 Stats_gump::Stats_gump(
     Container_game_object *cont,
@@ -136,7 +136,7 @@ Stats_gump::Stats_gump(
     int shnum,
     ShapeFile shfile
 ) : Gump(cont, initx, inity, shnum, shfile) {
-	set_object_area(Rectangle(0, 0, 0, 0), 6, 136);
+	set_object_area(TileRect(0, 0, 0, 0), 6, 136);
 }
 
 /*
@@ -152,11 +152,11 @@ Stats_gump *Stats_gump::create(
 	assert(npc != nullptr);
 	Actor::Atts_vector atts;
 	npc->get_attributes(atts);
-	int sz = atts.size();
-	int num = (sz + num_extra_spots - 1) / num_extra_spots;
+	const int sz = atts.size();
+	const int num = (sz + num_extra_spots - 1) / num_extra_spots;
 	// Create going backwards.
 	for (int i = num - 1; i >= 0; --i) {
-		int first = i * num_extra_spots;
+		const int first = i * num_extra_spots;
 		auto *egmp = new Stats_extra_gump(npc,
 		        x - 5 * (i + 1), y - 5 * (i + 1), atts, first, i + 1);
 		gumpman->add_gump(egmp);
@@ -190,11 +190,11 @@ void Stats_gump::paint(
 	// Paint red "checkmark".
 	paint_elems();
 	// Show statistics.
-	std::string nm = act->get_name();
+	const std::string nm = act->get_name();
 	sman->paint_text(2, nm.c_str(), x + namex +
 	                 (namew - sman->get_text_width(2, nm.c_str())) / 2, y + namey);
 	if (gwin->failed_copy_protection()) {
-		int oinkx = 96;
+		const int oinkx = 96;
 		sman->paint_text(2, "Oink!", x + oinkx, y + texty[0]);
 		sman->paint_text(2, "Oink!", x + oinkx, y + texty[1]);
 		sman->paint_text(2, "Oink!", x + oinkx, y + texty[2]);
@@ -243,5 +243,5 @@ void Stats_gump::paint(
 	if (act->get_flag(Obj_flags::cursed))
 		attsx += Show_atts(x + attsx, y + attsy, CURSED);
 	if (act->get_flag(Obj_flags::paralyzed))
-		attsx += Show_atts(x + attsx, y + attsy, PARALYZED);
+		Show_atts(x + attsx, y + attsy, PARALYZED);
 }

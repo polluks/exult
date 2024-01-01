@@ -141,16 +141,6 @@ inline void Interp10(Dest_pixel *pc, int c1, int c2, int c3,
 
 #define PTYPES              Dest_pixel,Manip_pixels
 
-static int RGBtoYUV(unsigned int r, unsigned int g, unsigned int b) {
-	int Y;
-	int u;
-	int v;
-	Y = (r + g + b) >> 2;
-	u = 128 + ((r - b) >> 2);
-	v = 128 + ((-r + 2 * g - b) >> 3);
-	return (Y << 16) + (u << 8) + v;
-}
-
 inline bool Diff(int YUV1, int YUV2) {
 	return (std::abs((YUV1 & Ymask) - (YUV2 & Ymask)) > trY) ||
 	       (std::abs((YUV1 & Umask) - (YUV2 & Umask)) > trU) ||
@@ -161,7 +151,12 @@ template<class Manip_pixels>
 inline int hqx_init(int *w, int *c, int *yuv, const unsigned char *from,
                     int x, int sline_pixels, int prevline, int nextline,
                     Manip_pixels &manip) {
-	int k;
+	auto RGBtoYUV = [](unsigned int r, unsigned int g, unsigned int b) {
+		const int Y = (r + g + b) >> 2;
+		const int u = 128 + ((r - b) >> 2);
+		const int v = 128 + ((-r + 2 * g - b) >> 3);
+		return (Y << 16) + (u << 8) + v;
+	};
 
 	w[2] = *((from + prevline));
 	w[5] = *(from);
@@ -187,7 +182,7 @@ inline int hqx_init(int *w, int *c, int *yuv, const unsigned char *from,
 		w[9] = w[8];
 	}
 
-	for (k = 1; k <= 9; k++) {
+	for (int k = 1; k <= 9; k++) {
 		unsigned int r;
 		unsigned int g;
 		unsigned int b;
@@ -195,16 +190,16 @@ inline int hqx_init(int *w, int *c, int *yuv, const unsigned char *from,
 		// The following is so the Interp routines work correctly.
 		r &= ~3;
 		g &= ~3;
-		c[k] = (r << 16) + (g << 8) + b;;
+		c[k] = (r << 16) + (g << 8) + b;
 		yuv[k] = RGBtoYUV(r, g, b);
 	}
 
 	int pattern = 0;
 	int flag = 1;
 
-	int YUV1 = yuv[5];
+	const int YUV1 = yuv[5];
 
-	for (k = 1; k <= 9; k++) {
+	for (int k = 1; k <= 9; k++) {
 		if (k == 5) continue;
 
 		if (w[k] != w[5]) {

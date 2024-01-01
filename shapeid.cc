@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -42,21 +42,12 @@
 #include <utility>
 
 using std::cerr;
-using std::cout;
 using std::endl;
 using std::string;
 using std::vector;
 using std::pair;
 using std::unique_ptr;
 using std::make_unique;
-
-// These MIGHT be macros!
-#ifndef min
-using std::min;
-#endif
-#ifndef max
-using std::max;
-#endif
 
 Shape_manager *Shape_manager::instance = nullptr;
 
@@ -111,11 +102,10 @@ void Shape_manager::read_shape_info(
 	const Shape_info &female = shapes.get_info(Shapeinfo_lookup::GetFemaleAvShape());
 
 	vector<Skin_data> *skins = Shapeinfo_lookup::GetSkinList();
-	for (auto it = skins->begin();
-	        it != skins->end(); ++it) {
-		if ((*it).copy_info) {
-			shapes.copy_info((*it).shape_num, (*it).is_female ? female : male);
-			shapes.copy_info((*it).naked_shape, (*it).is_female ? female : male);
+	for (auto& skin : *skins) {
+		if (skin.copy_info) {
+			shapes.copy_info(skin.shape_num, skin.is_female ? female : male);
+			shapes.copy_info(skin.naked_shape, skin.is_female ? female : male);
 		}
 	}
 }
@@ -126,6 +116,11 @@ void Shape_manager::read_shape_info(
 
 void Shape_manager::load(
 ) {
+	// Reset all caches, just in case.
+	for (auto& cache : shape_cache) {
+		cache.clear();
+	}
+
 	shapes.reset_imports();
 
 	// Determine some colors based on the default palette
@@ -201,8 +196,8 @@ void Shape_manager::load(
 	files[SF_SPRITES_VGA].load(SPRITES_VGA, PATCH_SPRITES);
 	if (GAME_SIB) {
 		// Lets try to import shape 0 of sprites.vga from BG or SI.
-		pair<string, int> sourcebg(string("<ULTIMA7_STATIC>/sprites.vga"), -1);
-		pair<string, int> sourcesi(string("<SERPENT_STATIC>/sprites.vga"), -1);
+		const pair<string, int> sourcebg(string("<ULTIMA7_STATIC>/sprites.vga"), -1);
+		const pair<string, int> sourcesi(string("<SERPENT_STATIC>/sprites.vga"), -1);
 
 		vector<pair<int, int> > imports;
 		imports.emplace_back(0, 0);
@@ -238,43 +233,23 @@ void Shape_manager::load(
 
 	read_shape_info();
 
-	delete fonts;
-	fonts = new Fonts_vga_file();
+	fonts = make_unique<Fonts_vga_file>();
 	fonts->init();
 
 	// Get translucency tables.
-	unsigned char *blends = nullptr;
 	unique_ptr<unsigned char[]> ptr; // We will delete THIS at the end, not blends!
-	int nblends;
 	// ++++TODO: Make this file editable in ES.
-	if (U7exists(PATCH_BLENDS)) {
-		std::ifstream fin;
-		U7open(fin, PATCH_BLENDS);
-		nblends = Read1(fin);
-		ptr = make_unique<unsigned char[]>(nblends * 4);
-		blends = ptr.get();
-		fin.read(reinterpret_cast<char *>(blends), nblends * 4);
-		fin.close();
-	} else if (GAME_BG || GAME_SI) {
-		const char *flexfile =
-		    GAME_BG ? BUNDLE_CHECK(BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX)
-		    : BUNDLE_CHECK(BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX);
-		U7object txtobj(flexfile,
-		                GAME_BG ? EXULT_BG_FLX_BLENDS_DAT : EXULT_SI_FLX_BLENDS_DAT);
-		std::size_t len;
-		ptr = txtobj.retrieve(len);
-		blends = ptr.get();
-		nblends = *blends++;
-	} else if (U7exists(BLENDS)) {
-		std::ifstream fin;
-		U7open(fin, BLENDS);
-		nblends = Read1(fin);
-		ptr = make_unique<unsigned char[]>(nblends * 4);
-		blends = ptr.get();
-		fin.read(reinterpret_cast<char *>(blends), nblends * 4);
-		fin.close();
+	{
+		const auto& blendsflexspec = GAME_BG
+		                       ? File_spec(BUNDLE_CHECK(BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX), EXULT_BG_FLX_BLENDS_DAT)
+		                       : File_spec(BUNDLE_CHECK(BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX), EXULT_SI_FLX_BLENDS_DAT);
+		const U7multiobject in(BLENDS, blendsflexspec, PATCH_BLENDS, 0);
+		size_t len;
+		ptr = in.retrieve(len);
 	}
-	if (!blends) {
+	unsigned char *blends;
+	size_t nblends;
+	if (!ptr) {
 		// All else failed.
 		// Note: the files bundled in exult_XX.flx contain these values.
 		// They are "good" enough, but there is probably room for
@@ -287,53 +262,38 @@ void Shape_manager::load(
 			8, 68,  0, 128,    255,  8,  8, 118,    255, 244, 248, 128,
 			56, 40, 32, 128,    228, 224, 214, 82
 		};
-		nblends = 17;
 		blends = hard_blends;
-		ptr = nullptr;
+		nblends = 17;
+	} else {
+		blends = ptr.get();
+		nblends = *blends++;
 	}
 	xforms.resize(nblends);
-	std::size_t nxforms = xforms.size();
-	// RGBA blend colors:
-	for (size_t i = 0; i < nxforms; i++)
-		xforms[i].set_color(blends[4 * i], blends[4 * i + 1],
-		                    blends[4 * i + 2], blends[4 * i + 3]);
+	const size_t nxforms = nblends;
 	// ++++TODO: Make this file editable in ES.
 	if (U7exists(XFORMTBL) || U7exists(PATCH_XFORMS)) {
 		// Read in translucency tables.
-		FlexFile *sxf = U7exists(XFORMTBL) ? new FlexFile(XFORMTBL) : nullptr;
-		FlexFile *pxf = U7exists(PATCH_XFORMS) ? new FlexFile(XFORMTBL) : nullptr;
-		int sn = sxf ? sxf->number_of_objects() : 0;
-		int pn = pxf ? pxf->number_of_objects() : 0;
-		int nobjs = min(max(sn, pn), nblends);  // Limit by blends.
-		for (int i = 0; i < nobjs; i++) {
-			unique_ptr<unsigned char[]> data = nullptr;
-			std::size_t len = 0;
-			if (pxf)
-				data = pxf->retrieve(i, len);
-			if (!data || len == 0) {
-				// Not in patch;
-				data.reset();
-				if (sxf)
-					data = sxf->retrieve(i, len);
-			}
-			if (!data || len == 0) {
+		U7multifile xformfile(XFORMTBL, PATCH_XFORMS);
+		const size_t nobjs = std::min(xformfile.number_of_objects(), nblends);  // Limit by blends.
+		for (size_t i = 0; i < nobjs; i++) {
+			auto ds = xformfile.retrieve(i);
+			if (!ds.good()) {
 				// No XForm data at all. Make this XForm into an
 				// identity transformation.
 				for (size_t j = 0; j < sizeof(xforms[0].colors); j++)
-					xforms[nxforms - 1 - i].colors[j] = j;
-				continue;
+					xforms[nxforms - 1 - i].colors[j] = static_cast<uint8>(j);
+			} else {
+				ds.read(xforms[nxforms - 1 - i].colors, sizeof(xforms[0].colors));
 			}
-			std::memcpy(xforms[nxforms - 1 - i].colors, data.get(),
-			            sizeof(xforms[0].colors));
 		}
-		delete sxf;
-		delete pxf;
 	} else {            // Create algorithmically.
 		gwin->get_pal()->load(PALETTES_FLX, PATCH_PALETTES, 0);
 		for (size_t i = 0; i < nxforms; i++) {
-			gwin->get_pal()->create_trans_table(xforms[i].r / 4,
-			                                    xforms[i].g / 4, xforms[i].b / 4,
-			                                    xforms[i].a, xforms[i].colors);
+			gwin->get_pal()->create_trans_table(blends[4 * i + 0] / 4,
+			                                    blends[4 * i + 1] / 4,
+			                                    blends[4 * i + 2] / 4,
+			                                    blends[4 * i + 3],
+			                                    xforms[i].colors);
 		}
 	}
 
@@ -343,25 +303,26 @@ void Shape_manager::load(
 
 // Read in files needed to display gumps.
 bool Shape_manager::load_gumps_minimal() {
-	bool ok = false;
+	U7FileManager::get_ptr()->reset();  // Cache no longer valid.
+	shape_cache[SF_GUMPS_VGA].clear();
+	shape_cache[SF_EXULT_FLX].clear();
 	try {
-		ok = files[SF_GUMPS_VGA].load(GUMPS_VGA, PATCH_GUMPS, true);
-	} catch (exult_exception &) {
-	}
-
-	if (!ok) {
-		std::cerr << "Couldn't open 'gumps.vga'." << std::endl;
+		if (!files[SF_GUMPS_VGA].load(GUMPS_VGA, PATCH_GUMPS, true)) {
+			std::cerr << "Couldn't open 'gumps.vga'." << std::endl;
+			return false;
+		}
+	} catch (exult_exception &ex) {
+		std::cerr << ex.what() << std::endl;
 		return false;
 	}
 
-	ok = false;
 	try {
-		ok = files[SF_EXULT_FLX].load(BUNDLE_CHECK(BUNDLE_EXULT_FLX, EXULT_FLX));
-	} catch (exult_exception &) {
-	}
-
-	if (!ok) {
-		std::cerr << "Couldn't open 'exult.flx'." << std::endl;
+		if (!files[SF_EXULT_FLX].load(BUNDLE_CHECK(BUNDLE_EXULT_FLX, EXULT_FLX))) {
+			std::cerr << "Couldn't open 'exult.flx'." << std::endl;
+			return false;
+		}
+	} catch (exult_exception &ex) {
+		std::cerr << ex.what() << std::endl;
 		return false;
 	}
 
@@ -377,10 +338,11 @@ bool Shape_manager::load_gumps_minimal() {
  */
 
 void Shape_manager::reload_shapes(
-    int dragtype            // Type from u7drag.h.
+    int shape_kind            // Type from u7drag.h.
 ) {
 	U7FileManager::get_ptr()->reset();  // Cache no longer valid.
-	switch (dragtype) {
+	shape_cache[shape_kind].clear();
+	switch (shape_kind) {
 	case U7_SHAPE_SHAPES:
 		read_shape_info();
 		// ++++Reread text?
@@ -401,7 +363,7 @@ void Shape_manager::reload_shapes(
 		files[SF_PAPERDOL_VGA].load(PAPERDOL, PATCH_PAPERDOL);
 		break;
 	default:
-		cerr << "Type not supported:  " << dragtype << endl;
+		cerr << "Type not supported:  " << shape_kind << endl;
 		break;
 	}
 }
@@ -419,7 +381,6 @@ void Shape_manager::reload_shape_info(
  *  Clean up.
  */
 Shape_manager::~Shape_manager() {
-	delete fonts;
 	assert(this == instance);
 	instance = nullptr;
 }
@@ -470,28 +431,36 @@ Font *Shape_manager::get_font(int fontnum) {
 	return fonts->get_font(fontnum);
 }
 
+Shape_manager::Cached_shape Shape_manager::cache_shape(int shape_kind, int shapenum, int framenum) {
+	Cached_shape cache{nullptr, false};
+	if (framenum == -1) {
+		return cache;
+	}
+	using cache_key = std::pair<int, int>;
+	auto iter = shape_cache[shape_kind].find(cache_key(shapenum, framenum));
+	if (iter != shape_cache[shape_kind].cend()) {
+		return iter->second;
+	}
+	if (shape_kind == SF_SHAPES_VGA) {
+		cache.shape = sman->shapes.get_shape(shapenum, framenum);
+		cache.has_trans = sman->shapes.get_info(shapenum).has_translucency();
+	} else if (shape_kind < SF_OTHER) {
+		cache.shape = sman->files[shape_kind].get_shape(shapenum, framenum);
+		if (shape_kind == SF_SPRITES_VGA)
+			cache.has_trans = true;
+	} else {
+		std::cerr << "Error! Wrong ShapeFile!" << std::endl;
+		return cache;
+	}
+	shape_cache[shape_kind][cache_key(shapenum, framenum)] = cache;
+	return cache;
+}
 
 /*
  *  Read in shape.
  */
-Shape_frame *ShapeID::cache_shape() const {
-	if (framenum == -1) return nullptr;
-
-	has_trans = false;
-	if (!shapefile) {
-		// Special case.
-		shape = sman->shapes.get_shape(shapenum, framenum);
-		has_trans = sman->shapes.get_info(shapenum).has_translucency();
-	} else if (shapefile < SF_OTHER) {
-		shape = sman->files[static_cast<int>(shapefile)].get_shape(
-		            shapenum, framenum);
-		if (shapefile == SF_SPRITES_VGA)
-			has_trans = true;
-	} else {
-		std::cerr << "Error! Wrong ShapeFile!" << std::endl;
-		return nullptr;
-	}
-	return shape;
+Shape_manager::Cached_shape ShapeID::cache_shape() const {
+	return sman->cache_shape(shapefile, shapenum, framenum);
 }
 
 int ShapeID::get_num_frames() const {

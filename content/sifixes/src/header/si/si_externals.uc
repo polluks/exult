@@ -46,7 +46,7 @@ extern void xenkaReturns 0x8F4 ();
 extern void xenkanMonkDies 0x8F5 (var monk);
 
 // Returns true is point is inside rectangle
-extern var pointInsideRect 0x8F8 (var point, var upperleft, var lowerright);
+extern var pointInsideRect 0x8F8 (struct<Position2D> point, struct<Position2D> upperleft, struct<Position2D> lowerright);
 
 // List of dead bodies nearby:
 extern var getNearbyBodies 0x8FB ();
@@ -100,6 +100,8 @@ extern var directionFromAvatar 0x979 (var obj);
 // Sees if the party has a minimum count of the specified item:
 extern var hasItemCount 0x97D (var cont, var mincount, var shapenum, var quality, var framenum);
 
+extern var absoluteValueOf 0x97E (var number);
+
 // Makes the NPC bark after delay ticks:
 extern void delayedBark 0x97F (var npc, var bark, var delay);
 
@@ -136,6 +138,10 @@ extern var getNonAutomatonPartyMembers 0x98E ();
  */
 extern var partyUtters 0x992 (var npcnum, var partyutter, var avatarutter, var isbark);
 
+// Makes a random party member bark utter.
+// Equivalent to partyUtters(1, utter, utter, true);
+extern void randomPartyBark 0x949 (var utter);
+
 // Gets the Avatar's location ID; see getLocationID in "misc/location_ids.uc"
 // for details:
 extern var getAvatarLocationID 0x994 ();
@@ -150,6 +156,9 @@ extern var getOuterContainer 0x99E (var obj);
 // of numbers (num1 and num2) into a number 0-31 then returns the path egg with
 // the corresponding frame. Returned path eggs come from the Usecode Container.
 extern var getPathEgg 0x9A0 (var num1, var num2);
+
+// Remove all items from a container, then removes the container.
+extern void removeAllItemsAndContainer 0x9A3 (var obj);
 
 // Returns an array containing the index of all instances of
 // element in the array:
@@ -168,7 +177,7 @@ extern void unfreezeAvatar 0x9AA ();
  */
 extern void setNewSchedules 0x9AC (var npc, var posx, var posy, var activity);
 
-// Sets a single NPC to attack the party, 
+// Sets a single NPC to attack the party,
 // and changes that NPC's alignment to Evil.
 extern void attackParty 0x9AD (var npc);
 

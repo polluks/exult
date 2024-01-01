@@ -1,6 +1,7 @@
 /*
 Copyright (C) 1997-2001 Id Software, Inc.
 Copyright (C) 2003 The Pentagram Team
+Copyright (C) 2005-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,10 +28,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <cctype>
 #include "istring.h"
+#include <limits>
 
 namespace Pentagram {
 
-int strncasecmp(const char *s1, const char *s2, uint32 length) {
+int strncasecmp(const char *s1, const char *s2, std::size_t length) {
 	sint32 c1;
 
 	do {
@@ -54,7 +56,7 @@ int strncasecmp(const char *s1, const char *s2, uint32 length) {
 }
 
 int strcasecmp(const char *s1, const char *s2) {
-	return strncasecmp(s1, s2, 2147483647);
+	return strncasecmp(s1, s2, std::numeric_limits<std::size_t>::max());
 }
 
 }

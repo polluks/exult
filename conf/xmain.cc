@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2000  Dancer A.L Vesperman
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -65,24 +66,24 @@ void    test1() {
 
 	cerr << "Testing: config/audio/midi/device" << endl;
 
-	std::string test_device("config/audio/midi/device");
+	const std::string test_device("config/audio/midi/device");
 	config->value(test_device, n, -1);
 	cout << "Returned from reference, \"" << test_device << "\". Got '" << n << "'" << endl;
 	assert(n == 5);
 
-	std::string test_enabled("config/audio/midi/enabled");
+	const std::string test_enabled("config/audio/midi/enabled");
 	config->value(test_enabled, r, "--nil--");
 	cout << "Returned from reference, \"" << test_enabled << "\". Got '" << r << "'" << endl;
 	assert(r == "yes");
 
-	std::string test_spaces("config/disk/u7path_with_spaces");
+	const std::string test_spaces("config/disk/u7path_with_spaces");
 	config->value(test_spaces, r, "--nil--");
 	cout << "Returned from reference, \"" << test_spaces << "\". Got '" << r << "'" << endl;
 	assert(r == "d:\\ultima series\\ultima vii - the serpent isle");
 
 	config->set("config/something/something/else", "wibble", false);
 
-	std::string out = config->dump();
+	const std::string out = config->dump();
 	cout << out << endl;
 
 	std::vector<std::string> vs;
@@ -113,13 +114,13 @@ void    test1() {
 	Configuration confnew("./config.xml", "config");
 
 	Configuration::KeyTypeList ktl;
-	string basekey("config/audio");
+	const string basekey("config/audio");
 	confnew.getsubkeys(ktl, basekey);
 
 	cout << endl;
 
-	for (auto i = ktl.begin(); i != ktl.end(); i++)
-		cout << "Key:\t" << i->first << endl << "Value:\t" << i->second << endl;
+	for (const auto& i : ktl)
+		cout << "Key:\t" << i.first << endl << "Value:\t" << i.second << endl;
 	assert(ktl.size() == 7);
 
 }

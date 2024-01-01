@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -28,8 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  A pushable button on a gump:
  */
 class Gump_button : public Gump_widget {
-	UNREPLICATABLE_CLASS(Gump_button)
-
 private:
 	int pushed_button;      // 1 if in pushed state.
 
@@ -65,7 +63,9 @@ public:
 	virtual bool is_checkmark() const {
 		return false;
 	}
-
+	Gump_button *as_button() override {
+		return this;
+	}
 };
 
 template <class Callable, class Tuple, size_t... Is>

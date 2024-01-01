@@ -61,10 +61,15 @@ public:
 
 	virtual void seek(size_t) = 0;
 	virtual void skip(std::streamoff) = 0;
-	virtual size_t getSize() = 0;
-	virtual size_t getPos() = 0;
-	virtual bool eof() = 0;
-	virtual bool good() {
+	virtual size_t getSize() const = 0;
+	virtual size_t getPos() const = 0;
+	size_t getAvail() const {
+		size_t const msize = getSize();
+		size_t const mpos = getPos();
+		return msize >= mpos ? msize - mpos : 0;
+	}
+	virtual bool eof() const = 0;
+	virtual bool good() const {
 		return true;
 	}
 	virtual void clear_error() { }
@@ -74,7 +79,7 @@ public:
 	void readline(std::string &str) {
 		str.erase();
 		while (!eof()) {
-			char character =  static_cast<char>(read1());
+			const char character =  static_cast<char>(read1());
 			if (character == '\r') {
 				continue;        // Skip cr
 			}
@@ -140,28 +145,24 @@ public:
 		in->seekg(pos, std::ios::cur);
 	}
 
-	size_t getSize() final {
-		size_t pos = in->tellg();
-		in->seekg(0, std::ios::end);
-		size_t len = in->tellg();
-		in->seekg(pos);
-		return len;
+	size_t getSize() const final {
+		return get_file_size(*in);
 	}
 
-	size_t getPos() final {
+	size_t getPos() const final {
 		return in->tellg();
 	}
 
-	bool eof() final {
+	bool eof() const final {
 		in->get();
-		bool ret = in->eof();
+		const bool ret = in->eof();
 		if (!ret) {
 			in->unget();
 		}
 		return ret;
 	}
-	bool good() final {
-		return in->good();
+	bool good() const final {
+		return in && in->good();
 	}
 	void clear_error() final {
 		in->clear();
@@ -173,17 +174,20 @@ public:
  */
 
 class IFileDataSource : public IStreamDataSource {
-	std::ifstream fin;
+	std::unique_ptr<std::istream> pFin;
 
 public:
 	explicit IFileDataSource(const File_spec &spec, bool is_text = false)
-		: IStreamDataSource(&fin) {
+		: IStreamDataSource(nullptr) {
 		if (U7exists(spec.name)) {
-			U7open(fin, spec.name.c_str(), is_text);
+			pFin = U7open_in(spec.name.c_str(), is_text);
 		} else {
 			// Set fail bit
+			pFin = std::make_unique<std::ifstream>();
+			auto& fin = *pFin;
 			fin.seekg(0);
 		}
+		in = pFin.get();
 	}
 };
 
@@ -254,11 +258,11 @@ public:
 		buf_ptr += pos;
 	}
 
-	size_t getSize() final {
+	size_t getSize() const final {
 		return size;
 	}
 
-	size_t getPos() final {
+	size_t getPos() const final {
 		return buf_ptr - buf;
 	}
 
@@ -266,11 +270,11 @@ public:
 		return buf_ptr;
 	}
 
-	bool eof() final {
+	bool eof() const final {
 		return buf_ptr >= buf + size;
 	}
 
-	bool good() final {
+	bool good() const final {
 		return (buf != nullptr) && (size != 0U);
 	}
 
@@ -291,6 +295,10 @@ public:
 	IBufferDataSource(std::unique_ptr<unsigned char[]> data_, size_t len)
 		: IBufferDataView(data_, len), data(std::move(data_)) {
 	}
+	auto steal_data(size_t& len) {
+		len = size;
+		return std::move(data);
+	}
 };
 
 /**
@@ -301,14 +309,14 @@ class IExultDataSource: public IBufferDataSource {
 public:
 	IExultDataSource(const File_spec &fname, int index)
 		: IBufferDataSource(nullptr, 0) {
-		U7object obj(fname, index);
+		const U7object obj(fname, index);
 		data = obj.retrieve(size);
 		buf = buf_ptr = data.get();
 	}
 
 	IExultDataSource(const File_spec &fname0, const File_spec &fname1, int index)
 		: IBufferDataSource(nullptr, 0) {
-		U7multiobject obj(fname0, fname1, index);
+		const U7multiobject obj(fname0, fname1, index);
 		data = obj.retrieve(size);
 		buf = buf_ptr = data.get();
 	}
@@ -316,7 +324,7 @@ public:
 	IExultDataSource(const File_spec &fname0, const File_spec &fname1,
 	                 const File_spec &fname2, int index)
 		: IBufferDataSource(nullptr, 0) {
-		U7multiobject obj(fname0, fname1, fname2, index);
+		const U7multiobject obj(fname0, fname1, fname2, index);
 		data = obj.retrieve(size);
 		buf = buf_ptr = data.get();
 	}
@@ -344,10 +352,10 @@ public:
 
 	virtual void seek(size_t) = 0;
 	virtual void skip(std::streamoff) = 0;
-	virtual size_t getSize() = 0;
-	virtual size_t getPos() = 0;
+	virtual size_t getSize() const = 0;
+	virtual size_t getPos() const = 0;
 	virtual void flush() { }
-	virtual bool good() {
+	virtual bool good() const {
 		return true;
 	}
 	virtual void clear_error() { }
@@ -389,7 +397,7 @@ public:
 	}
 
 	void write(const std::string &s) final {
-		out->write(&s[0], s.size());
+		out->write(s.data(), s.size());
 	}
 
 	void seek(size_t pos) final {
@@ -400,22 +408,18 @@ public:
 		out->seekp(pos, std::ios::cur);
 	}
 
-	size_t getSize() final {
-		size_t pos = out->tellp();
-		out->seekp(0, std::ios::end);
-		size_t len = out->tellp();
-		out->seekp(pos);
-		return len;
+	size_t getSize() const final {
+		return out->tellp();
 	}
 
-	size_t getPos() final {
+	size_t getPos() const final {
 		return out->tellp();
 	}
 
 	void flush() final {
 		out->flush();
 	}
-	bool good() final {
+	bool good() const final {
 		return out->good();
 	}
 	void clear_error() final {
@@ -427,12 +431,13 @@ public:
  * File-based output data source which owns the stream.
  */
 class OFileDataSource : public OStreamDataSource {
-	std::ofstream fout;
+	std::unique_ptr<std::ostream> fout;
 
 public:
 	explicit OFileDataSource(const File_spec &spec, bool is_text = false)
-		: OStreamDataSource(&fout) {
-		U7open(fout, spec.name.c_str(), is_text);
+		: OStreamDataSource(nullptr) {
+		fout = U7open_out(spec.name.c_str(), is_text);
+		out = fout.get();
 	}
 };
 
@@ -485,7 +490,7 @@ public:
 	}
 
 	void write(const std::string &s) final {
-		write(&s[0], s.size());
+		write(s.data(), s.size());
 	}
 
 	void seek(size_t pos) final {
@@ -496,11 +501,11 @@ public:
 		buf_ptr += pos;
 	}
 
-	size_t getSize() final {
+	size_t getSize() const final {
 		return size;
 	}
 
-	size_t getPos() final {
+	size_t getPos() const final {
 		return buf_ptr - buf;
 	}
 
@@ -530,7 +535,7 @@ public:
 };
 
 inline void IDataSource::copy_to(ODataSource& dest) {
-	size_t len = getSize();
+	const size_t len = getSize();
 	auto data = readN(len);
 	dest.write(data.get(), len);
 }
@@ -540,7 +545,7 @@ inline std::unique_ptr<IDataSource> IStreamDataSource::makeSource(size_t len) {
 }
 
 inline std::unique_ptr<IDataSource> IBufferDataView::makeSource(size_t len) {
-	size_t avail = getSize() - getPos();
+	const size_t avail = getAvail();
 	if (avail < len) {
 		len = avail;
 	}
@@ -550,7 +555,7 @@ inline std::unique_ptr<IDataSource> IBufferDataView::makeSource(size_t len) {
 }
 
 inline void IBufferDataView::copy_to(ODataSource& dest) {
-	size_t len = getSize() - getPos();
+	const size_t len = getAvail();
 	dest.write(getPtr(), len);
 	skip(len);
 }

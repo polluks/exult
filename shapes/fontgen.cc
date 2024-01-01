@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2002  The Exult Team
+Copyright (C) 2002-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -31,7 +31,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <memory>
 #include "vgafile.h"
 
-using std::unique_ptr;
 using std::make_unique;
 /*
  *  Generate a shadow around a character.
@@ -96,13 +95,14 @@ static bool Gen_font_shape_win32(
 	//matrix.eM22.fract = 0x10000 * 10 / 12;
 
 	shape->resize(nframes);     // Make it big enough.
-	for (wchar_t chr = 0; chr < nframes; chr++) {
+	for (int ii = 0; ii < nframes; ii++) {
 		// Get each glyph.
 		GLYPHMETRICS metrics;
 
-		unsigned int buffsize = GetGlyphOutline(dc, chr, GGO_BITMAP, &metrics, 0, nullptr, &matrix);
+		const unsigned int buffsize = GetGlyphOutline(dc, ii, GGO_BITMAP, &metrics, 0, nullptr, &matrix);
 		int offset = 0;     // Starting row, col.
 
+		const wchar_t chr = ii;
 		if (buffsize == GDI_ERROR || buffsize == 0) {
 			SIZE size;
 			GetTextExtentPoint32W(dc, &chr, 1, &size);
@@ -143,7 +143,7 @@ static bool Gen_font_shape_win32(
 			}
 
 			// Allocate our buffer.
-			int cnt = sw * sh;  // Total #pixels.
+			const int cnt = sw * sh;  // Total #pixels.
 			auto *pixels = new unsigned char[cnt];
 			memset(pixels, bg, cnt);// Fill with background.
 
@@ -248,7 +248,7 @@ static bool Gen_font_shape_win32(
 	SelectObject(dc, bmp);
 	SelectObject(dc, font);
 
-	bool ret = Gen_font_shape_win32(dc, font, shape, nframes, pixels_ht, fg, bg, shadow);
+	const bool ret = Gen_font_shape_win32(dc, font, shape, nframes, pixels_ht, fg, bg, shadow);
 	DeleteObject(bmp);
 	DeleteObject(font);
 	DeleteDC(dc);
@@ -305,11 +305,11 @@ bool Gen_font_shape(
 #if defined(_WIN32) && defined(USE_WIN32_FONTGEN)
 	static HANDLE(WINAPI * AddFontResourceExA)(LPCSTR, DWORD, PVOID);
 	if (AddFontResourceExA == nullptr) {
-		AddFontResourceExA = reinterpret_cast<HANDLE(WINAPI *)(LPCSTR, DWORD, PVOID)>
-		                     (GetProcAddress(LoadLibrary("GDI32"), "AddFontResourceExA"));
-
+		static_assert(sizeof(HANDLE) == sizeof(FARPROC), "sizeof(FARPROC) is not equal to sizeof(HANDLE)!");
+		const FARPROC handle = GetProcAddress(LoadLibrary("GDI32"), "AddFontResourceExA");
+		std::memcpy(&AddFontResourceExA, &handle, sizeof(HANDLE));
 	}
-	if (AddFontResourceExA && AddFontResourceExA(fontfile, FR_PRIVATE, nullptr) != nullptr) {
+	if (AddFontResourceExA != nullptr && AddFontResourceExA(fontfile, FR_PRIVATE, nullptr) != nullptr) {
 		//if (face->family_name) MessageBox(nullptr,face->family_name,"face->family_name",MB_OK);
 		//if (face->style_name) MessageBox(nullptr,face->style_name,"face->style_name",MB_OK);
 		if (Gen_font_shape_win32(shape, face->family_name, face->style_name, nframes, pixels_ht, fg, bg, shadow)) {
@@ -334,8 +334,8 @@ bool Gen_font_shape(
 			shape->set_frame(make_unique<Shape_frame>(&bg, 1, 1, 0, 0, true), chr);
 			continue;
 		}
-		int w = glyph->bitmap.width;
-		int h = glyph->bitmap.rows;
+		const int w = glyph->bitmap.width;
+		const int h = glyph->bitmap.rows;
 		int sw = w;
 		int sh = h; // Shape width/height.
 		int offset = 0;     // Starting row, col.
@@ -349,7 +349,7 @@ bool Gen_font_shape(
 			offset = 1;
 		}
 		// Allocate our buffer.
-		int cnt = sw * sh;  // Total #pixels.
+		const int cnt = sw * sh;  // Total #pixels.
 		auto *pixels = new unsigned char[cnt];
 		memset(pixels, bg, cnt);// Fill with background.
 		// I believe this is 1 bit/pixel:

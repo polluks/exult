@@ -1,5 +1,5 @@
 /*
-*  Copyright (C) 2000-2013  The Exult Team
+*  Copyright (C) 2000-2022  The Exult Team
 *
 *  This program is free software; you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -19,12 +19,8 @@
 #include "pent_include.h"
 #include "ignore_unused_variable_warning.h"
 
-#include <SDL_audio.h>
-#include <SDL_timer.h>
-
 #include <fstream>
 #include <set>
-//#include "SDL_mapping.h"
 
 #include "Audio.h"
 #include "Configuration.h"
@@ -101,10 +97,10 @@ AudioSample *SFX_cache_manager::request(Flex *sfx_file, int id)
 {
 	SFX_cached *loaded = find_sfx(id);
 	if (!loaded) {
-		SFX_cached new_sfx;
+		SFX_cached& new_sfx = cache[id];
 		new_sfx.first = 0;
 		new_sfx.second = nullptr;
-		loaded = &(cache[id] = new_sfx);
+		loaded = &new_sfx;
 	}
 
 	if (!loaded->second)
@@ -129,7 +125,7 @@ void SFX_cache_manager::flush(AudioMixer *mixer)
 {
 	for (auto it = cache.begin() ; it != cache.end(); it = cache.begin())
 	{
-		if (it->second.second) 
+		if (it->second.second)
 		{
 			if (it->second.second->getRefCount() != 1 && mixer)
 				mixer->stopSample(it->second.second);
@@ -150,10 +146,10 @@ void SFX_cache_manager::garbage_collect()
 
 	std::multiset <int> sorted;
 
-	for (auto it = cache.begin(); it != cache.end(); ++it)
+	for (auto& it : cache)
 	{
-		if (it->second.second && it->second.second->getRefCount() == 1) 
-			sorted.insert(it->second.first); 
+		if (it.second.second && it.second.second->getRefCount() == 1)
+			sorted.insert(it.second.first);
 	}
 
 	if (sorted.empty()) return;
@@ -178,22 +174,22 @@ void SFX_cache_manager::garbage_collect()
 		}
 	}
 
-	if (count <= max_fixed) 
+	if (count <= max_fixed)
 		return;
 
-	for (auto it = cache.begin(); it != cache.end(); ++it)
+	for (auto& it : cache)
 	{
-		if (it->second.second)
+		if (it.second.second)
 		{
-			if (it->second.first < threshold) 
+			if (it.second.first < threshold)
 			{
-				it->second.second->Release();
-				it->second.second = nullptr;
+				it.second.second->Release();
+				it.second.second = nullptr;
 			}
-			else if (it->second.first == threshold && count > max_fixed) 
+			else if (it.second.first == threshold && count > max_fixed)
 			{
-				it->second.second->Release();
-				it->second.second = nullptr;
+				it.second.second->Release();
+				it.second.second = nullptr;
 				count--;
 			}
 		}
@@ -207,7 +203,7 @@ void Audio::Init()
 	// Crate the Audio singleton object
 	if (!self)
 	{
-		int sample_rate = 22050;
+		int sample_rate = 44100;
 		bool stereo = true;
 
 		config->value("config/audio/sample_rate", sample_rate, sample_rate);
@@ -259,7 +255,7 @@ Audio::Audio()
 	sfxs = std::make_unique<SFX_cache_manager>();
 }
 
-void Audio::Init(int _samplerate,int _channels)	
+void Audio::Init(int _samplerate,int _channels)
 {
 	if (!audio_enabled) return;
 
@@ -290,7 +286,7 @@ bool	Audio::can_sfx(const std::string &file, std::string *out)
 		}
 		if (U7exists(f.c_str())) {
 			if (out)
-				*out = f;
+				*out = std::move(f);
 			return true;
 		}
 	}
@@ -305,7 +301,7 @@ bool Audio::have_roland_sfx(Exult_Game game, std::string *out)
 		return can_sfx(SFX_ROLAND_SI, out);
 	return false;
 	}
-	
+
 bool Audio::have_sblaster_sfx(Exult_Game game, std::string *out)
 	{
 	if (game == BLACK_GATE)
@@ -314,7 +310,7 @@ bool Audio::have_sblaster_sfx(Exult_Game game, std::string *out)
 		return can_sfx(SFX_BLASTER_SI, out);
 	return false;
 	}
-	
+
 bool Audio::have_midi_sfx(std::string *out)
 	{
 #ifdef ENABLE_MIDISFX
@@ -324,15 +320,15 @@ bool Audio::have_midi_sfx(std::string *out)
 	return false;
 #endif
 	}
-	
+
 bool Audio::have_config_sfx(const std::string &game, std::string *out)
 	{
 	string s;
-	string d = "config/disk/game/" + game + "/waves";
+	const string d = "config/disk/game/" + game + "/waves";
 	config->value(d.c_str(), s, "---");
 	return (s != "---") && can_sfx(s, out);
 	}
-	
+
 void	Audio::Init_sfx()
 {
 	sfx_file.reset();
@@ -343,7 +339,7 @@ void	Audio::Init_sfx()
 		sfxs->garbage_collect();
 		}
 
-	Exult_Game game = Game::get_game_type();
+	const Exult_Game game = Game::get_game_type();
 	if (game == SERPENT_ISLE)
 	{
 		bg2si_sfxs = bgconv;
@@ -372,7 +368,7 @@ void	Audio::Init_sfx()
 		{
 		if (have_roland_sfx(game, &flex) || have_sblaster_sfx(game, &flex))
 			{
-			string d = "config/disk/game/" + Game::get_gametitle() + "/waves";
+			const string d = "config/disk/game/" + Game::get_gametitle() + "/waves";
 			size_t sep = flex.rfind('/');
 			std::string pflex;
 			if (sep != string::npos)
@@ -396,7 +392,7 @@ void	Audio::Init_sfx()
 }
 
 Audio::~Audio()
-{ 
+{
 	if (!initialized)
 	{
 		//SDL_open = false;
@@ -409,26 +405,28 @@ Audio::~Audio()
 	CERR("~Audio:  about to quit subsystem");
 }
 
-void Audio::copy_and_play(const uint8 *sound_data, uint32 len, bool wait)
-{
+sint32 Audio::copy_and_play(const uint8* sound_data, uint32 len, bool wait) {
 	auto new_sound_data = std::make_unique<uint8[]>(len);
 	std::memcpy(new_sound_data.get(), sound_data, len);
-	play(std::move(new_sound_data), len, wait);
+	return play(std::move(new_sound_data), len, wait);
 }
 
-void Audio::play(std::unique_ptr<uint8[]> sound_data, uint32 len, bool wait)
+sint32 Audio::play(std::unique_ptr<uint8[]> sound_data, uint32 len, bool wait)
 {
 	ignore_unused_variable_warning(wait);
 	if (!audio_enabled || !speech_enabled || !len) {
-		return;
+		return -1;
 	}
 
 	AudioSample *audio_sample = AudioSample::createAudioSample(std::move(sound_data), len);
 
 	if (audio_sample) {
-		mixer->playSample(audio_sample,0,128);
+		sint32 id = mixer->playSample(audio_sample,0,128);
 		audio_sample->Release();
+		return id;
 	}
+
+	return -1;
 
 }
 
@@ -459,22 +457,22 @@ void 	Audio::resume_audio()
 }
 
 
-void Audio::playfile(const char *fname, const char *fpatch, bool wait)
+sint32 Audio::playfile(const char *fname, const char *fpatch, bool wait)
 {
 	if (!audio_enabled)
-		return;
+		return -1;
 
-	U7multiobject sample(fname, fpatch, 0);
+	const U7multiobject sample(fname, fpatch, 0);
 
 	size_t len;
 	auto buf = sample.retrieve(len);
 	if (!buf || len == 0) {
 		// Failed to find file in patch or static dirs.
 		CERR("Audio::playfile: Error reading file '" << fname << "'");
-		return;
+		return -1;
 	}
 
-	play(std::move(buf), len, wait);
+	return play(std::move(buf), len, wait);
 }
 
 
@@ -568,7 +566,7 @@ bool Audio::start_speech(int num, bool wait)
 		patchfile = PATCH_U7SPEECH;
 	}
 
-	U7multiobject sample(filename, patchfile, num);
+	const U7multiobject sample(filename, patchfile, num);
 
 	size_t len;
 	auto buf = sample.retrieve(len);
@@ -576,7 +574,7 @@ bool Audio::start_speech(int num, bool wait)
 		return false;
 	}
 
-	play(std::move(buf), len, wait);
+	speech_id = play(std::move(buf), len, wait);
 	return true;
 }
 
@@ -586,6 +584,37 @@ void Audio::stop_speech()
 		return;
 
 	mixer->reset();
+	speech_id = -1;
+}
+
+bool Audio::is_speech_playing() {
+	return speech_id != -1 && mixer->isPlaying(speech_id);
+}
+
+int Audio::wait_for_speech(std::function<int(Uint32 ms)> waitfunc) {
+	if (speech_id == -1)
+		return -1;
+
+	if (!waitfunc)
+		waitfunc = [](int ms) {
+			SDL_Delay(ms);
+			return 0;
+		};
+
+	while (mixer->isPlaying(speech_id)) {
+
+		//50 ms or 20times a second
+		int canceled = waitfunc(50);
+		if (canceled > 0) {
+			mixer->stopSample(speech_id);
+			speech_id = -1;
+			return canceled;
+		}
+
+	}
+	speech_id = -1;
+	return 0;
+
 }
 
 /*
@@ -610,7 +639,7 @@ int	Audio::play_sound_effect (int num, int volume, int balance, int repeat, int 
 }
 
 /*
-*	Play a .wav format sound effect, 
+*	Play a .wav format sound effect,
 *  return the channel number playing on or -1 if not playing, (0 is a valid channel in SDL_Mixer!)
 */
 int Audio::play_wave_sfx
@@ -622,7 +651,7 @@ int Audio::play_wave_sfx
 	int distance
 )
 {
-	if (!effects_enabled || !sfx_file || !mixer) 
+	if (!effects_enabled || !sfx_file || !mixer)
 		return -1;  // no .wav sfx available
 
 	if (num < 0 || static_cast<unsigned>(num) >= sfx_file->number_of_objects())
@@ -637,7 +666,7 @@ int Audio::play_wave_sfx
 		return -1;
 	}
 
-	int instance_id = mixer->playSample(wave,repeat,0,true,AUDIO_DEF_PITCH,volume,volume);
+	const int instance_id = mixer->playSample(wave,repeat,0,true,AUDIO_DEF_PITCH,volume,volume);
 	if (instance_id < 0)
 	{
 		CERR("No channel was available to play sfx '" << num << "'");
@@ -645,9 +674,65 @@ int Audio::play_wave_sfx
 	}
 
 	CERR("Playing SFX: " << num);
-	
+
 	mixer->set2DPosition(instance_id,distance,balance);
 	mixer->setPaused(instance_id,false);
+
+	return instance_id;
+}
+
+/*
+*	This returns a 'unique' ID, but only for .wav SFX's (for now).
+*/
+int	Audio::play_sound_effect (const File_spec& sfxfile, int num, int volume, int balance, int repeat, int distance)
+{
+	if (!audio_enabled || !effects_enabled) return -1;
+	// TODO: No support for MIDI SFX at this time here.
+	return play_wave_sfx(sfxfile, num, volume, balance, repeat, distance);
+}
+
+/*
+*	Play a .wav format sound effect,
+*  return the channel number playing on or -1 if not playing, (0 is a valid channel in SDL_Mixer!)
+*/
+int Audio::play_wave_sfx
+(
+	const File_spec& sfxfile,
+	int num,
+	int volume,		// 0-256.
+	int balance,		// balance, -256 (left) - +256 (right)
+	int repeat,		// Keep playing.
+	int distance
+)
+{
+	if (!effects_enabled || !mixer || !U7exists(sfxfile.name)) {
+		return -1;  // no .wav sfx available
+	}
+	IExultDataSource ds(sfxfile, num);
+	if (!ds.good()) {
+		cerr << "SFX " << num << " from {" << sfxfile.name << ", " << sfxfile.index << "} is out of range" << endl;
+		return -1;
+	}
+
+	size_t wavlen;			// Read .wav file.
+	auto wavbuf = ds.steal_data(wavlen);
+	auto *wave = AudioSample::createAudioSample(std::move(wavbuf), wavlen);
+
+	const int instance_id = mixer->playSample(wave, repeat, 0, true, AUDIO_DEF_PITCH, volume,volume);
+	// Either AudioMixer::playSample called IncRef through AudioChannel::playSample and the sample
+	// will be played, of the sample was not queued for playback.
+	// In either case we need to Release the sample to avoid a memory leak.
+	wave->Release();
+	if (instance_id < 0)
+	{
+		CERR("No channel was available to play sfx '" << num << "' from {" << sfxfile.name << ", " << sfxfile.index << "}");
+		return -1;
+	}
+
+	CERR("Playing SFX: " << num << " from {" << sfxfile.name << ", " << sfxfile.index << "}");
+
+	mixer->set2DPosition(instance_id, distance, balance);
+	mixer->setPaused(instance_id, false);
 
 	return instance_id;
 }
@@ -670,10 +755,10 @@ void Audio::get_2d_position_for_tile(const Tile_coord &tile, int &distance, int 
 	balance = 0;
 
 	Game_window *gwin = Game_window::get_instance();
-	Rectangle size = gwin->get_win_tile_rect();
-	Tile_coord apos(size.x+size.w/2,size.y+size.h/2,gwin->get_camera_actor()->get_lift());
+	const TileRect size = gwin->get_win_tile_rect();
+	const Tile_coord apos(size.x+size.w/2,size.y+size.h/2,gwin->get_camera_actor()->get_lift());
 
-	int sqr_dist = apos.square_distance_screen_space(tile);
+	const int sqr_dist = apos.square_distance_screen_space(tile);
 	if (sqr_dist > MAX_SOUND_FALLOFF*MAX_SOUND_FALLOFF) {
 		distance = 257;
 		return;
@@ -689,7 +774,7 @@ void Audio::get_2d_position_for_tile(const Tile_coord &tile, int &distance, int 
 
 int Audio::play_sound_effect (int num, const Game_object *obj, int volume, int repeat)
 {
-	Tile_coord tile = obj->get_center_tile();
+	const Tile_coord tile = obj->get_center_tile();
 	return play_sound_effect(num, tile, volume, repeat);
 }
 
@@ -704,7 +789,7 @@ int Audio::play_sound_effect (int num, const Tile_coord &tile, int volume, int r
 
 int Audio::update_sound_effect(int chan, const Game_object *obj)
 {
-	Tile_coord tile = obj->get_center_tile();
+	const Tile_coord tile = obj->get_center_tile();
 	return update_sound_effect(chan,tile);
 }
 
@@ -770,7 +855,7 @@ void Audio::set_audio_enabled(bool ena)
 	{
 		audio_enabled = true;
 
-		int sample_rate = 22050;
+		int sample_rate = 44100;
 		bool stereo = true;
 
 		config->value("config/audio/sample_rate", sample_rate, sample_rate);
@@ -784,13 +869,18 @@ void Audio::set_audio_enabled(bool ena)
 	}
 }
 
-bool Audio::is_track_playing(int num)
+bool Audio::is_track_playing(int num) const
 {
-	MyMidiPlayer *midi = mixer?mixer->getMidiPlayer():nullptr;
+	MyMidiPlayer *midi = get_midi();
 	return midi && midi->is_track_playing(num);
 }
 
-MyMidiPlayer *Audio::get_midi()
+bool Audio::is_voice_playing() const
 {
-	return mixer?mixer->getMidiPlayer():nullptr;
+	return mixer && mixer->isPlayingVoice();
+}
+
+MyMidiPlayer *Audio::get_midi() const
+{
+	return mixer ? mixer->getMidiPlayer() : nullptr;
 }

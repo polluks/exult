@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2005  The Pentagram Team
+Copyright (C) 2008-2022  The ExultTeam
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -20,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "MidiDriver.h"
 #include <vector>
 
-#include "MidiDriver.h"
 #include "WindowsMidiDriver.h"
 #include "CoreAudioMidiDriver.h"
 #include "CoreMidiDriver.h"
@@ -29,15 +29,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "ALSAMidiDriver.h"
 #include "UnixSeqMidiDriver.h"
 #include "FluidSynthMidiDriver.h"
-
-// Legacy Exult Midi Drivers
 #include "MT32EmuMidiDriver.h"
 
 #include "Configuration.h"
 
 static MidiDriver *Disabled_CreateInstance() { return nullptr; }
 
-static const MidiDriver::MidiDriverDesc Disabled_desc = 
+static const MidiDriver::MidiDriverDesc Disabled_desc =
 		MidiDriver::MidiDriverDesc ("Disabled", Disabled_CreateInstance);
 
 static std::vector<const MidiDriver::MidiDriverDesc*> midi_drivers;
@@ -107,24 +105,19 @@ MidiDriver *MidiDriver::createInstance(const std::string& desired_driver,uint32 
 	// Has the config file specified disabled midi?
 	if ( Pentagram::strcasecmp(drv, "disabled") != 0)
 	{
-		std::vector<const MidiDriver::MidiDriverDesc*>::iterator it;
-
 		// Ok, it hasn't so search for the driver
-		for (it = midi_drivers.begin(); it < midi_drivers.end(); ++it) {
-
+		for (const auto *midi_driver : midi_drivers) {
 			// Found it (case insensitive)
-			if (!Pentagram::strcasecmp(drv, (*it)->name)) {
+			if (!Pentagram::strcasecmp(drv, midi_driver->name)) {
+				pout << "Trying config specified Midi driver: `" << midi_driver->name << "'" << std::endl;
 
-				pout << "Trying config specified Midi driver: `" << (*it)->name << "'" << std::endl;
-
-				new_driver = (*it)->createInstance();
+				new_driver = midi_driver->createInstance();
 				if (new_driver) {
-
 					if (new_driver->initMidiDriver(sample_rate,stereo)) {
 						pout << "Failed!" << std::endl;
 						delete new_driver;
-						new_driver = nullptr; 
-					} 
+						new_driver = nullptr;
+					}
 					else
 					{
 						pout << "Success!" << std::endl;
@@ -134,27 +127,27 @@ MidiDriver *MidiDriver::createInstance(const std::string& desired_driver,uint32 
 			}
 		}
 
-		// Uh oh, we didn't manage to load a driver! 
+		// Uh oh, we didn't manage to load a driver!
 		// Search for the first working one
-		if (!new_driver) for (it = midi_drivers.begin(); it < midi_drivers.end(); it++) {
+		if (!new_driver) {
+			for (const auto *midi_driver : midi_drivers) {
+				pout << "Trying: `" << midi_driver->name << "'" << std::endl;
 
-			pout << "Trying: `" << (*it)->name << "'" << std::endl;
+				new_driver = midi_driver->createInstance();
+				if (new_driver) {
+					// Got it
+					if (!new_driver->initMidiDriver(sample_rate,stereo))
+					{
+						pout << "Success!" << std::endl;
+						break;
+					}
 
-			new_driver = (*it)->createInstance();
-			if (new_driver) {
+					pout << "Failed!" << std::endl;
 
-				// Got it
-				if (!new_driver->initMidiDriver(sample_rate,stereo)) 
-				{
-					pout << "Success!" << std::endl;
-					break;
+					// Oh well, try the next one
+					delete new_driver;
+					new_driver = nullptr;
 				}
-
-				pout << "Failed!" << std::endl;
-
-				// Oh well, try the next one
-				delete new_driver;
-				new_driver = nullptr; 
 			}
 		}
 	}

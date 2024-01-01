@@ -6,7 +6,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,14 +26,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <vector>
-#include <string>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
+#include "array_size.h"
 #include "ucfun.h"
 #include "ucclass.h"
 #include "ucexpr.h"
@@ -41,22 +41,27 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "opcodes.h"
 #include "ucscriptop.h"
 
-using std::strcpy;
-using std::strcat;
-using std::strlen;
 using std::string;
 using std::vector;
 
 void yyerror(const char *);
 void yywarning(const char *);
 extern int yylex();
-extern void start_script(), end_script();
-extern void start_loop(), end_loop();
-extern void start_breakable(), end_breakable();
-extern void start_fun_id(), end_fun_id();
+extern void start_script();
+extern void end_script();
+extern void start_converse();
+extern void end_converse();
+extern void start_loop();
+extern void end_loop();
+extern void start_breakable();
+extern void end_breakable();
+extern void start_fun_id();
+extern void end_fun_id();
+extern bool can_break();
+extern bool can_continue();
+static Uc_var_symbol *Get_variable(const char *);
 static Uc_array_expression *Create_array(int, Uc_expression *);
-static Uc_array_expression *Create_array(int, Uc_expression *,
-							Uc_expression *);
+static Uc_array_expression *Create_array(int, Uc_expression *, Uc_expression *);
 static Uc_class *Find_class(const char *nm);
 static bool Class_unexpected_error(Uc_expression *expr);
 static bool Nonclass_unexpected_error(Uc_expression *expr);
@@ -65,9 +70,6 @@ static Uc_call_expression *cls_method_call(Uc_expression *ths, Uc_class *curcls,
 		Uc_class *clsscope, char *nm, Uc_array_expression *parms);
 static Uc_call_expression *cls_function_call(Uc_expression *ths,
 		Uc_class *curcls, char *nm, bool original, Uc_array_expression *parms);
-
-
-#define YYERROR_VERBOSE 1
 
 std::vector<Uc_design_unit *> units;	// THIS is what we produce.
 
@@ -101,13 +103,40 @@ struct Member_selector
 		{  }
 	};
 
+struct Loop_Init
+	{
+	const char *var;
+	Uc_var_symbol *array;
+	Loop_Init(const char *v, Uc_var_symbol *a)
+		: var(v), array(a)
+		{  }
+	};
+
+struct Loop_Vars
+	{
+	Uc_var_symbol *var;
+	Uc_var_symbol *array;
+	Uc_var_symbol *index;
+	Uc_var_symbol *length;
+	Loop_Vars(Uc_var_symbol *v, Uc_var_symbol *a, Uc_var_symbol *i = nullptr,
+	          Uc_var_symbol *l = nullptr)
+		: var(v), array(a), index(i), length(l)
+		{  }
+	};
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wcast-qual"
+#if !defined(__llvm__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#endif
 #endif  // __GNUC__
 
 %}
+
+%define parse.lac full
+%define parse.error detailed
 
 %union
 	{
@@ -121,12 +150,14 @@ struct Member_selector
 	class Uc_statement *stmt;
 	class std::vector<Uc_var_symbol *> *varvec;
 	class Uc_block_statement *block;
-	class Uc_arrayloop_statement *arrayloop;
 	class Uc_array_expression *exprlist;
+	class Uc_label_statement *label;
 	class std::vector<int> *intlist;
 	class std::vector<Uc_statement *> *stmtlist;
 	struct Fun_id_info *funid;
 	struct Member_selector *membersel;
+	struct Loop_Init *loopinit;
+	struct Loop_Vars *loopvars;
 	int intval;
 	char *strval;
 	}
@@ -134,44 +165,196 @@ struct Member_selector
 /*
  *	Keywords:
  */
-%token IF ELSE RETURN DO WHILE FOR UCC_IN WITH TO EXTERN BREAK GOTO CASE
-%token VAR VOID ALIAS STRUCT UCC_CHAR UCC_INT UCC_LONG UCC_CONST STRING ENUM
-%token CONVERSE NESTED SAY MESSAGE RESPONSE EVENT FLAG ITEM UCTRUE UCFALSE REMOVE
-%token ADD HIDE SCRIPT AFTER TICKS STATIC_ ORIGINAL SHAPENUM OBJECTNUM
-%token CLASS NEW DELETE RUNSCRIPT UCC_INSERT SWITCH DEFAULT
-%token ADD_EQ SUB_EQ MUL_EQ DIV_EQ MOD_EQ CHOICE TRY CATCH ABORT THROW
+%token IF "'if'"
+%token ELSE "'else'"
+%token RETURN "'return'"
+%token DO "'do'"
+%token WHILE "'while'"
+%token FOR "'for'"
+%token WITH "'with'"
+%token TO "'to'"
+%token EXTERN "'extern'"
+%token DECLARE_ "'declare'"
+%token BREAK "'break'"
+%token GOTO "'goto'"
+%token CASE "'case'"
+%token VAR "'var'"
+%token VOID "'void'"
+%token ALIAS "'alias'"
+%token STRUCT "'struct'"
+%token UCC_CHAR "'char'"
+%token UCC_INT "'int'"
+%token UCC_LONG "'long'"
+%token UCC_CONST "'const'"
+%token STRING "'string'"
+%token ENUM "'enum'"
+%token CONVERSE "'converse'"
+%token NESTED "'nested'"
+%token SAY "'say'"
+%token MESSAGE "'message'"
+%token RESPONSE "'response'"
+%token EVENT "'event'"
+%token FLAG "'gflags'"
+%token ITEM "'item'"
+%token UCTRUE "'true'"
+%token UCFALSE "'false'"
+%token REMOVE "'remove'"
+%token ADD "'add'"
+%token HIDE "'hide'"
+%token SCRIPT "'script'"
+%token AFTER "'after'"
+%token TICKS "'ticks'"
+%token STATIC_ "'static'"
+%token ORIGINAL "'original'"
+%token SHAPENUM "shape'#'"
+%token OBJECTNUM "object'#'"
+%token IDNUM "id'#'"
+%token CLASS "'class'"
+%token RUNSCRIPT "'runscript'"
+%token SWITCH "'switch'"
+%token DEFAULT "'default'"
+%token FALLTHROUGH "'fallthrough'"
+%token ALWAYS "'always'"
+%token CHOICE "'user_choice'"
+%token TRY "'try'"
+%token CATCH "'catch'"
+%token ABORT "'abort'"
+%token THROW "'throw'"
+%token ATTEND "'attend'"
+%token ENDCONV "'endconv'"
 
 /*
  *	Script keywords:
  */
 					/* Script commands. */
-%token CONTINUE REPEAT NOP NOHALT WAIT /*REMOVE*/ RISE DESCEND FRAME HATCH
-%token NEXT PREVIOUS CYCLE STEP MUSIC CALL SPEECH SFX FACE HIT HOURS ACTOR
-%token ATTACK FINISH RESURRECT SETEGG MINUTES RESET WEATHER NEAR FAR
-%token NORTH SOUTH EAST WEST NE NW SE SW
-%token STANDING STEP_RIGHT STEP_LEFT READY RAISE_1H REACH_1H STRIKE_1H RAISE_2H
-%token REACH_2H STRIKE_2H SITTING BOWING KNEELING SLEEPING CAST_UP CAST_OUT
-%token CACHED_IN PARTY_NEAR AVATAR_NEAR AVATAR_FAR AVATAR_FOOTPAD
-%token PARTY_FOOTPAD SOMETHING_ON EXTERNAL_CRITERIA NORMAL_DAMAGE FIRE_DAMAGE
-%token  MAGIC_DAMAGE LIGHTNING_DAMAGE ETHEREAL_DAMAGE SONIC_DAMAGE
+%token NOBREAK "'nobreak'"
+%token CONTINUE "'continue'"
+%token REPEAT "'repeat'"
+%token NOP "'nop'"
+%token NOHALT "'nohalt'"
+%token WAIT "'wait'"
+%token RISE "'rise'"
+%token DESCEND "'descend'"
+%token FRAME "'frame'"
+%token HATCH "'hatch'"
+%token NEXT "'next'"
+%token PREVIOUS "'previous'"
+%token CYCLE "'cycle'"
+%token STEP "'step'"
+%token MUSIC "'music'"
+%token CALL "'call'"
+%token SPEECH "'speech'"
+%token SFX "'sfx'"
+%token FACE "'face'"
+%token HIT "'hit'"
+%token HOURS "'hours'"
+%token ACTOR "'actor'"
+%token ATTACK "'attack'"
+%token FINISH "'finish'"
+%token RESURRECT "'resurrect'"
+%token SETEGG "'setegg'"
+%token MINUTES "'minutes'"
+%token RESET "'reset'"
+%token WEATHER "'weather'"
+%token NEAR "'near'"
+%token FAR "'far'"
+%token NORTH "'north'"
+%token SOUTH "'south'"
+%token EAST "'east'"
+%token WEST "'west'"
+%token NE "'ne'"
+%token NW "'nw'"
+%token SE "'se'"
+%token SW "'sw'"
+%token NOP2 "'nop2'"
+%token RAW "'raw'"
+%token STANDING "'standing'"
+%token STEP_RIGHT "'step_right'"
+%token STEP_LEFT "'step_left'"
+%token READY "'ready'"
+%token RAISE_1H "'raise_1h'"
+%token REACH_1H "'reach_1h'"
+%token STRIKE_1H "'strike_1h'"
+%token RAISE_2H "'raise_2h'"
+%token REACH_2H "'reach_2h'"
+%token STRIKE_2H "'strike_2h'"
+%token SITTING "'sitting'"
+%token BOWING "'bowing'"
+%token KNEELING "'kneeling'"
+%token SLEEPING "'sleeping'"
+%token CAST_UP "'cast_up'"
+%token CAST_OUT "'cast_out'"
+%token CACHED_IN "'cached_in'"
+%token PARTY_NEAR "'party_near'"
+%token AVATAR_NEAR "'avatar_near'"
+%token AVATAR_FAR "'avatar_far'"
+%token AVATAR_FOOTPAD "'avatar_footpad'"
+%token PARTY_FOOTPAD "'party_footpad'"
+%token SOMETHING_ON "'something_on'"
+%token EXTERNAL_CRITERIA "'external_criteria'"
+%token NORMAL_DAMAGE "'normal_damage'"
+%token FIRE_DAMAGE "'fire_damage'"
+%token MAGIC_DAMAGE "'magic_damage'"
+%token LIGHTNING_DAMAGE "'lightning_damage'"
+%token POISON_DAMAGE "'poison_damage'"
+%token STARVATION_DAMAGE "'starvation_damage'"
+%token FREEZING_DAMAGE "'freezing_damage'"
+%token ETHEREAL_DAMAGE "'ethereal_damage'"
+%token SONIC_DAMAGE "'sonic_damage'"
+%token FOREVER "'forever'"
+%token BREAKABLE "'breakable'"
 
+/*
+ *	Operators
+ */
+%token UCC_INSERT "'<<'"
+%token ADD_EQ "'+='"
+%token SUB_EQ "'-='"
+%token MUL_EQ "'*='"
+%token DIV_EQ "'/='"
+%token MOD_EQ "'%='"
+%token AND_EQ "'&='"
+%token AND "'&&'"
+%token OR "'||'"
+%token EQUALS "'=='"
+%token NEQUALS "'!='"
+%token LTEQUALS "'<='"
+%token GTEQUALS "'>='"
+%token UCC_IN "'in'"
+%token NOT "'!'"
+%token ADDRESSOF "'&'"
+%token UMINUS "'-'"
+%token UPLUS "'+'"
+%token NEW "'new'"
+%token DELETE "'delete'"
+%token UCC_POINTS "'->'"
+%token UCC_SCOPE "'::'"
 
 /*
  *	Other tokens:
  */
-%token <strval> STRING_LITERAL STRING_PREFIX IDENTIFIER
-%token <intval> INT_LITERAL
+%token <strval> STRING_LITERAL "string literal"
+%token <strval> STRING_PREFIX "string prefix"
+%token <strval> IDENTIFIER "identifier"
+%token <intval> INT_LITERAL "integer"
 
 /*
  *	Handle if-then-else conflict.
  */
-%left IF
-%right ELSE
+%precedence IF
+%precedence ELSE
+
+/*
+ *	Handle <loop>-nobreak conflict.
+ */
+
+%precedence LOOP
+%precedence NOBREAK
 
 /*
  *	Expression precedence rules (lowest to highest):
  */
-%left UCC_INSERT ADD_EQ SUB_EQ MUL_EQ DIV_EQ MOD_EQ '='
+%left UCC_INSERT ADD_EQ SUB_EQ MUL_EQ DIV_EQ MOD_EQ AND_EQ '='
 %left AND OR
 %left EQUALS NEQUALS
 %left LTEQUALS GTEQUALS '<' '>' UCC_IN
@@ -186,11 +369,13 @@ struct Member_selector
  *	Production types:
  */
 %type <expr> expression primary declared_var_value opt_script_delay item
-%type <expr> script_command start_call addressof new_expr class_expr
+%type <expr> script_command start_call new_expr class_expr
 %type <expr> nonclass_expr opt_delay appended_element int_literal
-%type <intval> opt_int direction converse_options actor_frames egg_criteria
+%type <expr> opt_primary_expression conv_expression repeat_count
+%type <intval> direction converse_options actor_frames egg_criteria
 %type <intval> opt_original assignment_operator const_int_val opt_const_int_val
-%type <intval> const_int_type int_cast dam_type opt_nest
+%type <intval> const_int_type int_cast dam_type opt_nest opt_int_value
+%type <intval> sign_int_literal const_int_expr opt_const_int_expr addressof
 %type <funid> opt_funid
 %type <membersel> member_selector
 %type <intlist> string_list response_expression
@@ -203,18 +388,24 @@ struct Member_selector
 %type <stmt> statement assignment_statement if_statement while_statement
 %type <stmt> statement_block return_statement function_call_statement
 %type <stmt> special_method_call_statement trycatch_statement trystart_statement
+%type <stmt> try_statement simple_statement noncase_statement
 %type <stmt> array_loop_statement var_decl var_decl_list stmt_declaration
 %type <stmt> class_decl class_decl_list struct_decl_list struct_decl
-%type <stmt> break_statement converse_statement
+%type <stmt> break_statement converse_statement opt_nobreak opt_nobreak_do
 %type <stmt> converse_case switch_case script_statement switch_statement
-%type <stmt> label_statement goto_statement answer_statement
-%type <stmt> delete_statement continue_statement response_case
-%type <block> statement_list
-%type <arrayloop> start_array_loop
+%type <stmt> goto_statement answer_statement delete_statement opt_nobreak_conv
+%type <stmt> continue_statement response_case fallthrough_statement
+%type <stmt> scoped_statement scoped_or_if_statement converse_case_attend
+%type <stmt> array_enum_statement opt_trailing_label
+%type <block> statement_list noncase_statement_list
+%type <label> label_statement
+%type <loopvars> start_array_variables
+%type <loopinit> start_array_loop
 %type <exprlist> opt_expression_list expression_list script_command_list
 %type <exprlist> opt_nonclass_expr_list nonclass_expr_list appended_element_list
 %type <stmtlist> switch_case_list converse_case_list response_case_list
-%type <funcall> function_call
+%type <funcall> function_call script_expr run_script_expression
+%type <strval> string_literal string_prefix
 
 %%
 
@@ -245,7 +436,7 @@ class_definition:
 		{
 		units.push_back(cur_class);
 		// Add to 'globals' symbol table.
-		(void) Uc_class_symbol::create($2, cur_class);
+		Uc_class_symbol::create($2, cur_class);
 		cur_class = nullptr;
 		}
 	;
@@ -253,13 +444,13 @@ class_definition:
 opt_inheritance:
 	':' defined_class
 		{ $$ = $2; }
-	|				/* Empty */
+	| %empty
 		{ $$ = nullptr; }
 	;
 
 class_item_list:
 	class_item_list class_item
-	|				/* Empty */
+	| %empty
 	;
 
 class_item:
@@ -291,7 +482,7 @@ method:
 		{
 		$3->insert($3->begin(),		// So it's local[0].
 			new Uc_class_inst_symbol("this", cur_class, 0));
-		Uc_function_symbol *funsym =
+		auto *funsym =
 			Uc_function_symbol::create($1, -1, *$3, false,
 					cur_class->get_scope(), Uc_function_symbol::utility_fun);
 		delete $3;		// A copy was made.
@@ -308,28 +499,30 @@ method:
 		struct_type = nullptr;
 
 		cur_fun = new Uc_function(funsym, cur_class->get_scope());
+		cur_class->add_method(cur_fun);
 		}
 	function_body
 		{
-		cur_class->add_method(cur_fun);
 		cur_fun = nullptr;
 		}
 	;
 
 struct_definition:
 	STRUCT IDENTIFIER
-		{ cur_struct = new Uc_struct_symbol($2); }
+		{
+		cur_struct = new Uc_struct_symbol($2);
+		Uc_function::add_global_struct_symbol(cur_struct);
+		}
 		'{' struct_item_list '}'
 		{
 		// Add to 'globals' symbol table.
-		Uc_function::add_global_struct_symbol(cur_struct);
 		cur_struct = nullptr;
 		}
 	;
 
 struct_item_list:
 	struct_item_list struct_item
-	|				/* Empty */
+	| %empty
 	;
 
 struct_item:
@@ -342,27 +535,46 @@ struct_item:
 	;
 
 function:
-	function_proto { cur_fun = new Uc_function($1); }
+	function_proto
+		{
+		cur_fun = new Uc_function($1);
+		units.push_back(cur_fun);
+		}
 	function_body
 		{
-		units.push_back(cur_fun);
 		cur_fun = nullptr;
 		}
 	;
 
-function_body:
-	'{' statement_list '}'
+opt_trailing_label:
+	label_statement
 		{
-		cur_fun->set_statement($2);
+		if (cur_fun->has_ret())
+			{
+			char buf[180];
+			snprintf(buf, array_size(buf), "Trailing label '%s' in non-void function '%s' is not allowed",
+					$1->get_label().c_str(), cur_fun->get_name());
+			yyerror(buf);
+			$$ = nullptr;
+			}
 		}
-	| '{' statement_list label_statement '}'
-		{	// Function ends in label.
-		$2->add($3);
+	| %empty
+		{
+		$$ = nullptr;
+		}
+
+function_body:
+	'{' statement_list opt_trailing_label '}'
+		{
+		if ($3 != nullptr)
+			{
+			$2->add($3);
+			}
 		cur_fun->set_statement($2);
 		}
 	;
 
-					/* Opt_int assigns function #. */
+					/* opt_const_int_val assigns function #. */
 function_proto:
 	ret_type IDENTIFIER { start_fun_id(); } opt_funid '(' opt_param_list ')'
 		{
@@ -372,13 +584,13 @@ function_proto:
 			char buf[180];
 			if (has_ret || struct_type)
 				{
-				sprintf(buf, "Functions declared with '%s#' cannot return a value",
+				snprintf(buf, array_size(buf), "Functions declared with '%s#' cannot return a value",
 					$4->kind == Uc_function_symbol::shape_fun ? "shape" : "object");
 				yyerror(buf);
 				}
 			if (!$6->empty())
 				{
-				sprintf(buf, "Functions declared with '%s#' cannot have arguments",
+				snprintf(buf, array_size(buf), "Functions declared with '%s#' cannot have arguments",
 					$4->kind == Uc_function_symbol::shape_fun ? "shape" : "object");
 				yyerror(buf);
 				}
@@ -393,7 +605,7 @@ function_proto:
 		has_ret = false;
 		struct_type = nullptr;
 		}
-	| CLASS '<' defined_class '>' IDENTIFIER opt_int '(' opt_param_list ')'
+	| CLASS '<' defined_class '>' IDENTIFIER opt_const_int_val '(' opt_param_list ')'
 		{
 		$$ = Uc_function_symbol::create($5, $6, *$8, is_extern, nullptr,
 				Uc_function_symbol::utility_fun);
@@ -403,26 +615,89 @@ function_proto:
 	;
 
 opt_funid:
-	SHAPENUM '(' const_int_val ')'
+	SHAPENUM '(' const_int_expr ')'
 		{
 		$$ = new Fun_id_info(Uc_function_symbol::shape_fun, $3 < 0 ? -1 : $3);
 		if ($3 < 0)
 			yyerror("Shape number cannot be negative");
 		}
-	| OBJECTNUM '(' opt_const_int_val ')'
+	| OBJECTNUM '(' opt_const_int_expr ')'
 		{ $$ = new Fun_id_info(Uc_function_symbol::object_fun, $3); }
 	| opt_const_int_val
 		{ $$ = new Fun_id_info(Uc_function_symbol::utility_fun, $1); }
+	| IDNUM '(' const_int_expr ')'
+		{ $$ = new Fun_id_info(Uc_function_symbol::utility_fun, $3); }
+	;
+
+opt_const_int_expr:
+	const_int_expr
+	| %empty
+		{ $$ = -1; }
+	;
+
+const_int_expr:
+	const_int_val
+	| const_int_expr '+' const_int_expr
+		{ $$ = $1 + $3; }
+	| const_int_expr '-' const_int_expr
+		{ $$ = $1 - $3; }
+	| const_int_expr '*' const_int_expr
+		{ $$ = $1 * $3; }
+	| const_int_expr '/' const_int_expr
+		{
+		if ($3 == 0)
+			{
+			yyerror("Division by 0");
+			$$ = -1;
+			}
+		else
+			{
+			$$ = $1 / $3;
+			}
+		}
+	| const_int_expr '%' const_int_expr
+		{
+		if ($3 == 0)
+			{
+			yyerror("Division by 0");
+			$$ = -1;
+			}
+		else
+			{
+			$$ = $1 % $3;
+			}
+		}
+	| const_int_expr EQUALS const_int_expr
+		{ $$ = $1 == $3; }
+	| const_int_expr NEQUALS const_int_expr
+		{ $$ = $1 != $3; }
+	| const_int_expr '<' const_int_expr
+		{ $$ = $1 < $3; }
+	| const_int_expr LTEQUALS const_int_expr
+		{ $$ = $1 <= $3; }
+	| const_int_expr '>' const_int_expr
+		{ $$ = $1 > $3; }
+	| const_int_expr GTEQUALS const_int_expr
+		{ $$ = $1 >= $3; }
+	| const_int_expr AND const_int_expr
+		{ $$ = $1 && $3; }
+	| const_int_expr OR const_int_expr
+		{ $$ = $1 || $3; }
+	| NOT const_int_expr
+		{ $$ = $2 == 0; }
+	| '(' const_int_expr ')'
+		{ $$ = $2; }
+	| addressof
 	;
 
 opt_const_int_val:
 	const_int_val
-	|				/* Empty. */
+	| %empty
 		{ $$ = -1; }
 	;
 
 const_int_val:
-	INT_LITERAL
+	sign_int_literal
 	| IDENTIFIER
 		{
 		Uc_symbol *sym = Uc_function::search_globals($1);
@@ -430,13 +705,13 @@ const_int_val:
 		char buf[180];
 		if (!sym)
 			{
-			sprintf(buf, "'%s' not declared", $1);
+			snprintf(buf, array_size(buf), "'%s' not declared", $1);
 			yyerror(buf);
 			$$ = -1;
 			}
 		else if ((var = dynamic_cast<Uc_const_int_symbol *>(sym)) == nullptr)
 			{
-			sprintf(buf, "'%s' is not a constant integer", $1);
+			snprintf(buf, array_size(buf), "'%s' is not a constant integer", $1);
 			yyerror(buf);
 			$$ = -1;
 			}
@@ -445,21 +720,13 @@ const_int_val:
 		}
 	;
 
-opt_int:
-	const_int_val
-	|				/* Empty. */
-		{ $$ = -1; }
-	;
-
 statement_block:
-	statement_block_start statement_list '}'
-		{
-		$$ = $2;
-		cur_fun->pop_scope();
-		}
-	| statement_block_start statement_list label_statement '}'
+	statement_block_start statement_list opt_trailing_label '}'
 		{	// Block ends in label.
-		$2->add($3);
+		if ($3 != nullptr)
+			{
+			$2->add($3);
+			}
 		$$ = $2;
 		cur_fun->pop_scope();
 		}
@@ -467,7 +734,7 @@ statement_block:
 		{	// Label followed by statements; "grab" next statement for label.
 		if ($2)
 			{
-			Uc_block_statement *stmt = new Uc_block_statement();
+			auto *stmt = new Uc_block_statement();
 			stmt->add($1);
 			stmt->add($2);
 			$$ = stmt;
@@ -488,26 +755,50 @@ statement_list:
 		if ($2)
 			$$->add($2);
 		}
-	|				/* Empty. */
+	| %empty
 		{ $$ = new Uc_block_statement(); }
 	;
 
-statement:
+noncase_statement_list:
+	noncase_statement_list noncase_statement
+		{
+		if ($2)
+			$$->add($2);
+		}
+	| %empty
+		{ $$ = new Uc_block_statement(); }
+	;
+
+simple_statement:
 	stmt_declaration
 	| assignment_statement
-	| if_statement
 	| trycatch_statement
 	| while_statement
 	| array_loop_statement
+	| array_enum_statement
 	| function_call_statement
 	| special_method_call_statement
 	| return_statement
-	| statement_block
 	| converse_statement
 	| switch_statement
 	| script_statement
 	| break_statement
+		{
+		if (!can_break())
+			{
+			yyerror("'break' statement not allowed outside of loops/converse/breakable/forever statements");
+			}
+			$$ = $1;
+		}
 	| continue_statement
+		{
+		if (!can_continue())
+			{
+			yyerror("'continue' statement not allowed outside of loops/converse/breakable/forever statements");
+			}
+			$$ = $1;
+		}
+	| fallthrough_statement
 	| goto_statement
 	| delete_statement
 	| SAY  '(' opt_nonclass_expr_list ')' ';'
@@ -515,12 +806,27 @@ statement:
 	| MESSAGE '(' opt_nonclass_expr_list ')' ';'
 		{ $$ = new Uc_message_statement($3); }
 	| answer_statement
+	| ENDCONV ';'
+		{ $$ = new Uc_endconv_statement(); }
 	| throwabort_statement ';'
 		{ $$ = new Uc_abort_statement(); }
 	| throwabort_statement expression ';'
 		{ $$ = new Uc_abort_statement($2); }
 	| ';'				/* Null statement */
 		{ $$ = nullptr; }
+	;
+
+statement:
+	simple_statement
+	| if_statement
+	| statement_block
+	| converse_case_attend
+	;
+
+noncase_statement:
+	simple_statement
+	| if_statement
+	| statement_block
 	;
 
 throwabort_statement:
@@ -534,7 +840,34 @@ alias_tok:
 	;
 
 stmt_declaration:
-	VAR var_decl_list ';'
+	DECLARE_ VAR IDENTIFIER ';'
+		{
+		if (cur_fun)
+			cur_fun->add_symbol($3, false);
+		else
+			cur_class->add_symbol($3);
+		$$ = nullptr;
+		}
+	| DECLARE_ STRUCT '<' defined_struct '>' { struct_type = $4; } IDENTIFIER ';'
+		{
+		if (cur_fun)
+			cur_fun->add_symbol($7, struct_type, false);
+		else
+			cur_class->add_symbol($7, struct_type);
+		struct_type = nullptr;
+		$$ = nullptr;
+		}
+	| DECLARE_ CLASS '<' defined_class '>' { class_type = $4; } IDENTIFIER ';'
+		{
+		if (class_type && cur_fun)
+			cur_fun->add_symbol($7, class_type, false);
+		else
+			// Unsupported for now
+			{   }
+		class_type = nullptr;
+		$$ = nullptr;
+		}
+	| VAR var_decl_list ';'
 		{ $$ = $2; }
 	| VAR alias_tok IDENTIFIER '=' declared_var ';'
 		{ cur_fun->add_alias($3, $5); $$ = nullptr; }
@@ -553,7 +886,7 @@ stmt_declaration:
 			cur_fun->add_alias($6, $8, $3);
 		$$ = nullptr;
 		}
-	| STRING string_decl_list ';'
+	| STRING string_decl_list opt_comma ';'
 		{ $$ = nullptr; }
 	| const_int_decl
 		{ $$ = nullptr; }
@@ -579,7 +912,7 @@ var_decl_list:
 			$$ = $3;
 		else			/* Both nonzero.  Need a list. */
 			{
-			Uc_block_statement *b = dynamic_cast<Uc_block_statement *>($1);
+			auto *b = dynamic_cast<Uc_block_statement *>($1);
 			if (!b)
 				{
 				b = new Uc_block_statement();
@@ -593,9 +926,14 @@ var_decl_list:
 		{ $$ = $1; }
 	;
 
+opt_comma:
+	','
+	| %empty
+	;
+
 enum_decl:				/* Decls. the elems, not the enum. */
 	ENUM IDENTIFIER { enum_val = -1; }
-			opt_enum_type '{' enum_item_list '}' ';'
+			opt_enum_type '{' enum_item_list opt_comma '}' ';'
 		{ const_opcode.pop_back(); }
 	;
 
@@ -613,7 +951,7 @@ const_int_type:
 opt_enum_type:
 	':' const_int_type
 		{ const_opcode.push_back(static_cast<UsecodeOps>($2)); }
-	|			/* Empty. */
+	| %empty
 		{ const_opcode.push_back(UC_PUSHI); }
 	;
 
@@ -637,7 +975,7 @@ enum_item:
 
 const_int_decl:
 	UCC_CONST const_int_type { const_opcode.push_back(static_cast<UsecodeOps>($2)); }
-		const_int_decl_list ';'
+		const_int_decl_list opt_comma ';'
 		{ const_opcode.pop_back(); }
 	;
 
@@ -647,20 +985,14 @@ const_int_decl_list:
 	;
 
 const_int:
-	IDENTIFIER '=' nonclass_expr
+	IDENTIFIER '=' const_int_expr
 		{
-		int val;		// Get constant.
-		if ($3->eval_const(val))
-			{
-			int op = const_opcode.back();
-			if (cur_fun)
-				cur_fun->add_int_const_symbol($1, val, op);
-			else		// Global.
-				Uc_function::add_global_int_const_symbol($1, val, op);
-			enum_val = val;	// In case we're in an enum.
-			}
-		else
-			yyerror("Integer constant expected.");
+		int op = const_opcode.back();
+		if (cur_fun)
+			cur_fun->add_int_const_symbol($1, $3, op);
+		else		// Global.
+			Uc_function::add_global_int_const_symbol($1, $3, op);
+		enum_val = $3;	// In case we're in an enum.
 		}
 	;
 
@@ -668,7 +1000,7 @@ var_decl:
 	IDENTIFIER
 		{
 		if (cur_fun)
-			cur_fun->add_symbol($1);
+			cur_fun->add_symbol($1, true);
 		else
 			cur_class->add_symbol($1);
 		$$ = nullptr;
@@ -678,15 +1010,31 @@ var_decl:
 		if (cur_class && !cur_fun)
 			{
 			char buf[180];
-			sprintf(buf, "Initialization of class member var '%s' must be done through constructor", $1);
+			snprintf(buf, array_size(buf), "Initialization of class member var '%s' must be done through constructor", $1);
 			yyerror(buf);
 			$$ = nullptr;
 			}
 		else
 			{
-			Uc_var_symbol *var = cur_fun ? cur_fun->add_symbol($1)
-							 : cur_class->add_symbol($1);
+			auto *var = cur_fun ? cur_fun->add_symbol($1, true)
+			                    : cur_class->add_symbol($1);
 			var->set_is_obj_fun($3->is_object_function(false));
+			$$ = new Uc_assignment_statement(new Uc_var_expression(var), $3);
+			}
+		}
+	| IDENTIFIER '=' script_expr
+		{
+		if (cur_class && !cur_fun)
+			{
+			char buf[180];
+			snprintf(buf, array_size(buf), "Initialization of class member var '%s' must be done through constructor", $1);
+			yyerror(buf);
+			$$ = nullptr;
+			}
+		else
+			{
+			auto *var = cur_fun ? cur_fun->add_symbol($1, true)
+			                    : cur_class->add_symbol($1);
 			$$ = new Uc_assignment_statement(new Uc_var_expression(var), $3);
 			}
 		}
@@ -701,7 +1049,7 @@ class_decl_list:
 			$$ = $3;
 		else		/*	Both nonzero; need a list.	*/
 			{
-			Uc_block_statement *b = dynamic_cast<Uc_block_statement *>($1);
+			auto *b = dynamic_cast<Uc_block_statement *>($1);
 			if (!b)
 				{
 				b = new Uc_block_statement();
@@ -719,7 +1067,7 @@ class_decl:
 	IDENTIFIER
 		{
 		if (class_type && cur_fun)
-			cur_fun->add_symbol($1, class_type);
+			cur_fun->add_symbol($1, class_type, true);
 		else
 			// Unsupported for now
 			{   }
@@ -736,7 +1084,7 @@ class_decl:
 				$$ = nullptr;
 			else
 				{
-				Uc_var_symbol *v = cur_fun->add_symbol($1, class_type);
+				auto *v = cur_fun->add_symbol($1, class_type, true);
 				$$ = new Uc_assignment_statement(new Uc_class_expression(v), $3);
 				}
 			}
@@ -752,7 +1100,7 @@ struct_decl_list:
 			$$ = $3;
 		else		/*	Both nonzero; need a list.	*/
 			{
-			Uc_block_statement *b = dynamic_cast<Uc_block_statement *>($1);
+			auto *b = dynamic_cast<Uc_block_statement *>($1);
 			if (!b)
 				{
 				b = new Uc_block_statement();
@@ -770,7 +1118,7 @@ struct_decl:
 	IDENTIFIER
 		{
 		if (cur_fun)
-			cur_fun->add_symbol($1, struct_type);
+			cur_fun->add_symbol($1, struct_type, true);
 		else
 			cur_class->add_symbol($1, struct_type);
 		$$ = nullptr;
@@ -780,13 +1128,13 @@ struct_decl:
 		if (cur_class && !cur_fun)
 			{
 			char buf[180];
-			sprintf(buf, "Initialization of class member struct '%s' must be done through constructor", $1);
+			snprintf(buf, array_size(buf), "Initialization of class member struct '%s' must be done through constructor", $1);
 			yyerror(buf);
 			$$ = nullptr;
 			}
 		else
 			{
-			Uc_var_symbol *var = cur_fun ? cur_fun->add_symbol($1, struct_type)
+			auto *var = cur_fun ? cur_fun->add_symbol($1, struct_type, true)
 							 : cur_class->add_symbol($1, struct_type);
 			var->set_is_obj_fun($3->is_object_function(false));
 			$$ = new Uc_assignment_statement(new Uc_var_expression(var), $3);
@@ -804,23 +1152,22 @@ class_expr:
 		if (!sym)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not declared", $1);
+			snprintf(buf, array_size(buf), "'%s' not declared", $1);
 			yyerror(buf);
-			cur_fun->add_symbol($1);
+			cur_fun->add_symbol($1, false);
 			$$ = nullptr;
 			}
 		else if (sym->get_sym_type() != Uc_symbol::Class)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not a class", $1);
+			snprintf(buf, array_size(buf), "'%s' not a class", $1);
 			yyerror(buf);
 			$$ = nullptr;
 			}
 		else
 			{
-				// Tests above guarantee this will always work.
-			Uc_class_inst_symbol *cls =
-					dynamic_cast<Uc_class_inst_symbol *>(sym->get_sym());
+			// Tests above guarantee this will always work.
+			auto *cls = dynamic_cast<Uc_class_inst_symbol *>(sym->get_sym());
 			$$ = new Uc_class_expression(cls);
 			}
 		}
@@ -887,13 +1234,43 @@ static_cls:
 		}
 	;
 
+string_literal:
+	string_literal STRING_LITERAL
+		{
+		size_t left_len = strlen($1);
+		size_t right_len = strlen($2);
+		char *ret = new char[left_len + right_len + 1];
+		std::memcpy(ret           , $1, left_len );
+		std::memcpy(ret + left_len, $2, right_len);
+		ret[left_len + right_len] = '\0';
+		delete [] $1;
+		delete [] $2;
+		$$ = ret;
+		}
+	| STRING_LITERAL
+
+string_prefix:
+	string_literal STRING_PREFIX
+		{
+		size_t left_len = strlen($1);
+		size_t right_len = strlen($2);
+		char *ret = new char[left_len + right_len + 1];
+		std::memcpy(ret           , $1, left_len );
+		std::memcpy(ret + left_len, $2, right_len);
+		ret[left_len + right_len] = '\0';
+		delete [] $1;
+		delete [] $2;
+		$$ = ret;
+		}
+	| STRING_PREFIX
+
 string_decl_list:
 	string_decl_list ',' string_decl
 	| string_decl
 	;
 
 string_decl:
-	IDENTIFIER '=' STRING_LITERAL
+	IDENTIFIER '=' string_literal
 		{
 		cur_fun->add_string_symbol($1, $3);
 		}
@@ -933,6 +1310,13 @@ assignment_statement:
 			$$ = new Uc_assignment_statement($1, $3);
 			}
 		}
+	| expression '=' script_expr ';'
+		{
+		if (Class_unexpected_error($1))
+			$$ = nullptr;
+		else
+			$$ = new Uc_assignment_statement($1, $3);
+		}
 	| nonclass_expr assignment_operator nonclass_expr ';'
 		{
 		$1->set_is_obj_fun(-1);
@@ -958,6 +1342,8 @@ assignment_operator:
 		{ $$ = UC_DIV; }
 	| MOD_EQ
 		{ $$ = UC_MOD; }
+	| AND_EQ
+		{ $$ = UC_ARRA; }
 	;
 
 appended_element_list:
@@ -979,20 +1365,49 @@ appended_element:
 		}
 	;
 
+scoped_statement:
+	statement_block_start statement_list opt_trailing_label '}'
+		{
+		if ($3 != nullptr)
+			{
+			$2->add($3);
+			}
+		cur_fun->pop_scope();
+		$$ = $2;
+		}
+	| {cur_fun->push_scope();} simple_statement
+		{
+		if (Uc_location::get_strict_mode()) {
+			yyerror("Statements must be surrounded by braces in strict mode");
+		}
+		cur_fun->pop_scope();
+		$$ = $2;
+		}
+	;
+
+scoped_or_if_statement:
+	scoped_statement
+	| if_statement
+	;
+
 if_statement:
-	IF '(' expression ')' statement %prec IF
+	IF '(' expression ')' scoped_or_if_statement %prec IF
 		{
 		int val;
 		if ($3->eval_const(val))
 			{
 			if (val)
 				{
-				$3->warning("'if' clause will always be executed");
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("'if' clause will always be executed");
+				}
 				$$ = $5;
 				}
 			else
 				{	// Need this because of those pesky GOTOs...
-				$3->warning("'if' clause may never be executed");
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("'if' clause may never execute");
+				}
 				$$ = new Uc_if_statement(nullptr, $5, nullptr);
 				}
 			delete $3;
@@ -1000,7 +1415,7 @@ if_statement:
 		else
 			$$ = new Uc_if_statement($3, $5, nullptr);
 		}
-	| IF '(' expression ')' statement ELSE statement
+	| IF '(' expression ')' scoped_or_if_statement ELSE scoped_or_if_statement
 		{
 		int val;
 		if ($3->eval_const(val))
@@ -1008,13 +1423,17 @@ if_statement:
 			if (val)
 				{
 					// Need this because of those pesky GOTOs...
-				$3->warning("'else' clause may never be executed");
-				$$ = new Uc_if_statement(new Uc_int_expression(val == 0), $5, $7);
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("'else' clause may never execute");
+				}
+				$$ = new Uc_if_statement(new Uc_int_expression(val != 0), $5, $7);
 				}
 			else
 				{
 					// Need this because of those pesky GOTOs...
-				$3->warning("'if' clause may never be executed");
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("'if' clause may never execute");
+				}
 				$$ = new Uc_if_statement(nullptr, $5, $7);
 				}
 			delete $3;
@@ -1025,104 +1444,195 @@ if_statement:
 	;
 
 trycatch_statement:
-	trystart_statement '{' statement_list '}'
+	trystart_statement '{' statement_list opt_trailing_label '}'
 		{
-		Uc_trycatch_statement *stmt = dynamic_cast<Uc_trycatch_statement*>($1);
+		if ($4 != nullptr)
+			{
+			$3->add($4);
+			}
+		auto *stmt = dynamic_cast<Uc_trycatch_statement*>($1);
 		if (!stmt) {
 			yyerror("try/catch statement is not a try/catch statement");
 		} else {
 			stmt->set_catch_statement($3);
 		}
+		cur_fun->pop_scope();
 		$$ = stmt;
 		}
 	;
 
 trystart_statement:
-	TRY '{' statement_list '}' CATCH '(' ')'
+	try_statement statement_list opt_trailing_label '}' CATCH '(' ')'
 		{
+		if ($3 != nullptr)
+			{
+			$2->add($3);
+			}
+		cur_fun->pop_scope();
 		cur_fun->push_scope();
-		$$ = new Uc_trycatch_statement($3);
+		$$ = new Uc_trycatch_statement($2);
 		}
-	| TRY '{' statement_list '}' CATCH '(' IDENTIFIER ')'
+	| try_statement statement_list opt_trailing_label '}' CATCH '(' IDENTIFIER ')'
 		{
+		if ($3 != nullptr)
+			{
+			$2->add($3);
+			}
+		cur_fun->pop_scope();
 		cur_fun->push_scope();
-		Uc_trycatch_statement *stmt = new Uc_trycatch_statement($3);
-		stmt->set_catch_variable(cur_fun->add_symbol($7));
+		auto *stmt = new Uc_trycatch_statement($2);
+		stmt->set_catch_variable(cur_fun->add_symbol($7, true));
 		$$ = stmt;
 		}
 	;
 
+try_statement:
+	TRY '{'
+		{
+		cur_fun->push_scope();
+		}
+	;
+
+opt_nobreak:
+	NOBREAK statement
+		{
+		$$ = $2;
+		}
+	| %empty %prec LOOP
+		{ $$ = nullptr; }
+	;
+
+opt_nobreak_do:
+	NOBREAK statement
+		{
+		$$ = $2;
+		}
+	| ';' %prec LOOP
+		{ $$ = nullptr; }
+	;
+
+opt_nobreak_conv:
+	NOBREAK statement
+		{
+		$$ = $2;
+		}
+	| %empty %prec LOOP
+		{ $$ = nullptr; }
+	;
+
 while_statement:
-	WHILE '(' nonclass_expr ')' { start_loop(); } statement
+	WHILE '(' nonclass_expr ')' { start_loop(); } scoped_statement { end_loop(); } opt_nobreak
 		{
 		int val;
 		if ($3->eval_const(val))
 			{
 			if (val)
 				{
-				$3->warning("Infinite loop detected");
-				$$ = new Uc_infinite_loop_statement($6);
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("Infinite loop detected");
+				}
+				$$ = new Uc_infinite_loop_statement($6, $8);
 				}
 			else
-				{	// Need this because of those pesky GOTOs...
-				$3->warning("Body of 'while' statement may never be executed");
-				$$ = new Uc_while_statement(nullptr, $6);
+				{	// Need 'may' because of those pesky GOTOs...
+				if (dynamic_cast<Uc_bool_expression*>($3) == nullptr) {
+					$3->warning("Body of 'while' statement may never execute");
+				}
+				$$ = new Uc_while_statement(nullptr, $6, $8);
 				}
 			delete $3;
 			}
 		else
-			$$ = new Uc_while_statement($3, $6);
-		end_loop();
+			$$ = new Uc_while_statement($3, $6, $8);
 		}
-	| DO { start_loop(); } statement WHILE '(' nonclass_expr ')' ';'
+	| FOREVER { start_loop(); } scoped_statement { end_loop(); } opt_nobreak
+		{
+		$$ = new Uc_infinite_loop_statement($3, $5);
+		}
+	| DO { start_loop(); } scoped_statement WHILE '(' nonclass_expr ')' { end_loop(); } opt_nobreak_do
 		{
 		int val;
 		if ($6->eval_const(val))
 			{
 			if (val)
 				{
-				$6->warning("Infinite loop detected");
-				$$ = new Uc_infinite_loop_statement($3);
+				if (dynamic_cast<Uc_bool_expression*>($6) == nullptr) {
+					$6->warning("Infinite loop detected");
 				}
-			else		// Optimize loop away.
-				$$ = new Uc_breakable_statement($3);
+				$$ = new Uc_infinite_loop_statement($3, $9);
+				}
+			else	// Optimize loop away.
+				{
+				$$ = new Uc_breakable_statement($3, $9);
+				}
 			delete $6;
 			}
 		else
-			$$ = new Uc_dowhile_statement($6, $3);
-		end_loop();
+			$$ = new Uc_dowhile_statement($6, $3, $9);
+		}
+	| BREAKABLE { start_loop(); } scoped_statement { end_loop(); } opt_nobreak
+		{
+		$$ = new Uc_breakable_statement($3, $5);
+		}
+	;
+
+array_enum_statement:
+	ENUM '(' ')' ';'
+		{
+		$$ = new array_enum_statement();
 		}
 	;
 
 array_loop_statement:
-	start_array_loop ')' { start_loop(); } statement
+	start_array_variables { start_loop(); } scoped_statement { end_loop(); } opt_nobreak
 		{
-		end_loop();
-		$1->set_statement($4);
-		$1->finish(cur_fun);
+		auto *expr = new Uc_arrayloop_statement($1->var, $1->array);
+		expr->set_statement($3);
+		expr->set_nobreak($5);
+		expr->set_index($1->index);
+		expr->set_array_size($1->length);
+		expr->finish(cur_fun);
 		cur_fun->pop_scope();
-		end_loop();
+		delete $1;	// No onger needed
+		$$ = expr;
 		}
-	| start_array_loop WITH IDENTIFIER
-		{ $1->set_index(cur_fun->add_symbol($3)); }
-					')' { start_loop(); } statement
+	| start_array_variables ATTEND IDENTIFIER ';'
 		{
-		end_loop();
-		$1->set_statement($7);
-		$1->finish(cur_fun);
+		auto *expr = new Uc_arrayloop_attend_statement($1->var, $1->array);
+		expr->set_index($1->index);
+		expr->set_array_size($1->length);
+		expr->set_target($3);
 		cur_fun->pop_scope();
-		end_loop();
+		expr->finish(cur_fun);
+		delete $1;	// No onger needed
+		$$ = expr;
 		}
-	| start_array_loop WITH IDENTIFIER
-		{ $1->set_index(cur_fun->add_symbol($3)); }
-				TO IDENTIFIER
-		{ $1->set_array_size(cur_fun->add_symbol($6)); }
-						')' { start_loop(); } statement
+	;
+
+start_array_variables:
+	start_array_loop ')'
 		{
-		end_loop();
-		$1->set_statement($10);
-		cur_fun->pop_scope();
-		end_loop();
+		Uc_var_symbol *index = cur_fun->add_symbol("$$for_loop_index_tempvar", true);
+		Uc_var_symbol *length = cur_fun->add_symbol("$$for_loop_length_tempvar", true);
+		Uc_var_symbol *var = Get_variable($1->var);
+		$$ = new Loop_Vars(var, $1->array, index, length);
+		delete $1;
+		}
+	| start_array_loop WITH IDENTIFIER ')'
+		{
+		Uc_var_symbol *index = Get_variable($3);
+		Uc_var_symbol *length = cur_fun->add_symbol("$$for_loop_length_tempvar", true);
+		Uc_var_symbol *var = Get_variable($1->var);
+		$$ = new Loop_Vars(var, $1->array, index, length);
+		delete $1;
+		}
+	| start_array_loop WITH IDENTIFIER TO IDENTIFIER ')'
+		{
+		Uc_var_symbol *index = Get_variable($3);
+		Uc_var_symbol *length = Get_variable($5);
+		Uc_var_symbol *var = Get_variable($1->var);
+		$$ = new Loop_Vars(var, $1->array, index, length);
+		delete $1;
 		}
 	;
 
@@ -1132,12 +1642,11 @@ start_array_loop:
 		if ($4->get_cls())
 			{
 			char buf[150];
-			sprintf(buf, "Can't convert class '%s' into non-class",
+			snprintf(buf, array_size(buf), "Can't convert class '%s' into non-class",
 					$4->get_name());
 			yyerror(buf);
 			}
-		Uc_var_symbol *var = cur_fun->add_symbol($2);
-		$$ = new Uc_arrayloop_statement(var, $4);
+		$$ = new Loop_Init($2, $4);
 		}
 	;
 
@@ -1145,7 +1654,6 @@ start_for:
 	FOR '('
 		{
 		cur_fun->push_scope();
-		start_loop();
 		}
 	;
 
@@ -1158,7 +1666,7 @@ special_method_call_statement:
 					/* Have 'primary' say something.*/
 	primary hierarchy_tok SAY '(' opt_nonclass_expr_list ')' ';'
 		{
-		Uc_block_statement *stmts = new Uc_block_statement();
+		auto *stmts = new Uc_block_statement();
 					/* Set up 'show' call.		*/
 		stmts->add(new Uc_call_statement(
 			new Uc_call_expression(Uc_function::get_show_face(),
@@ -1173,31 +1681,30 @@ special_method_call_statement:
 			new Uc_call_expression(Uc_function::get_remove_face(),
 				new Uc_array_expression($1), cur_fun));
 		}
-	| primary hierarchy_tok RUNSCRIPT '(' declared_var opt_delay ')' ';'
+	| run_script_expression ';'
 		{
-		if ($5->get_cls())
-			{
-			char buf[150];
-			sprintf(buf, "Can't convert class '%s' into non-class",
-					$5->get_name());
-			yyerror(buf);
-			}
-		Uc_array_expression *parms = new Uc_array_expression();
+		$$ = new Uc_call_statement($1);
+		}
+	;
+
+run_script_expression:
+	opt_primary_expression RUNSCRIPT '(' nonclass_expr opt_delay ')'
+		{
+		auto *parms = new Uc_array_expression();
 		parms->add($1);		// Itemref.
-		parms->add(new Uc_var_expression($5));		// Script.
-		if ($6)
-			parms->add($6);		// Delay.
+		parms->add($4);		// Script.
+		if ($5)
+			parms->add($5);		// Delay.
 					// Get the script intrinsic.
-		Uc_symbol *sym = Uc_function::get_intrinsic($6 ? 2 : 1);
-		$$ = new Uc_call_statement(
-			new Uc_call_expression(sym, parms, cur_fun));
+		Uc_symbol *sym = Uc_function::get_intrinsic($5 ? 2 : 1);
+		$$ = new Uc_call_expression(sym, parms, cur_fun);
 		}
 	;
 
 opt_delay:
 	',' nonclass_expr
 		{ $$ = $2; }
-	|				/* Empty */
+	| %empty
 		{ $$ = nullptr; }
 	;
 
@@ -1207,7 +1714,7 @@ return_statement:
 		if (!cur_fun->has_ret())
 			{
 			char buf[180];
-			sprintf(buf, "Function '%s' can't return a value",
+			snprintf(buf, array_size(buf), "Function '%s' can't return a value",
 					cur_fun->get_name());
 			yyerror(buf);
 			$$ = nullptr;
@@ -1226,7 +1733,7 @@ return_statement:
 				else
 					{
 					char buf[210];
-					sprintf(buf, "Function '%s' expects a return of %s '%s' but supplied value is %s'%s'",
+					snprintf(buf, array_size(buf), "Function '%s' expects a return of %s '%s' but supplied value is %s'%s'",
 							cur_fun->get_name(),
 							trg ? "class" : "type",
 							trg ? trg->get_name() : "var",
@@ -1248,7 +1755,7 @@ return_statement:
 			{
 			Uc_class *cls = cur_fun->get_cls();
 			char buf[180];
-			sprintf(buf, "Function '%s' must return a '%s'",
+			snprintf(buf, array_size(buf), "Function '%s' must return a '%s'",
 					cur_fun->get_name(), cls ? cls->get_name() : "var");
 			yyerror(buf);
 			$$ = nullptr;
@@ -1261,34 +1768,57 @@ return_statement:
 opt_nest:
 	':' NESTED
 		{ $$ = 1; }
-	|				/* Empty */
+	| %empty
 		{ $$ = 0; }
 	;
 
 converse_statement:
-	start_conv '{' response_case_list '}'
+	CONVERSE start_conv
+			noncase_statement_list response_case_list '}' { end_converse(); } opt_nobreak_conv
 		{
-		end_loop();
+		cur_fun->pop_scope();
 		--converse;
-		$$ = new Uc_converse_statement(nullptr, $3, false);
+		$$ = new Uc_converse_statement(nullptr, $3, $4, false, $7);
 		}
-
-	| start_conv opt_nest '(' expression ')' '{' converse_case_list '}'
+	| CONVERSE opt_nest conv_expression start_conv
+			noncase_statement_list converse_case_list '}' { end_converse(); } opt_nobreak_conv
 		{
-		end_loop();
+		cur_fun->pop_scope();
 		--converse;
-		if (Class_unexpected_error($4))
-			$$ = nullptr;
-		else
-			$$ = new Uc_converse_statement($4, $7, $2);
+		$$ = new Uc_converse_statement($3, $5, $6, $2, $9);
+		}
+	| CONVERSE ATTEND IDENTIFIER ';'
+		{
+		$$ = new Uc_converse_attend_statement($3);
 		}
 	;
 
 start_conv:
-	CONVERSE
+	'{'
 		{
-		start_loop();
+		start_converse();
+		cur_fun->push_scope();
 		++converse;
+		}
+	;
+
+conv_expression:
+	'(' expression ')'
+		{
+		if (Class_unexpected_error($2))
+			$$ = nullptr;
+		else
+			{
+			int ival;
+			if ($2->eval_const(ival))
+				{
+				$$ = nullptr;
+				}
+			else
+				{
+				$$ = $2;
+				}
+			}
 		}
 	;
 
@@ -1298,25 +1828,73 @@ converse_case_list:
 		if ($2)
 			$$->push_back($2);
 		}
-	|				/* Empty */
+	| %empty
 		{ $$ = new vector<Uc_statement *>; }
 	;
 
 converse_case:
-	CASE string_list converse_options ':'
-			{ cur_fun->push_scope(); } statement_list
+	CASE declared_var_value converse_options ':'
+			{ cur_fun->push_scope(); } noncase_statement_list
 		{
-		$$ = new Uc_converse_case_statement(*$2,
-				($3 ? true : false), $6);
+		Uc_expression *expr = $2;
+		if (Class_unexpected_error(expr))
+			{
+			expr = nullptr;
+			}
+		$$ = new Uc_converse_variable_case_statement(expr, $6, ($3 ? true : false));
+		cur_fun->pop_scope();
+		}
+	| CASE string_list converse_options ':'
+			{ cur_fun->push_scope(); } noncase_statement_list
+		{
+		$$ = new Uc_converse_strings_case_statement(*$2, $6, ($3 ? true : false));
 		delete $2;		// A copy was made.
 		cur_fun->pop_scope();
 		}
-	| DEFAULT converse_options ':'
-			{ cur_fun->push_scope(); } statement_list
+	| ALWAYS ':'
+			{ cur_fun->push_scope(); } noncase_statement_list
 		{
-		$$ = new Uc_converse_case_statement(std::vector<int>(),
-				($2 ? true : false), $5);
+		$$ = new Uc_converse_always_case_statement($4);
 		cur_fun->pop_scope();
+		}
+	| DEFAULT ':'
+			{ cur_fun->push_scope(); } noncase_statement_list
+		{
+		$$ = new Uc_converse_default_case_statement($4);
+		cur_fun->pop_scope();
+		}
+	;
+
+opt_int_value:
+	'(' int_literal ')'
+		{
+		int ival;
+		if (!$2->eval_const(ival))
+			yyerror("Failed to obtain value from integer constant");
+		$$ = ival;
+		}
+	| %empty
+		{ $$ = 1; }
+	;
+
+converse_case_attend:
+	CASE declared_var_value converse_options ATTEND IDENTIFIER ':'
+		{
+		Uc_expression *expr = $2;
+		if (Class_unexpected_error(expr))
+			{
+			expr = nullptr;
+			}
+		$$ = new Uc_converse_variable_case_attend_statement(expr, $5, ($3 ? true : false));
+		}
+	| CASE string_list converse_options ATTEND IDENTIFIER ':'
+		{
+		$$ = new Uc_converse_strings_case_attend_statement(*$2, $5, ($3 ? true : false));
+		delete $2;		// A copy was made.
+		}
+	| DEFAULT opt_int_value ATTEND IDENTIFIER ':'
+		{
+		$$ = new Uc_converse_default_case_attend_statement($4, $2);
 		}
 	;
 
@@ -1337,14 +1915,14 @@ response_case:
 	response_expression
 			{ cur_fun->push_scope(); } statement_list
 		{
-		$$ = new Uc_converse_case_statement(*$1, false, $3);
+		$$ = new Uc_converse_strings_case_statement(*$1, $3, false);
 		delete $1;		// A copy was made.
 		cur_fun->pop_scope();
 		}
 	;
 
 response_expression:
-	IF '(' RESPONSE EQUALS STRING_LITERAL ')'
+	IF '(' RESPONSE EQUALS string_literal ')'
 		{
 		$$ = new vector<int>;
 		$$->push_back(cur_fun->add_string($5));
@@ -1354,9 +1932,9 @@ response_expression:
 	;
 
 string_list:
-	string_list ',' STRING_LITERAL
+	string_list ',' string_literal
 		{ $$->push_back(cur_fun->add_string($3)); }
-	| STRING_LITERAL
+	| string_literal
 		{
 		$$ = new vector<int>;
 		$$->push_back(cur_fun->add_string($1));
@@ -1366,7 +1944,7 @@ string_list:
 converse_options:
 	'(' REMOVE ')'			/* For now, just one.		*/
 		{ $$ = 1; }
-	|				/* Empty */
+	| %empty
 		{ $$ = 0; }
 	;
 
@@ -1382,7 +1960,7 @@ switch_statement:
 			{
 			end_breakable();
 			$$ = new Uc_switch_statement($4, $8);
-			delete($8);		// a copy has been made.
+			delete $8;		// a copy has been made.
 			cur_fun->pop_scope();
 			}
 		}
@@ -1399,29 +1977,33 @@ switch_case_list:
 	;
 
 switch_case:
-	CASE int_literal ':' statement_list
+	CASE int_literal ':' noncase_statement_list
 		{	$$ = new Uc_switch_expression_case_statement($2, $4);	}
-	| CASE STRING_LITERAL ':' statement_list
+	| CASE string_literal ':' noncase_statement_list
 		{	$$ = new Uc_switch_expression_case_statement(
 				new Uc_string_expression(cur_fun->add_string($2)), $4);	}
-	| DEFAULT ':' statement_list
+	| DEFAULT ':' noncase_statement_list
 		{	$$ = new Uc_switch_default_case_statement($3);	}
 	;
 
-script_statement:			/* Yes, this could be an intrinsic. */
+script_expr:
 	SCRIPT { start_script(); } item opt_script_delay script_command
 		{
-		Uc_array_expression *parms = new Uc_array_expression();
+		end_script();
+		auto *parms = new Uc_array_expression();
 		parms->add($3);		// Itemref.
 		parms->add($5);		// Script.
 		if ($4)			// Delay?
 			parms->add($4);
 					// Get the script intrinsic.
 		Uc_symbol *sym = Uc_function::get_intrinsic($4 ? 2 : 1);
-		Uc_call_expression *fcall =
-				new Uc_call_expression(sym, parms, cur_fun);
-		$$ = new Uc_call_statement(fcall);
-		end_script();
+		$$ = new Uc_call_expression(sym, parms, cur_fun);
+		}
+
+script_statement:			/* Yes, this could be an intrinsic. */
+	script_expr
+		{
+		$$ = new Uc_call_statement($1);
 		}
 	;
 
@@ -1448,10 +2030,10 @@ script_command:
 		{ $$ = new Uc_int_expression(Ucscript::cont, UC_PUSHB); }
 	| RESET ';'			/* Go back to the beginning of the script */
 		{ $$ = new Uc_int_expression(Ucscript::reset, UC_PUSHB); }
-	| REPEAT nonclass_expr { repeat_nesting++; } script_command  ';'
+	| REPEAT repeat_count { repeat_nesting++; } script_command  ';'
 		{
 		repeat_nesting--;
-		Uc_array_expression *result = new Uc_array_expression();
+		auto *result = new Uc_array_expression();
 		result->concat($4);	// Start with cmnds. to repeat.
 		int sz = result->get_exprs().size();
 		result->add(new Uc_int_expression(
@@ -1467,7 +2049,7 @@ script_command:
 		script_command  ';'
 		{	// Allow setting a different initial number of repeats.
 		repeat_nesting--;
-		Uc_array_expression *result = new Uc_array_expression();
+		auto *result = new Uc_array_expression();
 		result->concat($6);	// Start with cmnds. to repeat.
 		int sz = result->get_exprs().size();
 		result->add(new Uc_int_expression(Ucscript::repeat2, UC_PUSHB));
@@ -1477,8 +2059,12 @@ script_command:
 		result->add($4);	// Then #times to repeat.
 		$$ = result;
 		}
+	| RAW '(' int_literal ')' ';'
+		{ $$ = $3; }
 	| NOP  ';'
-		{ $$ = new Uc_int_expression(Ucscript::nop, UC_PUSHB); }
+		{ $$ = new Uc_int_expression(Ucscript::nop2, UC_PUSHB); }
+	| NOP2 ';'
+		{ $$ = new Uc_int_expression(Ucscript::nop1, UC_PUSHB); }
 	| NOHALT  ';'
 		{ $$ = new Uc_int_expression(Ucscript::dont_halt, UC_PUSHB); }
 	| WAIT nonclass_expr  ';'		/* Ticks. */
@@ -1501,12 +2087,12 @@ script_command:
 		{ $$ = Create_array(Ucscript::frame, $2); }
 	| ACTOR FRAME nonclass_expr ';'
 		{
-		$$ = new Uc_binary_expression(UC_ADD, new Uc_int_expression(0x61),
+		$$ = new Uc_binary_expression(UC_ADD, new Uc_int_expression(Ucscript::npc_frame),
 				new Uc_binary_expression(UC_MOD, $3, new Uc_int_expression(16)),
 				UC_PUSHB);	// Want byte.
 		}
 	| ACTOR FRAME actor_frames ';'
-		{ $$ = new Uc_int_expression(0x61 + ($3 & 15), UC_PUSHB); }
+		{ $$ = new Uc_int_expression(Ucscript::npc_frame + ($3 & 15), UC_PUSHB); }
 	| HATCH ';'			/* Assumes item is an egg. */
 		{ $$ = new Uc_int_expression(Ucscript::egg, UC_PUSHB); }
 	| SETEGG nonclass_expr ',' nonclass_expr ';'
@@ -1543,24 +2129,31 @@ script_command:
 	| STEP direction ';'
 		{ $$ = new Uc_int_expression(Ucscript::step_n + $2, UC_PUSHB); }
 	| MUSIC nonclass_expr ';'
-		{ $$ = Create_array(Ucscript::music, $2); }
+		{ $$ = Create_array(Ucscript::music, $2, new Uc_int_expression(0)); }
 	| MUSIC nonclass_expr ',' nonclass_expr ';'
 		{
 			// This is the 'repeat' flag.
 		Uc_expression *expr;
 		int ival;
 		if ($4->eval_const(ival))
-			expr = new Uc_int_expression(ival ? 256 : 0);
+			expr = new Uc_int_expression(ival ? 1 : 0);
 		else	// Argh.
-			expr = new Uc_binary_expression(UC_MUL,
-					new Uc_int_expression(256),
-					new Uc_binary_expression(UC_CMPNE, $4,
-						new Uc_bool_expression(false)));
-		$$ = Create_array(Ucscript::music,
-				new Uc_binary_expression(UC_ADD, $2, expr));
+			expr = $4;
+		$$ = Create_array(Ucscript::music, $2, expr);
 		}
 	| start_call ';'
-		{ $$ = Create_array(Ucscript::usecode, $1); }
+		{
+		int ival;
+		if ($1->eval_const(ival) && ival >= 0 && ival < 0x100)
+			{
+			// Matches original usecode.
+			$$ = Create_array(Ucscript::usecode, $1, new Uc_int_expression(0));
+			}
+		else
+			{
+			$$ = Create_array(Ucscript::usecode, $1);
+			}
+		}
 	| start_call ',' nonclass_expr ';'
 		{ $$ = Create_array(Ucscript::usecode2, $1, $3); }
 	| SPEECH nonclass_expr ';'
@@ -1579,6 +2172,7 @@ script_command:
 		{ $$ = Create_array(Ucscript::hit, $2, new Uc_int_expression($4)); }
 	| ATTACK ';'
 		{ $$ = new Uc_int_expression(Ucscript::attack, UC_PUSHB); }
+	| declared_var_value ';'
 	| '{' script_command_list '}'
 		{ $$ = $2; }
 	;
@@ -1594,13 +2188,24 @@ start_call:
 			if ($2->is_object_function() == -1)
 				{	// Don't know.
 				char buf[180];
-				sprintf(buf, "Please ensure that 'call' uses a function declared with 'shape#' or 'object#'");
+				snprintf(buf, array_size(buf), "Please ensure that 'call' uses a function declared with 'shape#' or 'object#'");
 				yywarning(buf);
 				}
 			$$ = $2;
 			}
 		}
 	;
+
+repeat_count:
+	nonclass_expr
+	| FOREVER
+		{
+		if (repeat_nesting != 0)
+			{
+			yyerror("'repeat forever' is not allowed for nested 'repeat' commands");
+			}
+		$$ = new Uc_int_expression(255);
+		}
 
 dam_type:
 	NORMAL_DAMAGE
@@ -1610,6 +2215,12 @@ dam_type:
 	| MAGIC_DAMAGE
 		{ $$ = 2; }
 	| LIGHTNING_DAMAGE
+		{ $$ = 3; }
+	| POISON_DAMAGE
+		{ $$ = 3; }
+	| STARVATION_DAMAGE
+		{ $$ = 3; }
+	| FREEZING_DAMAGE
 		{ $$ = 3; }
 	| ETHEREAL_DAMAGE
 		{ $$ = 4; }
@@ -1693,7 +2304,7 @@ egg_criteria:
 opt_script_delay:
 	AFTER nonclass_expr TICKS
 		{ $$ = $2; }
-	|				/* Empty */
+	| %empty
 		{ $$ = nullptr; }
 	;
 
@@ -1707,13 +2318,18 @@ continue_statement:
 		{ $$ = new Uc_continue_statement(); }
 	;
 
+fallthrough_statement:
+	FALLTHROUGH ';'
+		{ $$ = new Uc_fallthrough_statement(); }
+	;
+
 label_statement:
 	IDENTIFIER ':'
 		{
 		if (cur_fun->search_label($1))
 			{
 			char buf[150];
-			sprintf(buf, "duplicate label: '%s'", $1);
+			snprintf(buf, array_size(buf), "duplicate label: '%s'", $1);
 			yyerror(buf);
 			$$ = nullptr;
 			}
@@ -1736,12 +2352,12 @@ goto_statement:
 delete_statement:
 	DELETE declared_var ';'
 		{
-		Uc_class_inst_symbol *cls =
+		auto *cls =
 				dynamic_cast<Uc_class_inst_symbol *>($2->get_sym());
 		if (!cls)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' is not a class", $2->get_name());
+			snprintf(buf, array_size(buf), "'%s' is not a class", $2->get_name());
 			yyerror(buf);
 			$$ = nullptr;
 			}
@@ -1767,7 +2383,7 @@ answer_statement:
 
 opt_nonclass_expr_list:
 	nonclass_expr_list
-	|				/* Empty */
+	| %empty
 		{ $$ = new Uc_array_expression(); }
 	;
 
@@ -1850,20 +2466,25 @@ expression:
 		if (Class_unexpected_error($2))
 			$$ = nullptr;
 		else
-			$$ = new Uc_binary_expression(UC_SUB,
-				new Uc_int_expression(0), $2);
+			$$ = new Uc_binary_expression(UC_SUB, new Uc_int_expression(0), $2);
 		}
 	| addressof
-		{ $$ = $1; }
+		{
+		int funid = $1;
+		UsecodeOps op = is_int_32bit(funid) ? UC_PUSHI32 : UC_PUSHI;
+		$$ = new Uc_int_expression(funid, op);
+		}
 	| NOT primary
 		{ $$ = new Uc_unary_expression(UC_NOT, $2); }
 	| '[' opt_expression_list ']'	/* Concat. into an array. */
 		{ $$ = $2; }
-	| STRING_LITERAL
+	| string_literal
 		{ $$ = new Uc_string_expression(cur_fun->add_string($1)); }
-	| STRING_PREFIX
+	| string_prefix
 		{ $$ = new Uc_string_prefix_expression(cur_fun, $1); }
 	| new_expr
+	| run_script_expression
+		{ $$ = $1; }
 	;
 
 addressof:
@@ -1874,30 +2495,49 @@ addressof:
 		if (!sym)	/* See if the symbol is defined */
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not declared", $2);
+			snprintf(buf, array_size(buf), "'%s' not declared", $2);
 			yyerror(buf);
-			$$ = nullptr;
+			$$ = -1;
 			}
-		Uc_function_symbol *fun = dynamic_cast<Uc_function_symbol *>(sym);
+		auto *fun = dynamic_cast<Uc_function_symbol *>(sym);
 		if (!fun)	/* See if the symbol is a function */
 			{
 			char buf[150];
-			sprintf(buf, "'%s' is not a function", $2);
+			snprintf(buf, array_size(buf), "'%s' is not a function", $2);
 			yyerror(buf);
-			$$ = nullptr;
+			$$ = -1;
 			}
 		else		/* Output the function's assigned number */
 			{
-			int funid = fun->get_usecode_num();
-			UsecodeOps op = is_int_32bit(funid) ? UC_PUSHI32 : UC_PUSHI;
-			$$ = new Uc_int_expression(funid, op);
+			$$ = fun->get_usecode_num();
+			}
+		}
+	| '&' STRUCT '<' defined_struct '>' UCC_SCOPE IDENTIFIER
+		{
+		auto *sym = $4;
+		if (sym)
+			{
+			int value = sym->search($7);
+			if (value < 0)
+				{
+				char buf[150];
+				snprintf(buf, array_size(buf),
+						"'struct<%s>::%s' is not a valid structure member",
+						$4->get_name(), $7);
+				yyerror(buf);
+				}
+			$$ = value;
+			}
+		else
+			{
+			$$ = -1;
 			}
 		}
 	;
 
 opt_expression_list:
-	expression_list
-	|				/* Empty */
+	expression_list opt_comma
+	| %empty
 		{ $$ = new Uc_array_expression(); }
 	;
 
@@ -1925,12 +2565,12 @@ primary:
 			char buf[150];
 			if (is_int_32bit($1))
 				{
-				sprintf(buf, "Literal integer '%d' cannot be represented as 16-bit integer. Assuming '(long)' cast.",
+				snprintf(buf, array_size(buf), "Literal integer '%d' cannot be represented as 16-bit integer. Assuming '(long)' cast.",
 						$1);
 				op = UC_PUSHI32;
 				}
 			else
-				sprintf(buf, "Interpreting integer '%d' as the signed 16-bit integer '%d'. If this is incorrect, use '(long)' cast.",
+				snprintf(buf, array_size(buf), "Interpreting integer '%d' as the signed 16-bit integer '%d'. If this is incorrect, use '(long)' cast.",
 						$1, static_cast<short>($1));
 			yywarning(buf);
 			}
@@ -1940,7 +2580,7 @@ primary:
 		{ $$ = new Uc_int_expression($2, static_cast<UsecodeOps>($1)); }
 	| member_selector
 		{
-		Uc_var_expression *expr = dynamic_cast<Uc_var_expression *>($1->expr);
+		auto *expr = dynamic_cast<Uc_var_expression *>($1->expr);
 		Uc_struct_symbol *base;
 		if (!expr || !(base = expr->get_struct()))
 			{
@@ -1953,15 +2593,15 @@ primary:
 			if (offset < 0)
 				{
 				char buf[150];
-				sprintf(buf, "'%s' does not belong to struct '%s'",
+				snprintf(buf, array_size(buf), "'%s' does not belong to struct '%s'",
 						$1->name, base->get_name());
 				yyerror(buf);
 				$$ = new Uc_int_expression(0);
 				}
 			else
 				{
-				Uc_var_symbol *var = expr->get_var();
-				Uc_int_expression *index = new Uc_int_expression(offset);
+				auto *var = expr->get_var();
+				auto *index = new Uc_int_expression(offset);
 				if (var->is_static())
 					$$ = new Uc_static_arrayelem_expression(var, index);
 				else if (var->get_sym_type() == Uc_symbol::Member_var)
@@ -1979,7 +2619,7 @@ primary:
 		if ($1->get_cls())
 			{
 			char buf[150];
-			sprintf(buf, "Can't convert class '%s' into non-class",
+			snprintf(buf, array_size(buf), "Can't convert class '%s' into non-class",
 					$1->get_name());
 			yyerror(buf);
 			$$ = new Uc_arrayelem_expression($1, $3);
@@ -2031,6 +2671,12 @@ member_selector:
 	primary hierarchy_tok IDENTIFIER
 		{ $$ = new Member_selector($1, $3); }
 	;
+
+opt_primary_expression:
+	primary hierarchy_tok
+		{ $$ = $1; }
+	| %empty
+		{ $$ = new Uc_item_expression(); }
 
 function_call:
 	member_selector opt_original '(' opt_expression_list ')'
@@ -2096,15 +2742,15 @@ function_call:
 opt_original:
 	ORIGINAL
 		{ $$ = 1; }
-	|				/* Empty */
+	| %empty
 		{ $$ = 0; }
 	;
 
 opt_param_list:
 	param_list
-	|				/* Empty */
+	| %empty
 		{ $$ = new std::vector<Uc_var_symbol *>; }
-   	;
+	;
 
 param_list:
 	param_list ',' param
@@ -2127,8 +2773,20 @@ param:
 		{ $$ = new Uc_class_inst_symbol($5, $3, 0); }
 	;
 
-int_literal:				/* A const. integer value.	*/
+sign_int_literal:
 	INT_LITERAL
+	| '-' INT_LITERAL %prec UMINUS
+		{
+		$$ = -$2;
+		}
+	| '+' INT_LITERAL %prec UPLUS
+		{
+		$$ = $2;
+		}
+	;
+
+int_literal:				/* A const. integer value.	*/
+	sign_int_literal
 		{
 		UsecodeOps op = !const_opcode.empty() ? const_opcode.back() : UC_PUSHI;
 		if (is_sint_32bit($1) && op != UC_PUSHI32)
@@ -2136,27 +2794,27 @@ int_literal:				/* A const. integer value.	*/
 			char buf[150];
 			if (is_int_32bit($1))
 				{
-				sprintf(buf, "Literal integer '%d' cannot be represented as 16-bit integer. Assuming '(long)' cast.",
+				snprintf(buf, array_size(buf), "Literal integer '%d' cannot be represented as 16-bit integer. Assuming '(long)' cast.",
 						$1);
 				op = UC_PUSHI32;
 				}
 			else
-				sprintf(buf, "Interpreting integer '%d' as the signed 16-bit integer '%d'. If this is incorrect, use '(long)' cast.",
+				snprintf(buf, array_size(buf), "Interpreting integer '%d' as the signed 16-bit integer '%d'. If this is incorrect, use '(long)' cast.",
 						$1, static_cast<short>($1));
 			yywarning(buf);
 			}
 		$$ = new Uc_int_expression($1, op);
 		}
-	| int_cast INT_LITERAL %prec UCC_CAST
+	| int_cast sign_int_literal %prec UCC_CAST
 		{ $$ = new Uc_int_expression($2, static_cast<UsecodeOps>($1)); }
 	| declared_sym
 		{
-		Uc_const_int_symbol *sym =
+		auto *sym =
 				dynamic_cast<Uc_const_int_symbol *>($1);
 		if (!sym)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' is not a const int", $1->get_name());
+			snprintf(buf, array_size(buf), "'%s' is not a const int", $1->get_name());
 			yyerror(buf);
 			$$ = nullptr;
 			}
@@ -2171,7 +2829,7 @@ int_literal:				/* A const. integer value.	*/
 
 opt_void:
 	VOID
-	|				/* Empty */
+	| %empty
 		{
 		yywarning("You should prepend 'void' for functions that do not return a value.");
 		}
@@ -2193,7 +2851,7 @@ declared_var_value:
 		if (!$$)
 			{
 			char buf[150];
-			sprintf(buf, "Can't use '%s' here", $1->get_name());
+			snprintf(buf, array_size(buf), "Can't use '%s' here", $1->get_name());
 			yyerror(buf);
 			$$ = new Uc_int_expression(0);
 			}
@@ -2203,14 +2861,14 @@ declared_var_value:
 declared_var:
 	declared_sym %prec UCC_SYM
 		{
-		Uc_var_symbol *var = dynamic_cast<Uc_var_symbol *>($1);
+		auto *var = dynamic_cast<Uc_var_symbol *>($1);
 		if (!var)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not a 'var'", $1->get_name());
+			snprintf(buf, array_size(buf), "'%s' not a 'var'", $1->get_name());
 			yyerror(buf);
-			sprintf(buf, "%s_needvar", $1->get_name());
-			var = cur_fun->add_symbol(buf);
+			snprintf(buf, array_size(buf), "%s_needvar", $1->get_name());
+			var = cur_fun->add_symbol(buf, false);
 			}
 		$$ = var;
 		}
@@ -2223,9 +2881,9 @@ declared_sym:
 		if (!sym)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not declared", $1);
+			snprintf(buf, array_size(buf), "'%s' not declared", $1);
 			yyerror(buf);
-			sym = cur_fun->add_symbol($1);
+			sym = cur_fun->add_symbol($1, false);
 			}
 		$$ = sym;
 		}
@@ -2239,12 +2897,12 @@ defined_class:
 defined_struct:
 	IDENTIFIER
 		{
-		Uc_struct_symbol *sym = dynamic_cast<Uc_struct_symbol *>(
+		auto *sym = dynamic_cast<Uc_struct_symbol *>(
 				Uc_function::search_globals($1));
 		if (!sym)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' not found, or is not a struct.", $1);
+			snprintf(buf, array_size(buf), "'%s' not found, or is not a struct.", $1);
 			yyerror(buf);
 			$$ = nullptr;
 			}
@@ -2259,6 +2917,19 @@ defined_struct:
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
 
+static Uc_var_symbol *Get_variable
+	(
+	const char *ident
+	)
+	{
+	Uc_symbol *sym = cur_fun->search_up(ident);
+	auto *var = dynamic_cast<Uc_var_symbol *>(sym);
+	if (!var)
+		{
+		var = cur_fun->add_symbol(ident, true);
+		}
+	return var;
+	}
 /*
  *	Create an array with an integer as the first element.
  */
@@ -2269,7 +2940,7 @@ static Uc_array_expression *Create_array
 	Uc_expression *e2
 	)
 	{
-	Uc_array_expression *arr = new Uc_array_expression();
+	auto *arr = new Uc_array_expression();
 	arr->add(new Uc_int_expression(e1, UC_PUSHB));
 	arr->add(e2);
 	return arr;
@@ -2281,7 +2952,7 @@ static Uc_array_expression *Create_array
 	Uc_expression *e3
 	)
 	{
-	Uc_array_expression *arr = new Uc_array_expression();
+	auto *arr = new Uc_array_expression();
 	arr->add(new Uc_int_expression(e1, UC_PUSHB));
 	arr->add(e2);
 	arr->add(e3);
@@ -2292,12 +2963,12 @@ static Uc_class *Find_class
 	const char *nm
 	)
 	{
-	Uc_class_symbol *csym = dynamic_cast<Uc_class_symbol *>(
+	auto *csym = dynamic_cast<Uc_class_symbol *>(
 			Uc_function::search_globals(nm));
 	if (!csym)
 		{
 		char buf[150];
-		sprintf(buf, "'%s' not found, or is not a class.", nm);
+		snprintf(buf, array_size(buf), "'%s' not found, or is not a class.", nm);
 		yyerror(buf);
 		return nullptr;
 		}
@@ -2329,7 +3000,7 @@ static bool Incompatible_classes_error(Uc_class *src, Uc_class *trg)
 	if (!src->is_class_compatible(trg->get_name()))
 		{
 		char buf[180];
-		sprintf(buf, "Class '%s' can't be converted into class '%s'",
+		snprintf(buf, array_size(buf), "Class '%s' can't be converted into class '%s'",
 				src->get_name(), trg->get_name());
 		yyerror(buf);
 		return true;
@@ -2349,7 +3020,7 @@ static Uc_call_expression *cls_method_call
 	if (!curcls)
 		{
 		char buf[150];
-		sprintf(buf, "'%s' requires a class object", nm);
+		snprintf(buf, array_size(buf), "'%s' requires a class object", nm);
 		yyerror(buf);
 		return nullptr;
 		}
@@ -2361,23 +3032,22 @@ static Uc_call_expression *cls_method_call
 	if (!sym)
 		{
 		char buf[150];
-		sprintf(buf, "Function '%s' is not declared in class '%s'",
+		snprintf(buf, array_size(buf), "Function '%s' is not declared in class '%s'",
 				nm, clsscope->get_name());
 		yyerror(buf);
 		return nullptr;
 		}
 
-	Uc_function_symbol *fun = dynamic_cast<Uc_function_symbol *>(sym);
+	auto *fun = dynamic_cast<Uc_function_symbol *>(sym);
 	if (!fun)
 		{
 		char buf[150];
-		sprintf(buf, "'%s' is not a function", nm);
+		snprintf(buf, array_size(buf), "'%s' is not a function", nm);
 		yyerror(buf);
 		return nullptr;
 		}
 
-	Uc_call_expression *ret =
-			new Uc_call_expression(sym, parms, cur_fun, false);
+	auto *ret = new Uc_call_expression(sym, parms, cur_fun, false);
 	ret->set_itemref(ths);
 	ret->set_call_scope(clsscope);
 	ret->check_params();
@@ -2394,7 +3064,7 @@ static bool Uc_is_valid_calle
 	{
 	if (original)
 		return true;
-	Uc_function_symbol *fun = dynamic_cast<Uc_function_symbol *>(sym);
+	auto *fun = dynamic_cast<Uc_function_symbol *>(sym);
 	if (!fun)		// Most likely an intrinsic.
 		return true;
 
@@ -2403,14 +3073,14 @@ static bool Uc_is_valid_calle
 		if (ths && !ths->is_class())
 			{
 			char buf[150];
-			sprintf(buf, "'%s' is not an object or shape function", nm);
+			snprintf(buf, array_size(buf), "'%s' is not an object or shape function", nm);
 			yyerror(buf);
 			return false;
 			}
 		else if (ths)
 			{
 			char buf[150];
-			sprintf(buf, "'%s' is not a member of class '%s'",
+			snprintf(buf, array_size(buf), "'%s' is not a member of class '%s'",
 					nm, ths->get_cls()->get_name());
 			yyerror(buf);
 			return false;
@@ -2421,7 +3091,7 @@ static bool Uc_is_valid_calle
 		if (!ths)
 			{
 			char buf[180];
-			sprintf(buf, "'%s' expects an itemref, but none was supplied; using current itemref", nm);
+			snprintf(buf, array_size(buf), "'%s' expects an itemref, but none was supplied; using current itemref", nm);
 			ths = new Uc_item_expression();
 			yywarning(buf);
 			return true;
@@ -2466,16 +3136,40 @@ static Uc_call_expression *cls_function_call
 			ths = new Uc_item_expression();
 		}
 
+	// UI_UNKNOWN_XX
+	if (!sym)
+		{
+		string name(nm);
+		const string uiUnk("UI_UNKNOWN_");
+		if (name.size() == uiUnk.size() + 2)
+			{
+			string num("0x");
+			num += name.substr(uiUnk.size(), 2);
+			if (name.substr(0, uiUnk.size()) == uiUnk)
+				{
+				try
+					{
+					auto val = std::stoul(num, nullptr, 0);
+					sym = Uc_function::get_intrinsic(val);
+					}
+				catch (std::exception&)
+					{
+					sym = nullptr;
+					}
+				}
+			}
+		}
+
 	if (!sym)
 		{
 		char buf[150];
-		sprintf(buf, "'%s' not declared", nm);
+		snprintf(buf, array_size(buf), "'%s' not declared", nm);
 		yyerror(buf);
 		return nullptr;
 		}
 	else
 		{
-		Uc_call_expression *ret =
+		auto *ret =
 				new Uc_call_expression(sym, parms, cur_fun, original);
 		ret->set_itemref(ths);
 		ret->check_params();

@@ -3,18 +3,18 @@
 
 [Setup]
 AppName=Exult
-AppVerName=Exult 1.7.0git Snapshot
+AppVerName=Exult 1.9.0git Snapshot
 AppPublisher=The Exult Team
-AppPublisherURL=http://exult.sourceforge.net/
-AppSupportURL=http://exult.sourceforge.net/
-AppUpdatesURL=http://exult.sourceforge.net/
+AppPublisherURL=http://exult.info/
+AppSupportURL=http://exult.info/
+AppUpdatesURL=http://exult.info/
 ; Setup exe version number:
-VersionInfoVersion=1.7.0
+VersionInfoVersion=1.9.0
 DisableDirPage=no
 DefaultDirName={code:GetExultInstDir|{autopf}\Exult}
 DisableProgramGroupPage=no
 DefaultGroupName={code:GetExultGroupDir|Exult}
-OutputBaseFilename=Exultwin32
+OutputBaseFilename=Exult
 Compression=lzma
 SolidCompression=yes
 InternalCompressLevel=max
@@ -22,7 +22,9 @@ OutputDir=.
 DisableWelcomePage=no
 WizardStyle=modern
 
-[Tasks]
+[Dirs]
+Name: "{app}\data"
+Name: "{app}\mods"
 
 [Types]
 Name: full; Description: Full installation
@@ -36,40 +38,41 @@ Name: Docs; Description: Install Exult Documentation; Types: full
 Name: GPL; Description: Install GPL License; Types: full compact custom; Flags: fixed
 Name: Paths; Description: Setup Game Paths; Types: full compact custom pathsonly
 Name: Icons; Description: Create Start Menu Icons; Types: full compact
+Name: "downloads"; Description: "Download and install"; Types: full custom
+Name: "downloads\audio"; Description: "Digital music and sound effects"; Types: full custom
+Name: "downloads\mods"; Description: "Mods"; Types: full custom
+Name: "downloads\mods\keyring"; Description: "Keyring mod for The Black Gate"; Types: full custom
+Name: "downloads\mods\sfisland"; Description: "SourceForge Island mod for The Black Gate"; Types: full custom
+Name: "downloads\mods\sifixes"; Description: "SIFixes mod for Serpent Isle"; Types: full custom
 
 [Files]
-Source: Exult\Exult.exe; DestDir: {app}; Flags: ignoreversion; Components: Exult
-
-Source: Exult\COPYING.txt; DestDir: {app}; Flags: ignoreversion; Components: GPL
-
-Source: Exult\*.dll; DestDir: {app};  Flags: ignoreversion; Components: Exult
-Source: Exult\README-SDL.txt; DestDir: {app}; Flags: ignoreversion; Components: Exult
-
-Source: Exult\AUTHORS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\bgdefaultkeys.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\ChangeLog.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\faq.html; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\FAQ.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\NEWS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\ReadMe.html; DestDir: {app}; Flags: ignoreversion isreadme; Components: Docs
-Source: Exult\README.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\README.win32.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\sidefaultkeys.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
-Source: Exult\images\back.gif; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs01.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs02.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs03.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs04.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs05.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\docs06.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-Source: Exult\images\exult_logo.gif; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
-
-Source: Exult\Data\exult.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
-Source: Exult\Data\exult_bg.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
-Source: Exult\Data\exult_si.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
-
-Source: exconfig.dll; Flags: dontcopy
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+; 32-bit files
+Source: Exult-i686\Exult.exe; DestDir: {app}; Flags: ignoreversion; Components: Exult; Check: not Is64BitInstallMode
+Source: Exult-i686\*.dll; DestDir: {app};  Flags: ignoreversion; Components: Exult; Check: not Is64BitInstallMode
+; 64-bit files
+Source: Exult-x86_64\Exult.exe; DestDir: {app}; Flags: ignoreversion; Components: Exult; Check: Is64BitInstallMode
+Source: Exult-x86_64\*.dll; DestDir: {app};  Flags: ignoreversion; Components: Exult; Check: Is64BitInstallMode
+; Architecture-neutral files
+Source: Exult-i686\COPYING.txt; DestDir: {app}; Flags: ignoreversion; Components: GPL
+Source: Exult-i686\README-SDL.txt; DestDir: {app}; Flags: ignoreversion; Components: Exult
+Source: Exult-i686\AUTHORS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\bgdefaultkeys.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\ChangeLog.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\faq.html; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\FAQ.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\NEWS.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\ReadMe.html; DestDir: {app}; Flags: ignoreversion isreadme; Components: Docs
+Source: Exult-i686\README.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\README.win32.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\sidefaultkeys.txt; DestDir: {app}; Flags: ignoreversion; Components: Docs
+Source: Exult-i686\images\*.gif; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
+Source: Exult-i686\images\docs*.png; DestDir: {app}\images; Flags: ignoreversion nocompression; Components: Docs
+Source: Exult-i686\Data\exult.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
+Source: Exult-i686\Data\exult_bg.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
+Source: Exult-i686\Data\exult_si.flx; DestDir: {app}\data; Flags: ignoreversion; Components: Exult
+; Always the 32-bit version
+Source: exconfig-i686.dll; Flags: dontcopy
 
 [Icons]
 Name: {group}\Exult; Filename: {app}\Exult.exe; WorkingDir: {app}; Flags: createonlyiffileexists; Components: Icons
@@ -95,23 +98,26 @@ var
   SIText: TNewStaticText;
   BGEdit: TEdit;
   SIEdit: TEdit;
+  DownloadPage: TDownloadWizardPage;
+  PrevItemAChecked: Boolean;
+  iBGVerified: Integer;
+  iSIVerified: Integer;
 
 // Get Paths from Exult.cfg
 procedure GetExultGamePaths(sExultDir, sBGPath, sSIPath: AnsiString; iMaxPath: Integer);
-external 'GetExultGamePaths@files:exconfig.dll stdcall';
+external 'GetExultGamePaths@files:exconfig-i686.dll stdcall';
 
 // Write Paths into Exult.cfg
 procedure SetExultGamePaths(sExultDir, sBGPath, sSIPath: AnsiString);
-external 'SetExultGamePaths@files:exconfig.dll stdcall';
+external 'SetExultGamePaths@files:exconfig-i686.dll stdcall';
 
 // Verify BG Dir
 function VerifyBGDirectory(sPath: AnsiString) : Integer;
-external 'VerifyBGDirectory@files:exconfig.dll stdcall';
+external 'VerifyBGDirectory@files:exconfig-i686.dll stdcall';
 
 // Verify SI Dir
 function VerifySIDirectory(sPath: AnsiString) : Integer;
-external 'VerifySIDirectory@files:exconfig.dll stdcall';
-
+external 'VerifySIDirectory@files:exconfig-i686.dll stdcall';
 
 // Get the Previous Exult Installation Dir
 // This is done in a manner that is compatible with the old InstallShield setup
@@ -171,6 +177,47 @@ begin
     end;
 end;
 
+function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
+begin
+  if Progress = ProgressMax then
+    Log(Format('Successfully downloaded file to {tmp}: %s', [FileName]));
+  Result := True;
+end;
+
+//
+// unzip function for our downloads
+//
+const
+  SHCONTCH_NOPROGRESSBOX = 4;
+  SHCONTCH_RESPONDYESTOALL = 16;
+
+procedure UnZip(ZipPath, TargetPath: string); 
+var
+  Shell: Variant;
+  ZipFile: Variant;
+  TargetFolder: Variant;
+begin
+  Shell := CreateOleObject('Shell.Application');
+
+  ZipFile := Shell.NameSpace(ZipPath);
+  if VarIsClear(ZipFile) then
+    RaiseException(
+      Format('ZIP file "%s" does not exist or cannot be opened', [ZipPath]));
+
+  TargetFolder := Shell.NameSpace(TargetPath);
+  if VarIsClear(TargetFolder) then
+    RaiseException(Format('Target path "%s" does not exist', [TargetPath]));
+
+  TargetFolder.CopyHere(
+    ZipFile.Items, SHCONTCH_NOPROGRESSBOX or SHCONTCH_RESPONDYESTOALL);
+end;
+procedure ExtractMe(src, target : AnsiString);
+begin
+  Log(Format('Zipfile "%s" ', [ExpandConstant(src)]));
+  Log(Format('TargetPath "%s" ', [ExpandConstant(target)]));
+  UnZip(ExpandConstant(src), ExpandConstant(target));
+end;
+
 //
 // Create the Directory browsing page
 //
@@ -223,6 +270,8 @@ begin
   SIEdit.Parent := DataDirPage.Surface;
 
   bSetPaths := False;
+
+  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), @OnDownloadProgress);
 end;
 
 //
@@ -250,9 +299,7 @@ end;
 // Make sure the SI and BG Paths are correct when we hit next button
 //
 function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  iBGVerified: Integer;
-  iSIVerified: Integer;
+var 
   sDir : string;
 begin
 
@@ -283,6 +330,33 @@ begin
           Result := False;
       end else
         Result := True;
+
+// Download page: Only download if the component was selected AND game paths are verified  
+  end else if CurPageID = wpReady then begin
+      DownloadPage.Clear;
+      if PrevItemAChecked <> WizardIsComponentSelected('downloads\audio') then
+        DownloadPage.Add('https://downloads.sourceforge.net/project/exult/exult-data/exult_audio.zip', 'exult_audio.zip','72e10efa8664a645470ceb99f6b749ce99c3d5fd1c8387c63640499cfcdbbc68');
+      if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\keyring')) AND (iBGVerified = 1) then
+        DownloadPage.Add('https://github.com/exult/exult/releases/latest/download/Keyring.zip', 'Keyring.zip', '');      
+      if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\sfisland')) AND (iBGVerified = 1) then
+        DownloadPage.Add('https://github.com/exult/exult/releases/latest/download/SFisland.zip', 'Sfisland.zip', '');      
+      if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\sifixes')) AND (iSIVerified = 1) then
+        DownloadPage.Add('https://github.com/exult/exult/releases/latest/download/Sifixes.zip', 'Sifixes.zip', '');      
+      DownloadPage.Show;
+      try
+        try
+          DownloadPage.Download; // This downloads the files to {tmp}
+          Result := True;
+        except
+          if DownloadPage.AbortedByUser then
+            Log('Aborted by user.')
+          else
+            SuppressibleMsgBox(AddPeriod(GetExceptionMessage), mbCriticalError, MB_OK, IDOK);
+          Result := False;
+        end;
+      finally
+        DownloadPage.Hide;
+      end;
   end else
     Result := True;
 end;
@@ -319,15 +393,41 @@ begin
 end;
 
 //
-// Write out the Config file and Registry Entries
+// Write out the Config file, Registry Entries and unzip the downloads
 //
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  sBGmods: String;
+  sSImods: String;
 begin
   if CurStep = ssPostInstall then
   begin
+    sBGmods := BGEdit.Text + '\mods';
+    sSImods := SIEdit.Text + '\mods';
     SetExultGamePaths(ExpandConstant('{app}'), BGEdit.Text, SIEdit.Text );
     RegWriteStringValue(HKEY_LOCAL_MACHINE, 'Software\Exult', 'Path', ExpandConstant('{app}'));
     if WizardIsComponentSelected('Icons') then
       RegWriteStringValue(HKEY_LOCAL_MACHINE, 'Software\Exult', 'ShellObjectFolder', ExpandConstant('{groupname}'));
-  end
+    
+// Wine doesn't support the Windows built-in unzip method hence will crash at installing the downloads
+    if not RegKeyExists(HKEY_LOCAL_MACHINE, 'Software\Wine') then begin     
+// again check if component was selected and game paths are verified, and there create the mods sub folder
+    if PrevItemAChecked <> WizardIsComponentSelected('downloads\audio') then
+      ExtractMe('{tmp}\exult_audio.zip','{app}\data\');
+    if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\keyring')) AND (iBGVerified = 1) then begin
+      ForceDirectories(sBGmods);
+      ExtractMe('{tmp}\Keyring.zip',sBGmods);
+    end;    
+    if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\sfisland')) AND (iBGVerified = 1) then begin
+      ForceDirectories(sBGmods);
+      ExtractMe('{tmp}\SFisland.zip',sBGmods);
+    end;    
+    if (PrevItemAChecked <> WizardIsComponentSelected('downloads\mods\sifixes')) AND (iSIVerified = 1) then begin
+      ForceDirectories(sSImods);
+      ExtractMe('{tmp}\Sifixes.zip',sSImods);
+    end;
+    end else if RegKeyExists(HKEY_LOCAL_MACHINE, 'Software\Wine') then begin
+      MsgBox('Warning: You seem to be using Wine. Unfortunately the installer cannnot install the extra downloads on Wine!', mbInformation, MB_OK);
+    end;
+  end;
 end;

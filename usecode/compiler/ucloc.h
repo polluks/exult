@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -35,6 +35,7 @@ class Uc_location {
 	static char *cur_source;    // Source filename.
 	static int cur_line;        // Line #.
 	static int num_errors;      // Total #.
+	static bool strict_mode;	// If all blocks are required to have braces
 	char *source;
 	int line;
 public:
@@ -44,6 +45,12 @@ public:
 	static void set_cur(const char *s, int l);
 	static void increment_cur_line() {
 		cur_line++;
+	}
+	static void set_strict_mode(bool tf) {
+		strict_mode = tf;
+	}
+	static bool get_strict_mode() {
+		return strict_mode;
 	}
 	int get_line() const {
 		return line;

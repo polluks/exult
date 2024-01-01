@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2005 The Pentagram team
-Copyright (C) 2010 The Exult team
+Copyright (C) 2010-2022 The Exult team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -47,9 +47,10 @@ public:
 	sint32			playSample(AudioSample *sample, int loop, int priority, bool paused=false, uint32 pitch_shift=AUDIO_DEF_PITCH, int lvol=AUDIO_MAX_VOLUME, int rvol=AUDIO_MAX_VOLUME);
 	bool			isPlaying(sint32 instance_id) const;
 	bool			isPlaying(AudioSample *sample) const;
+	bool			isPlayingVoice() const;
 	void			stopSample(sint32 instance_id);
 	void			stopSample(AudioSample *sample);
-	
+
 	void			setPaused(sint32 instance_id, bool paused);
 	bool			isPaused(sint32 instance_id) const;
 
@@ -80,7 +81,7 @@ private:
 	std::vector<AudioChannel>	channels;
 	sint32			id_counter;
 
-	SDLAudioDevice	*device;
+	std::unique_ptr<SDLAudioDevice>	device;
 
 	void			init_midi();
 	static void		sdlAudioCallback(void *userdata, uint8 *stream, int len);

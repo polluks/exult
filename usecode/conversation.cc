@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,9 +33,7 @@
 #include "touchui.h"
 
 using std::size_t;
-using std::strcpy;
 using std::string;
-using std::vector;
 
 //TODO: show_face & show_avatar_choices seem to share code?
 //TODO: show_avatar_choices shouldn't first convert to char**, probably
@@ -51,8 +49,8 @@ public:
 	//int frame;
 	bool text_pending;      // Text has been written, but user
 	//   has not yet been prompted.
-	Rectangle face_rect;    // Rectangle where face is shown.
-	Rectangle text_rect;    // Rectangle NPC statement is shown in.
+	TileRect face_rect;     // Rectangle where face is shown.
+	TileRect text_rect;     // Rectangle NPC statement is shown in.
 	bool large_face;        // Guardian, snake.
 	int last_text_height;   // Height of last text painted.
 	string cur_text;        // Current text being shown.
@@ -73,7 +71,7 @@ void Conversation::clear_answers() {
 
 void Conversation::add_answer(const char *str) {
 	remove_answer(str);
-	string s(str);
+	const string s(str);
 	answers.push_back(s);
 }
 
@@ -83,7 +81,7 @@ void Conversation::add_answer(const char *str) {
 
 void Conversation::add_answer(Usecode_value &val) {
 	const char *str;
-	int size = val.get_array_size();
+	const int size = val.get_array_size();
 	if (size) {         // An array?
 		for (int i = 0; i < size; i++)
 			add_answer(val.get_elem(i));
@@ -92,13 +90,9 @@ void Conversation::add_answer(Usecode_value &val) {
 }
 
 void Conversation::remove_answer(const char *str) {
-	std::vector<string>::iterator it;
+	auto it = std::find(answers.cbegin(), answers.cend(), str);
 
-	for (it = answers.begin(); it != answers.end(); ++it)
-		if (*it == str)
-			break;
-
-	if (it != answers.end())
+	if (it != answers.cend())
 		answers.erase(it);
 }
 
@@ -109,7 +103,7 @@ void Conversation::remove_answer(const char *str) {
 void Conversation::remove_answer(Usecode_value &val) {
 	const char *str;
 	if (val.is_array()) {
-		int size = val.get_array_size();
+		const int size = val.get_array_size();
 		for (int i = 0; i < size; i++) {
 			str = val.get_elem(i).get_str_value();
 			if (str) remove_answer(str);
@@ -144,7 +138,7 @@ void Conversation::set_face_rect(
     int screenw,
     int screenh
 ) {
-	int text_height = sman->get_text_height(0);
+	const int text_height = sman->get_text_height(0);
 	// Figure starting y-coord.
 	// Get character's portrait.
 	Shape_frame *face = info->shape.get_shapenum() >= 0 ? info->shape.get_shape() : nullptr;
@@ -181,19 +175,19 @@ void Conversation::set_face_rect(
 		starty = 1;
 		extrah = 4;
 	}
-	info->face_rect = gwin->clip_to_win(Rectangle(startx, starty,
+	info->face_rect = gwin->clip_to_win(TileRect(startx, starty,
 	                                    face_w + extraw, face_h + extrah));
-	Rectangle &fbox = info->face_rect;
+	const TileRect &fbox = info->face_rect;
 	// This is where NPC text will go.
-	info->text_rect = gwin->clip_to_win(Rectangle(
+	info->text_rect = gwin->clip_to_win(TileRect(
 	                                        fbox.x + fbox.w + 3, fbox.y + 3,
 	                                        screenw - fbox.x - fbox.w - 6, 4 * text_height));
 	// No room?  (Serpent?)
 	if (info->large_face) {
 		// Show in lower center.
-		int x = screenw / 5;
-		int y = 3 * (screenh / 4);
-		info->text_rect = Rectangle(x, y,
+		const int x = screenw / 5;
+		const int y = 3 * (screenh / 4);
+		info->text_rect = TileRect(x, y,
 		                            screenw - (2 * x), screenh - y - 4);
 	}
 	info->last_text_height = info->text_rect.h;
@@ -215,8 +209,8 @@ void Conversation::show_face(int shape, int frame, int slot) {
 		pal->set(-1, 100);
 
 	// Get screen dims.
-	int screenw = gwin->get_width();
-	int screenh = gwin->get_height();
+	const int screenw = gwin->get_width();
+	const int screenh = gwin->get_height();
 	Npc_face_info *info = nullptr;
 	// See if already on screen.
 	for (int i = 0; i < max_faces; i++)
@@ -276,8 +270,8 @@ void Conversation::change_face_frame(int frame, int slot) {
 
 	info->shape.set_frame(frame);
 	// Get screen dims.
-	int screenw = gwin->get_width();
-	int screenh = gwin->get_height();
+	const int screenw = gwin->get_width();
+	const int screenh = gwin->get_height();
 	Npc_face_info *prev = slot ? face_info[slot - 1] : nullptr;
 	set_face_rect(info, prev, screenw, screenh);
 
@@ -344,9 +338,9 @@ void Conversation::show_npc_message(const char *msg) {
 	if (last_face_shown == -1)
 		return;
 	Npc_face_info *info = face_info[last_face_shown];
-	int font = info->large_face ? 7 : 0;    // Use red for Guardian, snake.
+	const int font = info->large_face ? 7 : 0;    // Use red for Guardian, snake.
 	info->cur_text = "";
-	Rectangle &box = info->text_rect;
+	const TileRect &box = info->text_rect;
 //	gwin->paint(box);        // Clear what was there before.
 //	paint_faces();
 	gwin->paint();
@@ -402,15 +396,15 @@ void Conversation::clear_text_pending() {
  */
 
 void Conversation::show_avatar_choices(int num_choices, char **choices) {
-	bool SI = Game::get_game_type() == SERPENT_ISLE;
+	const bool SI = Game::get_game_type() == SERPENT_ISLE;
 	Main_actor *main_actor = gwin->get_main_actor();
 	const int max_faces = array_size(face_info);
 	// Get screen rectangle.
-	Rectangle sbox = gwin->get_game_rect();
+	const TileRect sbox = gwin->get_game_rect();
 	int x = 0;
 	int y = 0;       // Keep track of coords. in box.
-	int height = sman->get_text_height(0);
-	int space_width = sman->get_text_width(0, " ");
+	const int height = sman->get_text_height(0);
+	const int space_width = sman->get_text_width(0, " ");
 
 	// Get main actor's portrait, checking for Petra flag.
 	int shape = Shapeinfo_lookup::GetFaceReplacement(0);
@@ -427,7 +421,7 @@ void Conversation::show_avatar_choices(int num_choices, char **choices) {
 		}
 	}
 
-	ShapeID face_sid(shape, frame, SF_FACES_VGA);
+	const ShapeID face_sid(shape, frame, SF_FACES_VGA);
 	Shape_frame *face = face_sid.get_shape();
 	int empty;          // Find face prev. to 1st empty slot.
 	for (empty = 0; empty < max_faces; empty++)
@@ -451,33 +445,31 @@ void Conversation::show_avatar_choices(int num_choices, char **choices) {
 			fy = prev->face_rect.y + prev->face_rect.h;
 		fy += height;
 	}
-	Rectangle mbox(fx, fy, face->get_width(), face->get_height());
+	TileRect mbox(fx, fy, face->get_width(), face->get_height());
 	mbox = mbox.intersect(sbox);
 	avatar_face = mbox;     // Repaint entire width.
 	// Set to where to draw sentences.
-	Rectangle tbox(mbox.x + mbox.w + 8, mbox.y + 4,
-	               sbox.w - mbox.x - mbox.w - 16,
-//				sbox.h - mbox.y - 16);
-	               5 * height); // Try 5 lines.
+	TileRect tbox(mbox.x + mbox.w + 8, mbox.y + 4,
+	              sbox.w - mbox.x - mbox.w - 16,
+	              5 * height); // Try 5 lines.
 	tbox = tbox.intersect(sbox);
-//	gwin->paint(tbox);              // Paint background.
 	// Draw portrait.
 	sman->paint_shape(mbox.x + face->get_xleft(),
 	                  mbox.y + face->get_yabove(), face);
 	delete [] conv_choices;     // Set up new list of choices.
-	conv_choices = new Rectangle[num_choices + 1];
+	conv_choices = new TileRect[num_choices + 1];
 	for (int i = 0; i < num_choices; i++) {
 		char text[256];
 		text[0] = 127;      // A circle.
 		strcpy(&text[1], choices[i]);
-		int width = sman->get_text_width(0, text);
+		const int width = sman->get_text_width(0, text);
 		if (x > 0 && x + width >= tbox.w) {
 			// Start a new line.
 			x = 0;
 			y += height - 1;
 		}
 		// Store info.
-		conv_choices[i] = Rectangle(tbox.x + x, tbox.y + y,
+		conv_choices[i] = TileRect(tbox.x + x, tbox.y + y,
 		                            width, height);
 		conv_choices[i] = conv_choices[i].intersect(sbox);
 		avatar_face = avatar_face.add(conv_choices[i]);
@@ -489,7 +481,7 @@ void Conversation::show_avatar_choices(int num_choices, char **choices) {
 	avatar_face.enlarge((3 * c_tilesize) / 4);  // Encloses entire area.
 	avatar_face = avatar_face.intersect(sbox);
 	// Terminate the list.
-	conv_choices[num_choices] = Rectangle(0, 0, 0, 0);
+	conv_choices[num_choices] = TileRect(0, 0, 0, 0);
 	clear_text_pending();
 	gwin->set_painted();
 }
@@ -562,26 +554,26 @@ void Conversation::paint_faces(
 		Shape_frame *face = finfo->face_num >= 0 ?
 		                    finfo->shape.get_shape() : nullptr;
 		if (face) {
-			int face_xleft = face->get_xleft();
-			int face_yabove = face->get_yabove();
-			int fx = finfo->face_rect.x + face_xleft;
-			int fy = finfo->face_rect.y + face_yabove;
+			const int face_xleft = face->get_xleft();
+			const int face_yabove = face->get_yabove();
+			const int fx = finfo->face_rect.x + face_xleft;
+			const int fy = finfo->face_rect.y + face_yabove;
 			if (finfo->large_face) {
 				// Guardian, serpents: fill whole screen with the
 				// background pixel.
-				unsigned char px = face->get_topleft_pix();
+				const unsigned char px = face->get_topleft_pix();
 				const int xfstart = 0xff - sman->get_xforms_cnt();
-				int fw = finfo->face_rect.w;
-				int fh = finfo->face_rect.h;
+				const int fw = finfo->face_rect.w;
+				const int fh = finfo->face_rect.h;
 				Image_window8 *win = gwin->get_win();
-				int gw = win->get_game_width();
-				int gh = win->get_game_height();
+				const int gw = win->get_game_width();
+				const int gh = win->get_game_height();
 				// Fill only if (a) not transparent, (b) is a translucent
 				// color and (c) the face is not covering the entire screen.
 				if (px >= xfstart && px <= 0xfe && (gw > fw || gh > fh)) {
-					Xform_palette &xform = sman->get_xform(px - xfstart);
-					int gx = win->get_start_x();
-					int gy = win->get_start_y();
+					const Xform_palette &xform = sman->get_xform(px - xfstart);
+					const int gx = win->get_start_x();
+					const int gy = win->get_start_y();
 					// Another option: 4 fills outside the face area.
 					win->fill_translucent8(0, gw, gh, gx, gy, xform);
 				}
@@ -590,9 +582,9 @@ void Conversation::paint_faces(
 			sman->paint_shape(fx, fy, face, true);
 		}
 		if (text) {     // Show text too?
-			Rectangle &box = finfo->text_rect;
+			const TileRect &box = finfo->text_rect;
 			// Use red for Guardian, snake.
-			int font = finfo->large_face ? 7 : 0;
+			const int font = finfo->large_face ? 7 : 0;
 			sman->paint_text_box(font, finfo->cur_text.c_str(),
 			                     box.x, box.y, box.w, box.h, -1, true,
 			                     finfo->large_face, gwin->get_text_bg());
@@ -606,11 +598,9 @@ void Conversation::paint_faces(
  */
 
 int Conversation::locate_answer(const char *str) {
-	int num;
-	std::vector<string>::iterator it;
-	num = 0;
-	for (it = answers.begin(); it != answers.end(); ++it) {
-		if (*it == str)
+	int num = 0;
+	for (auto& answer : answers) {
+		if (answer == str)
 			return num;
 		num++;
 	}

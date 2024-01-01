@@ -5,7 +5,8 @@
  **/
 
 /*
-Copyright (C) 2000  Jeffrey S. Freedman
+Copyright (C) 2000-2008  Jeffrey S. Freedman
+Copyright (C) 2009-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -33,13 +34,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *  touches.
  */
 class Chunk_intersect_iterator {
-	Rectangle tiles;        // Original rect, shifted -cx, -cy.
+	TileRect tiles;        // Original rect, shifted -cx, -cy.
 	int start_tx;           // Saves start of tx in tiles.
 	// Chunk #'s covered:
 	int startcx, stopcx, stopcy;
 	int curcx, curcy;       // Next chunk to return.
 public:
-	Chunk_intersect_iterator(Rectangle const &t) : tiles(t),
+	Chunk_intersect_iterator(TileRect const &t) : tiles(t),
 		startcx(t.x / c_tiles_per_chunk),
 		stopcx(INCR_CHUNK((t.x + t.w - 1) / c_tiles_per_chunk)),
 		stopcy(INCR_CHUNK((t.y + t.h - 1) / c_tiles_per_chunk)),
@@ -54,7 +55,7 @@ public:
 		}
 	}
 	// Intersect is ranged within chunk.
-	int get_next(Rectangle &intersect, int &cx, int &cy) {
+	int get_next(TileRect &intersect, int &cx, int &cy) {
 		if (curcx == stopcx) {  // End of row?
 			if (curcy == stopcy)
 				return 0;
@@ -67,7 +68,7 @@ public:
 				curcx = startcx;
 			}
 		}
-		Rectangle cr(0, 0, c_tiles_per_chunk, c_tiles_per_chunk);
+		const TileRect cr(0, 0, c_tiles_per_chunk, c_tiles_per_chunk);
 		// Intersect given rect. with chunk.
 		intersect = cr.intersect(tiles);
 		cx = curcx;

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -56,8 +56,8 @@ void Jawbone_object::remove(Game_object *obj) {
 }
 
 void Jawbone_object::find_teeth() {
-	for (int i = 0; i < 19; i++)
-		teeth[i] = nullptr;
+	for (auto& tooth : teeth)
+		tooth = nullptr;
 	toothcount = 0;
 
 	Object_list &objects = get_objects();
@@ -70,8 +70,8 @@ void Jawbone_object::find_teeth() {
 	while ((obj = next.get_next()) != nullptr)
 		teeth[obj->get_framenum()] = obj;
 
-	for (int i = 0; i < 19; i++)
-		if (teeth[i])
+	for (auto *tooth : teeth)
+		if (tooth)
 			toothcount++;
 }
 

@@ -1,5 +1,5 @@
 /*
-*   Copyright (C) 2009-2013 Exult Team
+*   Copyright (C) 2009-2022 Exult Team
 *
 *   This library is free software; you can redistribute it and/or
 *   modify it under the terms of the GNU Library General Public
@@ -20,7 +20,16 @@
 #ifndef INCL_MANIP_H
 #define INCL_MANIP_H    1
 
-#include "SDL_video.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include <cstdlib>
 #include <cstring>
 
@@ -107,7 +116,7 @@ public:
 
 	static uintD rgb(unsigned int r, unsigned int g,
 	                 unsigned int b) {
-		return ((r >> 3) << 10) | ((g >> 3) << 5) | ((b >> 3));
+		return ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
 	}
 	static void split_dest(uintD pix, unsigned int &r,
 	                       unsigned int &g, unsigned int &b) {
@@ -142,7 +151,7 @@ public:
 
 	static uintD rgb(unsigned int r, unsigned int g,
 	                 unsigned int b) {
-		return ((r >> 3) << 11) | ((g >> 2) << 5) | ((b >> 3));
+		return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 	}
 	static void split_dest(uintD pix, unsigned int &r,
 	                       unsigned int &g, unsigned int &b) {
@@ -160,7 +169,7 @@ public:
 	using uintD = color_8::T;
 
 	static int get_error(int r, int g, int b, int index) {
-		SDL_Color &color = colors[index];
+		const SDL_Color &color = colors[index];
 		return std::abs(r - color.r) + std::abs(g - color.g) + std::abs(b - color.b);
 	}
 
@@ -169,7 +178,7 @@ public:
 		uintD best = 0;
 		int best_error = get_error(r, g, b, 0);
 		for (int i = 0; i < 256; i++) {
-			int error = get_error(r, g, b, i);
+			const int error = get_error(r, g, b, i);
 			if (error < best_error) {
 				best = i;
 				best_error = error;
@@ -179,7 +188,7 @@ public:
 	}
 	static void split_dest(uintD pix, unsigned int &r,
 	                       unsigned int &g, unsigned int &b) {
-		SDL_Color &color = colors[pix];
+		const SDL_Color &color = colors[pix];
 		r = color.r;
 		g = color.g;
 		b = color.b;
@@ -259,7 +268,7 @@ public:
 
 	static void split_source(uintS pix, unsigned int &r,
 	                         unsigned int &g, unsigned int &b) {
-		SDL_Color &color = ManipBase::colors[pix];
+		const SDL_Color &color = ManipBase::colors[pix];
 		r = color.r;
 		g = color.g;
 		b = color.b;
@@ -267,7 +276,7 @@ public:
 
 	static void split_source(uintS pix, uint8 &r,
 	                         uint8 &g, uint8 &b) {
-		SDL_Color &color = ManipBase::colors[pix];
+		const SDL_Color &color = ManipBase::colors[pix];
 		r = color.r;
 		g = color.g;
 		b = color.b;

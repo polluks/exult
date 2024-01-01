@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2001-2013 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,35 +23,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wparentheses"
-#if !defined(__llvm__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-#else
-#pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
-#endif
-#endif  // __GNUC__
-#include <gtk/gtkradiomenuitem.h>
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif  // __GNUC__
-#include "gtk_redefines.h"
-
-#include "studio.h"
-#include "servemsg.h"
+#include "array_size.h"
 #include "exult_constants.h"
-#include "utils.h"
 #include "fnames.h"
-#include "ignore_unused_variable_warning.h"
+#include "servemsg.h"
+#include "studio.h"
+#include "utils.h"
 
 using EStudio::Add_menu_item;
-using EStudio::Alert;
 
 /*
  *  Find highest map #.
@@ -106,7 +88,7 @@ void ExultStudio::new_map_dialog(
 ) {
 	GtkWidget *win = get_widget("newmap_dialog");
 	gtk_window_set_modal(GTK_WINDOW(win), true);
-	int highest = Find_highest_map();
+	const int highest = Find_highest_map();
 	set_spin("newmap_num", highest + 1, 1, 100);
 	set_entry("newmap_name", "", false);    // LATER.
 	set_spin("newmap_copy_num", 0, 0, highest);
@@ -150,7 +132,7 @@ C_EXPORT void on_newmap_ok_clicked(
 	char sname[128];
 	ExultStudio *studio = ExultStudio::get_instance();
 	GtkWidget *win = studio->get_widget("newmap_dialog");
-	int num = studio->get_spin("newmap_num");
+	const int num = studio->get_spin("newmap_num");
 
 	if (U7exists(Get_mapped_name("<PATCH>/", num, fname)) ||
 	        U7exists(Get_mapped_name("<STATIC>/", num, sname))) {
@@ -158,15 +140,15 @@ C_EXPORT void on_newmap_ok_clicked(
 		return;         // Leave dialog open.
 	}
 	U7mkdir(fname, 0755);       // Create map directory in 'patch'.
-	int frommap = studio->get_spin("newmap_copy_num");
+	const int frommap = studio->get_spin("newmap_copy_num");
 	if (studio->get_toggle("newmap_copy_flats"))
 		Copy_static_file(U7MAP, PATCH_U7MAP, frommap, num);
 	if (studio->get_toggle("newmap_copy_fixed")) {
 		for (int schunk = 0; schunk < 12 * 12; schunk++) {
 			char pname[128];
 			char sname[128];
-			sprintf(pname, "%s%02x", PATCH_U7IFIX, schunk);
-			sprintf(sname, "%s%02x", U7IFIX, schunk);
+			snprintf(pname, array_size(pname), "%s%02x", PATCH_U7IFIX, schunk);
+			snprintf(sname, array_size(sname), "%s%02x", U7IFIX, schunk);
 			if (!Copy_static_file(sname, pname, frommap, num))
 				break;
 		}
@@ -176,9 +158,11 @@ C_EXPORT void on_newmap_ok_clicked(
 		char tname[128];
 		for (int schunk = 0; schunk < 12 * 12; schunk++) {
 			Get_mapped_name(U7IREG, frommap, fname);
-			sprintf(fname + strlen(fname), "%02x", schunk);
+			const size_t fnamelen = strlen(fname);
+			snprintf(fname + fnamelen, array_size(fname) - fnamelen, "%02x", schunk);
 			Get_mapped_name(U7IREG, num, tname);
-			sprintf(tname + strlen(tname), "%02x", schunk);
+			const size_t tnamelen = strlen(tname);
+			snprintf(tname + tnamelen, array_size(tname) - tnamelen, "%02x", schunk);
 			if (U7exists(fname))
 				if (!EStudio::Copy_file(fname, tname))
 					break;
@@ -196,7 +180,7 @@ void ExultStudio::setup_maps_list(
 ) {
 	GtkWidget *maps = gtk_menu_item_get_submenu(
 	                      GTK_MENU_ITEM(get_widget("map1")));
-	GList *items = gtk_container_get_children(GTK_CONTAINER(maps));
+	GList *items = g_list_first(gtk_container_get_children(GTK_CONTAINER(maps)));
 	GList *each = g_list_last(items);
 	GSList *group = nullptr;
 	int curmap = 0;
@@ -208,7 +192,7 @@ void ExultStudio::setup_maps_list(
 		if (strcmp(text, "Main") == 0) {
 			group = gtk_radio_menu_item_get_group(
 			            GTK_RADIO_MENU_ITEM(item));
-			gtk_object_set_user_data(GTK_OBJECT(item), nullptr);
+			g_object_set_data(G_OBJECT(item), "user_data", nullptr);
 			if (curmap == 0)
 				gtk_check_menu_item_set_active(
 				    GTK_CHECK_MENU_ITEM(item), TRUE);
@@ -216,8 +200,8 @@ void ExultStudio::setup_maps_list(
 		}
 		if (gtk_check_menu_item_get_active(
 		            GTK_CHECK_MENU_ITEM(item)))
-			curmap = reinterpret_cast<sintptr>(gtk_object_get_user_data(
-			             GTK_OBJECT(item)));
+			curmap = reinterpret_cast<sintptr>(g_object_get_data(
+			                                       G_OBJECT(item), "user_data"));
 		GList *prev = g_list_previous(each);
 		gtk_container_remove(GTK_CONTAINER(maps), GTK_WIDGET(item));
 		each = prev;
@@ -225,16 +209,17 @@ void ExultStudio::setup_maps_list(
 	int num = 0;
 	while ((num = Find_next_map(num + 1, 10)) != -1) {
 		char name[40];
-		sprintf(name, "Map #%02x", num);
+		snprintf(name, array_size(name), "Map #%02x", num);
 		auto *ptrnum = reinterpret_cast<gpointer>(uintptr(num));
 		GtkWidget *item =
-		    Add_menu_item(maps, name, GTK_SIGNAL_FUNC(on_map_activate), ptrnum, group);
-		gtk_object_set_user_data(GTK_OBJECT(item), ptrnum);
+		    Add_menu_item(maps, name, G_CALLBACK(on_map_activate), ptrnum, group);
+		g_object_set_data(G_OBJECT(item), "user_data", ptrnum);
 		if (curmap == num)
 			gtk_check_menu_item_set_active(
 			    GTK_CHECK_MENU_ITEM(item), TRUE);
 		group = gtk_radio_menu_item_get_group(
 		            GTK_RADIO_MENU_ITEM(item));
 	}
+	g_list_free(items);
 }
 

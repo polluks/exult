@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2003-2005  The Pentagram Team
+Copyright (C) 2007-2022  The Exult team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,9 +27,19 @@ class XMidiEventList;
 class XMidiSequence;
 
 #include <cstring>
+#include <memory>
 #include <queue>
+
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
 #include <SDL.h>
-#include <SDL_thread.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "common_types.h"
 #include "ignore_unused_variable_warning.h"
 
@@ -174,19 +185,30 @@ private:
 
 		} data;
 	};
+	class SDLMutex {
+	public:
+		SDLMutex();
+		~SDLMutex();
+		operator SDL_mutex*() {
+			return mutex;
+		}
+		void lock();
+		void unlock();
+
+	private:
+		SDL_mutex *mutex;
+	};
 
 	bool					uploading_timbres;	// Set in 'uploading' timbres mode
 
 	// Communications
 	std::queue<ComMessage>	messages;
-	SDL_mutex				*mutex = nullptr;
-	SDL_mutex				*cbmutex = nullptr;
-	SDL_cond                *cond = nullptr;
+	std::unique_ptr<SDLMutex> mutex;
+	std::unique_ptr<SDLMutex> cbmutex;
+	SDL_cond				*cond = nullptr;
 	sint32					peekComMessageType();
 	void					sendComMessage(ComMessage& message);
 	void					waitTillNoComMessages();
-	void					lockComMessage();
-	void					unlockComMessage();
 
 	// State
 	bool					playing[LLMD_NUM_SEQ];			// Only set by thread

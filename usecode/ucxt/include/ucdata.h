@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2011  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <memory>
 
 #include "ucfunc.h"
 
@@ -54,6 +55,7 @@ public:
 	}
 
 	bool fail() const {
+		auto& _file = *_pFile;
 		return _file.fail();
 	}
 
@@ -71,13 +73,15 @@ private:
 
 	void file_open(const std::string &filename);
 	void file_seek_start() {
+		auto& _file = *_pFile;
 		_file.seekg(0, std::ios::beg);
 	}
 	void file_seek_end() {
+		auto& _file = *_pFile;
 		_file.seekg(0, std::ios::end);
 	}
 
-	std::ifstream _file;
+	std::unique_ptr<std::istream> _pFile;
 
 	std::string _output_redirect;
 	std::string _input_usecode_file;

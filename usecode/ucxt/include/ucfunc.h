@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2011  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -196,8 +196,6 @@ public:
 		return _offset;
 	}
 
-	using iterator = std::vector<std::pair<UCc *, bool>>::iterator;
-
 private:
 	unsigned int _offset = 0;
 	std::vector<std::pair<UCc *, bool> > _uccs;
@@ -220,11 +218,11 @@ public:
 
 	void parse_ucs(const FuncMap &funcmap, const std::map<unsigned int, std::string> &intrinsics, const UCOptions &options, Usecode_symbol_table *symtbl);
 	void parse_ucs_pass1(std::vector<UCNode *> &nodes);
-	void parse_ucs_pass2(std::vector<GotoSet> &gotoset, const FuncMap &funcmap, const std::map<unsigned int, std::string> &intrinsics, Usecode_symbol_table *symtbl);
+	void parse_ucs_pass2(std::vector<GotoSet> &gotoset, const FuncMap &funcmap, const std::map<unsigned int, std::string> &intrinsics, const UCOptions &options, Usecode_symbol_table *symtbl);
 	std::vector<UCc *> parse_ucs_pass2a(std::vector<std::pair<UCc *, bool> >::reverse_iterator current,
 	                                    std::vector<std::pair<UCc *, bool> > &vec, int opsneeded,
 	                                    const FuncMap &funcmap, const std::map<unsigned int, std::string> &intrinsics,
-	                                    Usecode_symbol_table *symtbl);
+	                                    const UCOptions &options, Usecode_symbol_table *symtbl);
 	void parse_ucs_pass3(std::vector<GotoSet> &gotoset, const std::map<unsigned int, std::string> &intrinsics);
 
 	bool output_asm(std::ostream &o, const FuncMap &funcmap, const std::map<unsigned int, std::string> &intrinsics, const UCOptions &options, Usecode_symbol_table *symtbl);
@@ -290,9 +288,9 @@ public:
 	static std::map<unsigned int, std::string> FlagMap;
 };
 
-void readbin_U7UCFunc(std::ifstream &f, UCFunc &ucf, const UCOptions &options,
+void readbin_U7UCFunc(std::istream &f, UCFunc &ucf, const UCOptions &options,
                       Usecode_symbol_table *symtbl);
-void readbin_U8UCFunc(std::ifstream &f, UCFunc &ucf);
+void readbin_U8UCFunc(std::istream &f, UCFunc &ucf);
 
 std::ostream &tab_indent(const unsigned int indent, std::ostream &o);
 #endif

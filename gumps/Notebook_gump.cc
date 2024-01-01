@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -28,13 +28,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gamewin.h"
 #include "gameclk.h"
 #include "actors.h"
-#include "SDL_events.h"
 #include "Configuration.h"
 #include "msgfile.h"
 #include "fnames.h"
 #include "cheat.h"
 #include "U7file.h"
-#include "Gump_manager.h"
 #include "exult.h"
 #include "touchui.h"
 
@@ -61,7 +59,7 @@ vector<string> Notebook_gump::auto_text;
 
 const int font = 4;         // Small black.
 const int vlead = 1;            // Extra inter-line spacing.
-#ifdef __IPHONEOS__
+#if defined(__IPHONEOS__) || defined(ANDROID)
 const int pagey = 7;           // Top of text area of page.
 #else
 const int pagey = 10;           // Top of text area of page.
@@ -143,14 +141,14 @@ void One_note::write(
  *  Get left/right text area.
  */
 
-inline Rectangle Get_text_area(bool right, bool startnote) {
+inline TileRect Get_text_area(bool right, bool startnote) {
 	const int ninf = 12;        // Space for note info.
 	if (!startnote)
-		return right ? Rectangle(rpagex, pagey, 122, 130)
-		       : Rectangle(lpagex, pagey, 122, 130);
+		return right ? TileRect(rpagex, pagey, 122, 130)
+		       : TileRect(lpagex, pagey, 122, 130);
 	else
-		return right ? Rectangle(rpagex, pagey + ninf, 122, 130 - ninf)
-		       : Rectangle(lpagex, pagey + ninf, 122, 130 - ninf);
+		return right ? TileRect(rpagex, pagey + ninf, 122, 130 - ninf)
+		       : TileRect(lpagex, pagey + ninf, 122, 130 - ninf);
 }
 
 /*
@@ -221,7 +219,7 @@ void Notebook_gump::add_new(
     int gflag
 ) {
 	Game_clock *clk = gwin->get_clock();
-	Tile_coord t = gwin->get_main_actor()->get_tile();
+	const Tile_coord t = gwin->get_main_actor()->get_tile();
 	auto *note = new One_note(clk->get_day(), clk->get_hour(),
 	                              clk->get_minute(), t.tx, t.ty, text, gflag);
 	note->is_new = true;
@@ -234,17 +232,17 @@ void Notebook_gump::add_new(
 
 Notebook_gump::Notebook_gump(
 ) : Gump(nullptr,
-#ifdef __IPHONEOS__
-	//on iOS the Notebook gump needs to be aligned with the top
-	5, -2,
-#endif
 	EXULT_FLX_NOTEBOOK_SHP, SF_EXULT_FLX) {
+#if defined(__IPHONEOS__) || defined(ANDROID)
+	//on iOS the Notebook gump needs to be aligned with the top
+	set_pos(5, -2);
+#endif
 	handles_kbd = true;
 	cursor.offset = 0;
 	cursor.x = cursor.y = -1;
 	cursor.line = cursor.nlines = 0;
 	// (Obj. area doesn't matter.)
-	set_object_area(Rectangle(36, 10, 100, 100), 7, 40);
+	set_object_area(TileRect(36, 10, 100, 100), 7, 40);
 	if (page_info.empty())
 		page_info.emplace_back(0, 0);
 	// Where to paint page marks:
@@ -306,12 +304,12 @@ Notebook_gump::~Notebook_gump(
  */
 
 bool Notebook_gump::paint_page(
-    Rectangle const &box,           // Display box rel. to gump.
+    TileRect const &box,           // Display box rel. to gump.
     One_note *note,         // Note to print.
     int &offset,            // Starting offset into text.  Updated.
     int pagenum
 ) {
-	bool find_cursor = (note == notes[curnote] && cursor.x < 0);
+	const bool find_cursor = (note == notes[curnote] && cursor.x < 0);
 	if (offset == 0) {      // Print note info. at start.
 		char buf[60];
 		const char *ampm = "am";
@@ -322,7 +320,7 @@ bool Notebook_gump::paint_page(
 		}
 		snprintf(buf, sizeof(buf), "Day %d, %02d:%02d%s",
 		         note->day, h ? h : 12, note->minute, ampm);
-#ifdef __IPHONEOS__
+#if defined(__IPHONEOS__) || defined(ANDROID)
 		const int fontnum = 4;
 		const int yoffset = 0;
 #else
@@ -342,7 +340,7 @@ bool Notebook_gump::paint_page(
 	}
 	const char *str = note->text.c_str() + offset;
 	cursor.offset -= offset;
-	int endoff = sman->paint_text_box(font, str, x + box.x,
+	const int endoff = sman->paint_text_box(font, str, x + box.x,
 	                                  y + box.y, box.w, box.h, vlead,
 	                                  false, false, -1, find_cursor ? &cursor : nullptr);
 	cursor.offset += offset;
@@ -369,9 +367,9 @@ bool Notebook_gump::paint_page(
 void Notebook_gump::change_page(
     int delta
 ) {
-	int topleft = curpage & ~1;
+	const int topleft = curpage & ~1;
 	if (delta > 0) {
-		int nxt = topleft + 2;
+		const int nxt = topleft + 2;
 		if (nxt >= static_cast<int>(page_info.size()))
 			return;
 		curpage = nxt;
@@ -404,12 +402,12 @@ Gump_button *Notebook_gump::on_button(
 		return leftpage;
 	else if (rightpage->on_button(mx, my))
 		return rightpage;
-	int topleft = curpage & ~1;
+	const int topleft = curpage & ~1;
 	int notenum = page_info[topleft].notenum;
 	if (notenum < 0)
 		return nullptr;
 	int offset = page_info[topleft].offset;
-	Rectangle box = Get_text_area(false, offset == 0);  // Left page.
+	TileRect box = Get_text_area(false, offset == 0);  // Left page.
 	One_note *note = notes[notenum];
 	int coff = sman->find_cursor(font, note->text.c_str() + offset, x + box.x,
 	                             y + box.y, box.w, box.h, mx, my, vlead);
@@ -457,7 +455,7 @@ void Notebook_gump::paint(
 	Gump::paint();
 	if (curpage > 0)        // Not the first?
 		leftpage->paint();
-	int topleft = curpage & ~1;
+	const int topleft = curpage & ~1;
 	int notenum = page_info[topleft].notenum;
 	if (notenum < 0)
 		return;
@@ -488,7 +486,7 @@ void Notebook_gump::paint(
 		offset = 0;
 	}
 	rightpage->paint();
-	int nxt = topleft + 2;      // For next pair of pages.
+	const int nxt = topleft + 2;      // For next pair of pages.
 	if (nxt >= static_cast<int>(page_info.size()))
 		page_info.resize(nxt + 1);
 	page_info[nxt].notenum = notenum;
@@ -503,7 +501,7 @@ void Notebook_gump::prev_page(
 ) {
 	if (!curpage)
 		return;
-	Notebook_top &pinfo = page_info[curpage];
+	const Notebook_top &pinfo = page_info[curpage];
 	--curpage;
 	curnote = page_info[curpage].notenum;
 	if (!pinfo.offset)      // Going to new note?
@@ -521,7 +519,7 @@ void Notebook_gump::next_page(
 	if (curpage >= static_cast<int>(page_info.size()))
 		return;
 	++curpage;
-	Notebook_top &pinfo = page_info[curpage];
+	const Notebook_top &pinfo = page_info[curpage];
 	curnote = pinfo.notenum;
 	cursor.offset = pinfo.offset;   // Start of page.
 }
@@ -548,8 +546,8 @@ bool Notebook_gump::on_first_page_line(
 void Notebook_gump::down_arrow(
 ) {
 	int offset = page_info[curpage].offset;
-	Rectangle box = Get_text_area((curpage % 2) != 0, offset == 0);
-	int ht = sman->get_text_height(font);
+	TileRect box = Get_text_area((curpage % 2) != 0, offset == 0);
+	const int ht = sman->get_text_height(font);
 	if (on_last_page_line()) {
 		if (curpage >= static_cast<int>(page_info.size()) - 1)
 			return;
@@ -560,11 +558,11 @@ void Notebook_gump::down_arrow(
 		cursor.y = y + box.y - ht;
 	}
 	box.shift(x, y);        // Window coords.
-	int mx = box.x + updnx + 1;
-	int my = cursor.y + ht + ht / 2;
-	int notenum = page_info[curpage].notenum;
+	const int mx = box.x + updnx + 1;
+	const int my = cursor.y + ht + ht / 2;
+	const int notenum = page_info[curpage].notenum;
 	One_note *note = notes[notenum];
-	int coff = sman->find_cursor(font, note->text.c_str() + offset, box.x,
+	const int coff = sman->find_cursor(font, note->text.c_str() + offset, box.x,
 	                             box.y, box.w, box.h, mx, my, vlead);
 	if (coff >= 0) {        // Found it?
 		cursor.offset = offset + coff;
@@ -574,15 +572,15 @@ void Notebook_gump::down_arrow(
 
 void Notebook_gump::up_arrow(
 ) {
-	Notebook_top &pinfo = page_info[curpage];
-	int ht = sman->get_text_height(font);
+	const Notebook_top &pinfo = page_info[curpage];
+	const int ht = sman->get_text_height(font);
 	int offset = pinfo.offset;
 	int notenum = pinfo.notenum;
 	if (on_first_page_line()) { // Above top.
 		if (!curpage)
 			return;
 		prev_page();
-		Notebook_top &pinfo2 = page_info[curpage];
+		const Notebook_top &pinfo2 = page_info[curpage];
 		notenum = pinfo2.notenum;
 		if (pinfo.notenum == notenum)   // Same note?
 			cursor.offset = offset - 1;
@@ -592,12 +590,12 @@ void Notebook_gump::up_arrow(
 		offset = pinfo2.offset;
 		cursor.y += ht / 2;     // Past bottom line.
 	}
-	Rectangle box = Get_text_area((curpage % 2) != 0, offset == 0);
+	TileRect box = Get_text_area((curpage % 2) != 0, offset == 0);
 	box.shift(x, y);        // Window coords.
-	int mx = box.x + updnx + 1;
-	int my = cursor.y - ht / 2;
+	const int mx = box.x + updnx + 1;
+	const int my = cursor.y - ht / 2;
 	One_note *note = notes[notenum];
-	int coff = sman->find_cursor(font, note->text.c_str() + offset, box.x,
+	const int coff = sman->find_cursor(font, note->text.c_str() + offset, box.x,
 	                             box.y, box.w, box.h, mx, my, vlead);
 	if (coff >= 0) {        // Found it?
 		cursor.offset = offset + coff;
@@ -622,7 +620,7 @@ bool Notebook_gump::handle_kbd_event(
 		return false;
 	if (curpage >= static_cast<int>(page_info.size()))
 		return false;       // Shouldn't happen.
-	Notebook_top &pinfo = page_info[curpage];
+	const Notebook_top &pinfo = page_info[curpage];
 	One_note *note = notes[pinfo.notenum];
 	switch (chr) {
 	case SDLK_RETURN:
@@ -680,12 +678,12 @@ bool Notebook_gump::handle_kbd_event(
 		change_page(1);
 		break;
 	default:
-		if (ev.key.keysym.mod & KMOD_SHIFT)
-			chr = toupper(chr);
 		if (chr < ' ')
 			return false;       // Ignore other special chars.
 		if (chr >= 256 || !isascii(chr))
 			return false;
+		if (ev.key.keysym.mod & (KMOD_SHIFT | KMOD_CAPS))
+			chr = toupper(chr);
 		note->insert(chr, cursor.offset);
 		++cursor.offset;
 		paint();        // (Not very efficient...)
@@ -714,9 +712,8 @@ void Notebook_gump::add_gflag_text(
 	if (!initialized)
 		initialize();
 	// See if already there.
-	for (auto it = notes.begin();
-	        it != notes.end(); ++it)
-		if ((*it)->gflag == gflag)
+	for (auto *note : notes)
+		if (note->gflag == gflag)
 			return;
 	if (gwin->get_allow_autonotes())
 		add_new(text, gflag);
@@ -728,18 +725,17 @@ void Notebook_gump::add_gflag_text(
 
 void Notebook_gump::write(
 ) {
-	ofstream out;
-
-	U7open(out, NOTEBOOKXML);
+	auto pOut = U7open_out(NOTEBOOKXML);
+	if (!pOut)
+		return;
+	auto& out = *pOut;
 	out << "<notebook>" << endl;
 	if (initialized) {
-		for (auto it = notes.begin();
-		        it != notes.end(); ++it)
-			if ((*it)->text.length() || !(*it)->is_new)
-				(*it)->write(out);
+		for (auto *note : notes)
+			if (note->text.length() || !note->is_new)
+				note->write(out);
 	}
 	out << "</notebook>" << endl;
-	out.close();
 }
 
 /*
@@ -748,22 +744,20 @@ void Notebook_gump::write(
 
 void Notebook_gump::read(
 ) {
-	string root;
+	const string root;
 	Configuration conf;
 
 	conf.read_abs_config_file(NOTEBOOKXML, root);
-	string identstr;
+	const string identstr;
 	// not spamming the terminal with all the notes in normal play
 #ifdef DEBUG
 	conf.dump(cout, identstr);
 #endif
 	Configuration::KeyTypeList note_nds;
-	string basekey = "notebook";
+	const string basekey = "notebook";
 	conf.getsubkeys(note_nds, basekey);
 	One_note *note = nullptr;
-	for (auto it = note_nds.begin();
-	        it != note_nds.end(); ++it) {
-		Configuration::KeyType notend = *it;
+	for (const auto& notend : note_nds) {
 		if (notend.first == "note") {
 			note = new One_note();
 			notes.push_back(note);
@@ -800,16 +794,18 @@ void Notebook_gump::read(
 void Notebook_gump::read_auto_text_file(const char *filename) {
 	if (gwin->get_allow_autonotes()) {
 		initialized_auto_text = true;
-		ifstream notesfile;
+		std::unique_ptr<std::istream> pNotesfile;
 		if (is_system_path_defined("<PATCH>") && U7exists(PATCH_AUTONOTES)) {
 			cout << "Loading patch autonotes" << endl;
-			U7open(notesfile, PATCH_AUTONOTES, true);
+			pNotesfile = U7open_in(PATCH_AUTONOTES, true);
 		} else {
 			cout << "Loading autonotes from file " << filename << endl;
-			U7open(notesfile, filename, true);
+			pNotesfile = U7open_in(filename, true);
 		}
+		if (!pNotesfile)
+			return;
+		auto& notesfile = *pNotesfile;
 		Read_text_msg_file(notesfile, auto_text);
-		notesfile.close();
 	}
 }
 
@@ -820,10 +816,11 @@ void Notebook_gump::read_auto_text(
 		initialized_auto_text = true;
 		if (is_system_path_defined("<PATCH>") && U7exists(PATCH_AUTONOTES)) {
 			cout << "Loading patch autonotes" << endl;
-			ifstream notesfile;
-			U7open(notesfile, PATCH_AUTONOTES, true);
+			auto pNotesfile = U7open_in(PATCH_AUTONOTES, true);
+			if (!pNotesfile)
+				return;
+			auto& notesfile = *pNotesfile;
 			Read_text_msg_file(notesfile, auto_text);
-			notesfile.close();
 		} else {
 			const str_int_pair &resource = game->get_resource("config/autonotes");
 			IExultDataSource buf(resource.str, resource.num);

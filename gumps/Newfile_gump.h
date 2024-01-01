@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -84,7 +84,6 @@ struct SaveGame_Party {
  *  The file save/load box:
  */
 class Newfile_gump : public Modal_gump {
-	UNREPLICATABLE_CLASS(Newfile_gump)
 
 public:
 	struct SaveInfo {
@@ -102,7 +101,6 @@ public:
 		void            SetSeqNumber();
 
 		~SaveInfo();
-
 	};
 
 protected:
@@ -232,7 +230,7 @@ public:
 	bool mouse_down(int mx, int my, int button) override;
 	bool mouse_up(int mx, int my, int button) override;
 	void mouse_drag(int mx, int my) override;
-	void text_input(int chr, int unicode) override; // Character typed.
+	void text_input(int chr, int unicode, bool shift_pressed) override; // Character typed.
 
 	void mousewheel_up() override;
 	void mousewheel_down() override;

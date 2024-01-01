@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000-2013 The Exult Team.
+Copyright (C) 2000-2022 The Exult Team.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -45,9 +45,12 @@ public:
 	Spellbook_object(int shapenum, int framenum, unsigned int shapex,
 	                 unsigned int shapey, unsigned int lft, unsigned char *c,
 	                 unsigned char bmark);
+	Spellbook_object *as_spellbook() override {
+		return this;
+	}
 	bool has_spell(int spell) {  // Has a spell.
-		int circle = spell / 8;
-		int num = spell % 8;    // # within circle.
+		const int circle = spell / 8;
+		const int num = spell % 8;    // # within circle.
 		return (circles[circle] & (1 << num)) != 0;
 	}
 	int add_spell(int spell);   // Add a spell.

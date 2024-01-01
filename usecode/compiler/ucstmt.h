@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -52,6 +52,10 @@ public:
 	                 Basic_block *&curr, Basic_block *end,
 	                 std::map<std::string, Basic_block *> &labels,
 	                 Basic_block *start = nullptr, Basic_block *exit = nullptr) = 0;
+	// Whether statement is a fallthrough statement or ends in one.
+	virtual bool falls_through() const {
+		return false;
+	}
 };
 
 /*
@@ -69,6 +73,9 @@ public:
 	         Basic_block *&curr, Basic_block *end,
 	         std::map<std::string, Basic_block *> &labels,
 	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+	bool falls_through() const override {
+		return !statements.empty() && statements.back()->falls_through();
+	}
 };
 
 /*
@@ -111,11 +118,12 @@ public:
  *  A try/catch statement:
  */
 class Uc_trycatch_statement : public Uc_statement {
-	Uc_var_symbol *catch_var;
-	Uc_statement *try_stmt, *catch_stmt;
+	Uc_var_symbol *catch_var{};
+	Uc_statement *try_stmt;
+	Uc_statement *catch_stmt{};
 public:
 	Uc_trycatch_statement(Uc_statement *t)
-		: catch_var(nullptr), try_stmt(t), catch_stmt(nullptr)
+		: try_stmt(t)
 	{  }
 	void set_catch_variable(Uc_var_symbol *v) {
 		catch_var = v;
@@ -136,9 +144,10 @@ public:
  */
 class Uc_breakable_statement : public Uc_statement {
 	Uc_statement *stmt;     // What to execute.
+	Uc_statement *nobreak;  // What to execute after normal finish.
 public:
-	Uc_breakable_statement(Uc_statement *s)
-		: stmt(s)
+	Uc_breakable_statement(Uc_statement *s, Uc_statement* nb)
+		: stmt(s), nobreak(nb)
 	{  }
 	~Uc_breakable_statement() override;
 	// Generate code.
@@ -154,10 +163,10 @@ public:
 class Uc_while_statement : public Uc_statement {
 	Uc_expression *expr;        // What to test.
 	Uc_statement *stmt;     // What to execute.
+	Uc_statement *nobreak;  // What to execute after normal finish.
 public:
-	Uc_while_statement(Uc_expression *e, Uc_statement *s)
-		: expr(e), stmt(s)
-	{  }
+	Uc_while_statement(Uc_expression* e, Uc_statement* s, Uc_statement* nb)
+			: expr(e), stmt(s), nobreak(nb) {}
 	~Uc_while_statement() override;
 	// Generate code.
 	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
@@ -172,9 +181,10 @@ public:
 class Uc_dowhile_statement : public Uc_statement {
 	Uc_expression *expr;        // What to test.
 	Uc_statement *stmt;     // What to execute.
+	Uc_statement *nobreak;  // What to execute after normal finish.
 public:
-	Uc_dowhile_statement(Uc_expression *e, Uc_statement *s)
-		: expr(e), stmt(s)
+	Uc_dowhile_statement(Uc_expression *e, Uc_statement *s, Uc_statement* nb)
+		: expr(e), stmt(s), nobreak(nb)
 	{  }
 	~Uc_dowhile_statement() override;
 	// Generate code.
@@ -189,9 +199,10 @@ public:
  */
 class Uc_infinite_loop_statement : public Uc_statement {
 	Uc_statement *stmt;     // What to execute.
+	Uc_statement *nobreak;  // What to execute after normal finish.
 public:
-	Uc_infinite_loop_statement(Uc_statement *s)
-		: stmt(s)
+	Uc_infinite_loop_statement(Uc_statement *s, Uc_statement *nb)
+		: stmt(s), nobreak(nb)
 	{  }
 	~Uc_infinite_loop_statement() override;
 	// Generate code.
@@ -202,29 +213,77 @@ public:
 };
 
 /*
- *  An array loop statement:
+ *  enum() statement:
  */
-class Uc_arrayloop_statement : public Uc_statement {
-	Uc_var_symbol *var;     // Loop variable.
-	Uc_var_symbol *array;       // Array to loop over.
-	Uc_var_symbol *index;       // Counter.
-	Uc_var_symbol *array_size;  // Symbol holding array size.
-	Uc_statement *stmt;     // What to execute.
+
+class array_enum_statement : public Uc_statement {
 public:
-	Uc_arrayloop_statement(Uc_var_symbol *v, Uc_var_symbol *a)
-		: var(v), array(a), index(nullptr), array_size(nullptr), stmt(nullptr)
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+};
+
+/*
+ *  Base for an array loop statement:
+ */
+class Uc_arrayloop_statement_base : public Uc_statement {
+	Uc_var_symbol *var;         // Loop variable.
+	Uc_var_symbol *array;       // Array to loop over.
+	Uc_var_symbol *index{};     // Counter.
+	Uc_var_symbol *array_len{}; // Symbol holding array size.
+public:
+	Uc_arrayloop_statement_base(Uc_var_symbol *v, Uc_var_symbol *a)
+		: var(v), array(a)
+
 	{  }
-	~Uc_arrayloop_statement() override;
-	void set_statement(Uc_statement *s) {
-		stmt = s;
-	}
 	void set_index(Uc_var_symbol *i) {
 		index = i;
 	}
 	void set_array_size(Uc_var_symbol *as) {
-		array_size = as;
+		array_len = as;
 	}
+	void gen_check(Basic_block *for_top, Basic_block *loop_body,
+	               Basic_block *past_loop);
 	void finish(Uc_function *fun);  // Create tmps. if necessary.
+};
+
+/*
+ *  An array loop statement:
+ */
+class Uc_arrayloop_statement : public Uc_arrayloop_statement_base {
+	Uc_statement *stmt{};       // What to execute.
+	Uc_statement *nobreak{};    // What to execute after normal finish.
+public:
+	Uc_arrayloop_statement(Uc_var_symbol *v, Uc_var_symbol *a)
+		: Uc_arrayloop_statement_base(v, a) {
+	}
+	~Uc_arrayloop_statement() override;
+	void set_statement(Uc_statement *s) {
+		stmt = s;
+	}
+	void set_nobreak(Uc_statement* n) {
+		nobreak = n;
+	}
+	// Generate code.
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+};
+
+/*
+ *  An array loop attend statement:
+ */
+class Uc_arrayloop_attend_statement : public Uc_arrayloop_statement_base {
+	std::string label;
+public:
+	Uc_arrayloop_attend_statement(Uc_var_symbol *v, Uc_var_symbol *a)
+		: Uc_arrayloop_statement_base(v, a) {
+	}
+	void set_target(std::string target) {
+		label = std::move(target);
+	}
 	// Generate code.
 	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
 	         Basic_block *&curr, Basic_block *end,
@@ -273,6 +332,23 @@ public:
 };
 
 /*
+ *  BREAK statement:
+ */
+class Uc_fallthrough_statement : public Uc_statement {
+public:
+	// Generate code.
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override {
+		ignore_unused_variable_warning(fun, blocks, curr, end, labels, start, exit);
+	}
+	bool falls_through() const override {
+		return true;
+	}
+};
+
+/*
  *  a LABEL statement:
  */
 class Uc_label_statement : public Uc_statement {
@@ -284,6 +360,9 @@ public:
 	         Basic_block *&curr, Basic_block *end,
 	         std::map<std::string, Basic_block *> &labels,
 	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+	const std::string& get_label() const {
+		return label;
+	}
 };
 
 /*
@@ -301,27 +380,184 @@ public:
 };
 
 /*
+ *  An ENDCONV statement:
+ */
+class Uc_endconv_statement : public Uc_statement {
+public:
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+};
+
+/*
  *  Conversation CASE statement:
  */
 class Uc_converse_case_statement : public Uc_statement {
-	std::vector<int> string_offset;     // Offset of string to compare.
-	bool remove;            // True to remove answer.
 	Uc_statement *statements;   // Execute these.
+	bool remove;                // True to remove answer.
 public:
-	Uc_converse_case_statement(std::vector<int> soff, bool rem, Uc_statement *stmts)
-		: string_offset(std::move(soff)), remove(rem), statements(stmts)
+	Uc_converse_case_statement(Uc_statement *stmts, bool rem)
+		: statements(stmts), remove(rem)
 	{  }
 	~Uc_converse_case_statement() override {
 		delete statements;
 	}
+	virtual int gen_check(Basic_block *curr, Basic_block *case_body,
+	                      Basic_block *past_case) = 0;
+	virtual int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	                       Basic_block *case_body, Basic_block *end,
+	                       std::map<std::string, Basic_block *> &labels) = 0;
 	// Generate code.
 	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
 	         Basic_block *&curr, Basic_block *end,
 	         std::map<std::string, Basic_block *> &labels,
 	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
-	bool is_default() {
-		return string_offset.empty();
+	bool falls_through() const override {
+		return statements != nullptr && statements->falls_through();
 	}
+};
+
+/*
+ *  Conversation CASE statement with a list of strings:
+ */
+class Uc_converse_strings_case_statement : public Uc_converse_case_statement {
+	std::vector<int> string_offset;     // Offset of string to compare.
+public:
+	Uc_converse_strings_case_statement(std::vector<int> soff, Uc_statement *stmts, bool rem)
+		: Uc_converse_case_statement(stmts, rem), string_offset(std::move(soff))
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+};
+
+/*
+ *  Conversation CASE statement with a variable:
+ */
+class Uc_converse_variable_case_statement : public Uc_converse_case_statement {
+	Uc_expression *variable;            // Alternative to pushing string_offset
+public:
+	Uc_converse_variable_case_statement(
+			Uc_expression *v, Uc_statement *stmts, bool rem)
+			: Uc_converse_case_statement(stmts, rem), variable(v)
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+};
+
+/*
+ *  Conversation DEFAULT statement:
+ */
+class Uc_converse_default_case_statement : public Uc_converse_case_statement {
+public:
+	Uc_converse_default_case_statement(Uc_statement *stmts)
+			: Uc_converse_case_statement(stmts, false)
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+};
+
+/*
+ *  Conversation ALWAYS statement:
+ */
+class Uc_converse_always_case_statement : public Uc_converse_case_statement {
+public:
+	Uc_converse_always_case_statement(Uc_statement *stmts)
+			: Uc_converse_case_statement(stmts, false)
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+	bool falls_through() const override {
+		return true;
+	}
+};
+
+/*
+ *  Conversation CASE ATTEND statement:
+ */
+class Uc_converse_case_attend_statement : public Uc_statement {
+	std::string label;
+	bool remove;                // True to remove answer.
+public:
+	Uc_converse_case_attend_statement(std::string target, bool rem)
+		: label(std::move(target)), remove(rem)
+	{  }
+	~Uc_converse_case_attend_statement() override = default;
+	virtual int gen_check(Basic_block *curr, Basic_block *case_body,
+	                      Basic_block *past_case) = 0;
+	virtual int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	                       Basic_block *case_body, Basic_block *end,
+	                       std::map<std::string, Basic_block *> &labels) = 0;
+	// Generate code.
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+	bool falls_through() const override {
+		return false;
+	}
+};
+
+/*
+ *  Conversation CASE ATTEND statement with a list of strings:
+ */
+class Uc_converse_strings_case_attend_statement : public Uc_converse_case_attend_statement {
+	std::vector<int> string_offset;     // Offset of string to compare.
+public:
+	Uc_converse_strings_case_attend_statement(std::vector<int> soff, std::string target, bool rem)
+		: Uc_converse_case_attend_statement(std::move(target), rem), string_offset(std::move(soff))
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+};
+
+/*
+ *  Conversation CASE ATTEND statement with a variable:
+ */
+class Uc_converse_variable_case_attend_statement : public Uc_converse_case_attend_statement {
+	Uc_expression *variable;            // Alternative to pushing string_offset
+public:
+	Uc_converse_variable_case_attend_statement(
+			Uc_expression *v, std::string target, bool rem)
+			: Uc_converse_case_attend_statement(std::move(target), rem), variable(v)
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
+};
+
+/*
+ *  Conversation DEFAULT ATTEND statement:
+ */
+class Uc_converse_default_case_attend_statement : public Uc_converse_case_attend_statement {
+	int value;
+public:
+	Uc_converse_default_case_attend_statement(std::string target, int v)
+			: Uc_converse_case_attend_statement(std::move(target), false),
+			  value(v)
+	{  }
+	int gen_check(Basic_block *curr, Basic_block *case_body,
+	              Basic_block *past_case) override;
+	int gen_remove(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	               Basic_block *case_body, Basic_block *end,
+	               std::map<std::string, Basic_block *> &labels) override;
 };
 
 /*
@@ -332,12 +568,29 @@ public:
 class Uc_converse_statement : public Uc_statement {
 	static int nest;        // Keeps track of nesting.
 	Uc_expression *answers;     // Answers to add.
+	Uc_block_statement *preamble;    // Statements before the first case.
+	Uc_statement *nobreak;  // What to execute after normal finish.
 	std::vector<Uc_statement *> cases;      // What to execute.
 	bool nestconv;          // Whether or not to force push/pop.
 public:
-	Uc_converse_statement(Uc_expression *a,
-	                      std::vector<Uc_statement *> *cs, bool n);
+	Uc_converse_statement(Uc_expression *a, Uc_block_statement *p,
+	                      std::vector<Uc_statement *> *cs, bool n,
+	                      Uc_statement *nb);
 	~Uc_converse_statement() override;
+	// Generate code.
+	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
+	         Basic_block *&curr, Basic_block *end,
+	         std::map<std::string, Basic_block *> &labels,
+	         Basic_block *start = nullptr, Basic_block *exit = nullptr) override;
+};
+
+/*
+ *  A CONVERSE ATTEND statement.
+ */
+class Uc_converse_attend_statement : public Uc_statement {
+	std::string label;
+public:
+	Uc_converse_attend_statement(std::string target);
 	// Generate code.
 	void gen(Uc_function *fun, std::vector<Basic_block *> &blocks,
 	         Basic_block *&curr, Basic_block *end,

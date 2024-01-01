@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2013 The Exult Team
+Copyright (C) 2000-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -78,9 +78,8 @@ Gump::Gump(
 	container(cont), x(initx), y(inity),
 	object_area(from->object_area), handles_kbd(false) {
 	// Clone widgets.
-	for (auto it = from->elems.begin();
-	        it != from->elems.end(); ++it)
-		add_elem((*it)->clone(this));
+	for (auto *elem : from->elems)
+		add_elem(elem->clone(this));
 }
 
 /*
@@ -88,8 +87,8 @@ Gump::Gump(
  */
 
 Gump::~Gump() {
-	for (auto it = elems.begin(); it != elems.end(); ++it)
-		delete *it;
+	for (auto *elem : elems)
+		delete elem;
 	if (container) // Probabbly dont need to check.. but would crash the game if it was NULL.
 		container->setGumpXY(x, y);
 }
@@ -108,7 +107,7 @@ void Gump::set_pos() {
  */
 
 void Gump::set_object_area(
-    Rectangle const &area,
+    TileRect const &area,
     int checkx,
     int checky
 ) {
@@ -122,13 +121,13 @@ void Gump::set_object_area(
  *  Get screen rectangle for one of our objects.
  */
 
-Rectangle Gump::get_shape_rect(
+TileRect Gump::get_shape_rect(
     const Game_object *obj
 ) const {
 	const Shape_frame *s = obj->get_shape();
 	if (!s)
-		return Rectangle(0, 0, 0, 0);
-	return Rectangle(x + object_area.x + obj->get_tx() - s->get_xleft(),
+		return TileRect(0, 0, 0, 0);
+	return TileRect(x + object_area.x + obj->get_tx() - s->get_xleft(),
 	                 y + object_area.y + obj->get_ty() - s->get_yabove(),
 	                 s->get_width(), s->get_height());
 }
@@ -166,7 +165,7 @@ Game_object *Gump::find_object(
 	int oy;
 
 	while ((obj = next.get_next()) != nullptr) {
-		Rectangle box = get_shape_rect(obj);
+		const TileRect box = get_shape_rect(obj);
 		if (box.has_point(mx, my)) {
 			s = obj->get_shape();
 			get_shape_location(obj, ox, oy);
@@ -182,15 +181,15 @@ Game_object *Gump::find_object(
  *  Get the entire screen rectangle covered by this gump and its contents.
  */
 
-Rectangle Gump::get_dirty(
+TileRect Gump::get_dirty(
 ) {
-	Rectangle rect = get_rect();
+	TileRect rect = get_rect();
 	if (!container)
 		return rect;
 	Object_iterator next(container->get_objects());
 	Game_object *obj;
 	while ((obj = next.get_next()) != nullptr) {
-		Rectangle orect = get_shape_rect(obj);
+		const TileRect orect = get_shape_rect(obj);
 		rect = rect.add(orect);
 	}
 	return rect;
@@ -213,10 +212,9 @@ Game_object *Gump::get_owner() {
 Gump_button *Gump::on_button(
     int mx, int my          // Point in window.
 ) {
-	for (auto it = elems.begin(); it != elems.end(); ++it) {
-		Gump_widget *w = *it;
+	for (auto *w : elems) {
 		if (w->on_button(mx, my))
-			return dynamic_cast<Gump_button *>(w);
+			return w->as_button();
 	}
 	return nullptr;
 }
@@ -285,7 +283,7 @@ void Gump::remove(
 	container->remove(obj);
 
 	// Paint Objects
-	Rectangle box = object_area;    // Paint objects inside.
+	TileRect box = object_area;    // Paint objects inside.
 	box.shift(x, y);        // Set box to screen location.
 
 
@@ -299,8 +297,8 @@ void Gump::remove(
 
 void Gump::paint_elems(
 ) {
-	for (auto it = elems.begin(); it != elems.end(); ++it)
-		(*it)->paint();
+	for (auto *elem : elems)
+		elem->paint();
 }
 
 void check_elem_positions(Object_list &objects)
@@ -311,8 +309,8 @@ void check_elem_positions(Object_list &objects)
 	Object_iterator next(objects);
 	// See if all have the same position, indicating from a new game.
 	while ((obj = next.get_next()) != nullptr) {
-		int tx = obj->get_tx();
-		int ty = obj->get_ty();
+		const int tx = obj->get_tx();
+		const int ty = obj->get_ty();
 	    if (prevx == -1) {
 		    prevx = tx;
 			prevy = ty;
@@ -344,12 +342,12 @@ void Gump::paint(
 	Object_list &objects = container->get_objects();
 	if (objects.is_empty())
 		return;         // Empty.
-	Rectangle box = object_area;    // Paint objects inside.
+	TileRect box = object_area;    // Paint objects inside.
 	box.shift(x, y);        // Set box to screen location.
 	int cury = 0;
 	int curx = 0;
-	int endy = box.h;
-	int endx = box.w;
+	const int endy = box.h;
+	const int endx = box.w;
 	int loop = 0;           // # of times covering container.
 	check_elem_positions(objects);	// Set to place if new game.
 	Game_object *obj;
@@ -358,9 +356,9 @@ void Gump::paint(
 		Shape_frame *shape = obj->get_shape();
 		if (!shape)
 			continue;
-		int objx = obj->get_tx() - shape->get_xleft() +
+		const int objx = obj->get_tx() - shape->get_xleft() +
 		           1 + object_area.x;
-		int objy = obj->get_ty() - shape->get_yabove() +
+		const int objy = obj->get_ty() - shape->get_yabove() +
 		           1 + object_area.y;
 		// Does obj. appear to be placed?
 		if (!object_area.has_point(objx, objy) ||
@@ -385,13 +383,11 @@ void Gump::paint(
 			}
 		}
 		obj->paint_shape(box.x + obj->get_tx(), box.y + obj->get_ty());
-		obj = obj->get_next();
 	}
 	// Outline selections in this gump.
 	const Game_object_shared_vector &sel = cheat.get_selected();
-	for (auto it = sel.begin();
-	        it != sel.end(); ++it) {
-		Game_object *obj = (*it).get();
+	for (const auto& it : sel) {
+		Game_object *obj = it.get();
 		if (container == obj->get_owner()) {
 			int x;
 			int y;
@@ -423,13 +419,13 @@ bool Gump::has_point(int sx, int sy) const {
  *  Get screen area used by a gump.
  */
 
-Rectangle Gump::get_rect() const {
+TileRect Gump::get_rect() const {
 	Shape_frame *s = get_shape();
 
-	if (!s) return Rectangle(0, 0, 0, 0);
+	if (!s) return TileRect(0, 0, 0, 0);
 
-	return Rectangle(x - s->get_xleft(),    y - s->get_yabove(),
-	                 s->get_width(), s->get_height());
+	return TileRect(x - s->get_xleft(),    y - s->get_yabove(),
+	                s->get_width(), s->get_height());
 }
 
 
@@ -441,28 +437,28 @@ void Container_gump::initialize(
     int shnum
 ) {
 	if (shnum == game->get_shape("gumps/box")) {
-		set_object_area(Rectangle(46, 28, 74, 32), 8, 56);
+		set_object_area(TileRect(46, 28, 74, 32), 8, 56);
 	} else if (shnum == game->get_shape("gumps/crate")) {
-		set_object_area(Rectangle(50, 20, 80, 24), 8, 64);
+		set_object_area(TileRect(50, 20, 80, 24), 8, 64);
 	} else if (shnum == game->get_shape("gumps/barrel")) {
-		set_object_area(Rectangle(32, 32, 40, 40), 12, 124);
+		set_object_area(TileRect(32, 32, 40, 40), 12, 124);
 	} else if (shnum == game->get_shape("gumps/bag")) {
-		set_object_area(Rectangle(48, 20, 66, 44), 8, 66);
+		set_object_area(TileRect(48, 20, 66, 44), 8, 66);
 	} else if (shnum == game->get_shape("gumps/backpack")) {
-		set_object_area(Rectangle(36, 36, 85, 40), 8, 62);
+		set_object_area(TileRect(36, 36, 85, 40), 8, 62);
 	} else if (shnum == game->get_shape("gumps/basket")) {
-		set_object_area(Rectangle(42, 32, 70, 26), 8, 56);
+		set_object_area(TileRect(42, 32, 70, 26), 8, 56);
 	} else if (shnum == game->get_shape("gumps/chest")) {
-		set_object_area(Rectangle(40, 18, 60, 37), 8, 46);
+		set_object_area(TileRect(40, 18, 60, 37), 8, 46);
 	} else if (shnum == game->get_shape("gumps/shipshold")) {
-		set_object_area(Rectangle(38, 10, 82, 80), 8, 92);
+		set_object_area(TileRect(38, 10, 82, 80), 8, 92);
 	} else if (shnum == game->get_shape("gumps/drawer")) {
-		set_object_area(Rectangle(36, 12, 70, 26), 8, 46);
+		set_object_area(TileRect(36, 12, 70, 26), 8, 46);
 	} else if (shnum == game->get_shape("gumps/tree")) {
-		set_object_area(Rectangle(62, 22, 36, 44), 9, 100);
+		set_object_area(TileRect(62, 22, 36, 44), 9, 100);
 	} else if (shnum == game->get_shape("gumps/body")) {
-		set_object_area(Rectangle(36, 46, 84, 40), 8, 70);
+		set_object_area(TileRect(36, 46, 84, 40), 8, 70);
 	} else
-		set_object_area(Rectangle(52, 22, 60, 40), 8, 64);
+		set_object_area(TileRect(52, 22, 60, 40), 8, 64);
 }
 

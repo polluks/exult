@@ -38,17 +38,27 @@ content/islefaq/patch/shapes.vga
 content/islefaq/patch/shapes_vga.h
 content/islefaq/patch/usecode
 content/si/usecode
+content/sifixes/data/faces.vga
+content/sifixes/data/faces_vga.h
 content/sifixes/data/gumps.vga
 content/sifixes/data/gumps_vga.h
 content/sifixes/data/mainshp.flx
 content/sifixes/data/mainshp_flx.h
 content/sifixes/data/shapes.vga
 content/sifixes/data/shapes_vga.h
+content/sifixes/data/paperdol.vga
+content/sifixes/data/paperdol_vga.h
+content/sifixes/data/sprites.vga
+content/sifixes/data/sprites_vga.h
 content/sifixes/data/usecode
 data/bg/bg_mr_faces.vga
 data/bg/bg_mr_faces_vga.h
 data/bg/bg_paperdol.vga
 data/bg/bg_paperdol_vga.h
+data/bg/introsfx_mt32.flx
+data/bg/introsfx_mt32_flx.h
+data/bg/introsfx_sb.flx
+data/bg/introsfx_sb_flx.h
 data/bg/sfx/
 data/exult.flx
 data/exult_bg.flx
@@ -58,7 +68,7 @@ data/exult_iphone.flx
 data/exult_iphone_flx.h
 data/exult_si.flx
 data/exult_si_flx.h
-exult
+/exult
 files/rwregress
 mapedit/exult_studio
 mapedit/u7shp
@@ -155,6 +165,7 @@ TAGS
 *.i*86
 *.x86_64
 *.hex
+*.arm64
 
 # Debug files
 *.dSYM/
@@ -262,9 +273,9 @@ Makecache
 
 # vscode
 .vscode
-.clangd/*
-.vs/*
-msvc/.vs/*
+.vs
+.cache
+msvc/.vs
 
 # Win32 build
 data/u7bgintrinsics.data
@@ -272,3 +283,14 @@ data/u7sibetaintrinsics.data
 data/u7siintrinsics.data
 exult_studio.exp
 msys2.patch
+
+#iOS
+ios/data
+ios/SDL2
+ios/libmt32emu
+ios/libogg
+ios/libvorbis
+project.xcworkspace
+
+*.ilk
+*.pdb

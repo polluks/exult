@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -100,10 +100,14 @@ int main(int argc, char **argv) {
 	// done because for some reason it started crashing upon piping or redirection to file... wierd.
 	// yes, it's a hack to fix an eldritch bug I could't find... it seems appropriate
 	// FIXME: Problem nolonger exists. Probably should put some 'nice' code in it's place.
-	std::ofstream outputstream;
 	std::streambuf *coutbuf = nullptr;
 	if (!uc.output_redirect().empty()) {
-		U7open(outputstream, uc.output_redirect().c_str(), false);
+		auto pOutputstream = U7open_out(uc.output_redirect().c_str(), false);
+		if (!pOutputstream) {
+			cout << "error. failed to open " << uc.output_redirect() << " for writing. exiting." << endl;
+			exit(1);
+		}
+		auto& outputstream = *pOutputstream;
 		if (outputstream.fail()) {
 			cout << "error. failed to open " << uc.output_redirect() << " for writing. exiting." << endl;
 			exit(1);
@@ -242,7 +246,7 @@ void open_usecode_file(UCData &uc, const Configuration &config) {
 			cout << "Configuring for " << game << "." << endl;
 	} else if (uc.options.game_u8()) {
 		if (uc.options.verbose) cout << "Configuring for u8." << endl;
-		path      = u8path;
+		path      = std::move(u8path);
 		ucspecial = "usecode.u8";
 		mucc_l  = mucc_u8l;
 		mucc_c  = mucc_u8c;

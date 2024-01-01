@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -22,6 +22,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
+#include "ucsym.h"
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -52,11 +53,10 @@ Uc_scope Uc_function::globals(nullptr);   // Stores intrinic symbols.
 vector<Uc_intrinsic_symbol *> Uc_function::intrinsics;
 int Uc_function::num_global_statics = 0;
 int Uc_function::add_answer = -1, Uc_function::remove_answer = -1,
-                 Uc_function::push_answers = -1, Uc_function::pop_answers = -1,
-                              Uc_function::show_face = -1, Uc_function::remove_face = -1,
-                                           Uc_function::get_item_shape = -1, Uc_function::get_usecode_fun = -1;
-Uc_function::Intrinsic_type Uc_function::intrinsic_type =
-    Uc_function::unset;
+    Uc_function::push_answers = -1, Uc_function::pop_answers = -1,
+    Uc_function::show_face = -1, Uc_function::remove_face = -1,
+    Uc_function::get_item_shape = -1, Uc_function::get_usecode_fun = -1;
+Uc_function::Intrinsic_type Uc_function::intrinsic_type = Uc_function::unset;
 
 /*
  *  Create function, and add to global symbol table.
@@ -89,6 +89,36 @@ Uc_function::~Uc_function(
 	labels.clear();
 }
 
+Uc_symbol *Uc_function::search(const char *nm) { // Search current scope.
+	Uc_symbol *sym = cur_scope->search(nm);
+	if (sym != nullptr) {
+		auto *var = dynamic_cast<Uc_var_symbol*>(sym);
+		if (var == nullptr) {
+			return sym;
+		}
+		if (var->get_offset() < 0) {
+			var->set_offset(num_parms + num_locals++);
+		}
+	}
+	return sym;
+}
+
+Uc_symbol *Uc_function::search_up(const char *nm) {
+	Uc_symbol *sym = cur_scope->search_up(nm);
+	if (sym != nullptr) {
+		auto *var = dynamic_cast<Uc_var_symbol*>(sym);
+		if (var == nullptr) {
+			return sym;
+		}
+		if (var->get_offset() < 0) {
+			var->set_offset(num_parms + num_locals++);
+		}
+		return sym;
+	}
+	setup_intrinsics();
+	return globals.search(nm);
+}
+
 /*
  *  Add a new variable to the current scope.
  *
@@ -96,12 +126,16 @@ Uc_function::~Uc_function(
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
-    char *nm
+    const char *nm,
+    bool bind_offset
 ) {
 	if (cur_scope->is_dup(nm))
 		return nullptr;
 	// Create & assign slot.
-	auto *var = new Uc_var_symbol(nm, num_parms + num_locals++);
+	auto *var = new Uc_var_symbol(nm, -1);
+	if (bind_offset) {
+		var->set_offset(num_parms + num_locals++);
+	}
 	cur_scope->add(var);
 	return var;
 }
@@ -113,13 +147,17 @@ Uc_var_symbol *Uc_function::add_symbol(
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
-    char *nm,
-    Uc_class *c
+    const char *nm,
+    Uc_class *c,
+    bool bind_offset
 ) {
 	if (cur_scope->is_dup(nm))
 		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = new Uc_class_inst_symbol(nm, c, num_parms + num_locals++);
+	Uc_var_symbol *var = new Uc_class_inst_symbol(nm, c, -1);
+	if (bind_offset) {
+		var->set_offset(num_parms + num_locals++);
+	}
 	cur_scope->add(var);
 	return var;
 }
@@ -131,13 +169,17 @@ Uc_var_symbol *Uc_function::add_symbol(
  */
 
 Uc_var_symbol *Uc_function::add_symbol(
-    char *nm,
-    Uc_struct_symbol *s
+    const char *nm,
+    Uc_struct_symbol *s,
+    bool bind_offset
 ) {
 	if (cur_scope->is_dup(nm))
 		return nullptr;
 	// Create & assign slot.
-	Uc_var_symbol *var = new Uc_struct_var_symbol(nm, s, num_parms + num_locals++);
+	Uc_var_symbol *var = new Uc_struct_var_symbol(nm, s, -1);
+	if (bind_offset) {
+		var->set_offset(num_parms + num_locals++);
+	}
 	cur_scope->add(var);
 	return var;
 }
@@ -377,9 +419,9 @@ int Uc_function::add_string(
 	// Search for an existing string.
 	auto exist = text_map.find(text);
 	if (exist != text_map.end())
-		return (*exist).second;
-	int offset = text_data_size;    // This is where it will go.
-	int textlen = strlen(text) + 1; // Got to include ending null.
+		return exist->second;
+	const int offset = text_data_size;    // This is where it will go.
+	const int textlen = strlen(text) + 1; // Got to include ending null.
 	char *new_text_data = new char[text_data_size + textlen];
 	if (text_data_size)     // Copy over old.
 		memcpy(new_text_data, text_data, text_data_size);
@@ -403,13 +445,14 @@ int Uc_function::find_string_prefix(
     Uc_location &loc,       // For printing errors.
     const char *text
 ) {
-	int len = strlen(text);
+	const int len = strlen(text);
 	// Find 1st entry >= text.
 	auto exist = text_map.lower_bound(text);
 	if (exist == text_map.end() ||
-	        strncmp(text, (*exist).first.c_str(), len) != 0) {
-		char *buf = new char[len + 100];
-		sprintf(buf, "Prefix '%s' matches no string in this function",
+	        strncmp(text, exist->first.c_str(), len) != 0) {
+		const size_t buflen = len + 100;
+		char *buf = new char[buflen];
+		snprintf(buf, buflen, "Prefix '%s' matches no string in this function",
 		        text);
 		loc.error(buf);
 		delete [] buf;
@@ -418,15 +461,15 @@ int Uc_function::find_string_prefix(
 	auto next = exist;
 	++next;
 	if (next != text_map.end() &&
-	        strncmp(text, (*next).first.c_str(), len) == 0) {
-		char *buf = new char[len + 100];
-		sprintf(buf, "Prefix '%s' matches more than one string", text);
+	        strncmp(text, next->first.c_str(), len) == 0) {
+		const size_t buflen = len + 100;
+		char *buf = new char[buflen];
+		snprintf(buf, buflen, "Prefix '%s' matches more than one string", text);
 		loc.error(buf);
 		delete [] buf;
 	}
-	return (*exist).second;     // Return offset.
+	return exist->second;     // Return offset.
 }
-
 
 /*
  *  Lookup/add a link to an external function.
@@ -440,29 +483,33 @@ int Uc_function::link(
 	for (auto it = links.begin(); it != links.end(); ++it)
 		if (*it == fun)     // Found it?  Return offset.
 			return it - links.begin();
-	int offset = links.size();  // Going to add it.
+	const int offset = links.size();  // Going to add it.
 	links.push_back(fun);
 	return offset;
 }
 
 static int Remove_dead_blocks(
-    vector<Basic_block *> &blocks
+    vector<Basic_block *> &blocks,
+	Basic_block *endblock
 ) {
-	int niter = 0;
+	int total_removed = 0;
 	while (true) {
-		niter++;
-		size_t i = 0;
-		int nremoved = 0;
-		while (i + 1 < blocks.size()) {
-			Basic_block *block = blocks[i];
+		size_t i        = 0;
+		int    nremoved = 0;
+		while (i < blocks.size()) {
+			Basic_block* block = blocks[i];
+			if (block->get_taken() == nullptr) {
+				block->set_targets(UC_INVALID, endblock);
+			}
 			bool remove = false;
-			if (!block->is_reachable()) {
+			if (!block->is_reachable() || block->no_parents()) {
 				// Remove unreachable block.
 				block->unlink_descendants();
 				block->unlink_predecessors();
 				remove = true;
-			} else if (block->is_empty_block() && block->is_forced_target()) {
-				// Link predecessors directly to decendants.
+			} else if (block->is_empty_block() && block->is_forced_target() &&
+				       !block->is_end_block()) {
+				// Link predecessors directly to descendants.
 				// May link a block to the initial block, or
 				// may link the initial and ending blocks.
 				block->link_through_block();
@@ -477,19 +524,20 @@ static int Remove_dead_blocks(
 			}
 			i++;
 		}
-		if (!nremoved)
+		total_removed += nremoved;
+		if (nremoved == 0) {
 			break;
+		}
 	}
-	return niter;
+	return total_removed;
 }
 
 static int Optimize_jumps(
-    vector<Basic_block *> &blocks,
+    vector<Basic_block*>& blocks,
     bool returns
 ) {
-	int niter = 0;
+	int total_removed = 0;
 	while (true) {
-		niter++;
 		size_t i = 0;
 		int nremoved = 0;
 		while (i + 1 < blocks.size()) {
@@ -498,12 +546,20 @@ static int Optimize_jumps(
 			bool remove = false;
 			if (block->is_jump_block()) {
 				// Unconditional jump block.
+				if (aux == blocks[i + 1]) {
+					// Jumping to next block.
+					// Optimize the jump away.
+					++nremoved;
+					block->clear_jump();
+					continue;
+				}
 				if (aux->is_simple_jump_block()) {
 					// Double-jump. Merge the jumps in a single one.
 					block->set_taken(aux->get_taken());
 					++nremoved;
 					continue;
-				} else if (aux->is_end_block()) {
+				}
+				if (aux->is_end_block()) {
 					// Jump to end-block.
 					if (aux->is_empty_block()) {
 						// No return opcode in end block; add one.
@@ -528,7 +584,7 @@ static int Optimize_jumps(
 			} else if (aux == blocks[i + 1]) {
 				if (block->is_fallthrough_block() || block->is_jump_block()) {
 					// Fall-through block followed by block which descends
-					// from current block or jump immediatelly followed
+					// from current block or jump immediately followed
 					// by its target.
 					if (aux->has_single_predecessor()) {
 						// Child block has single ancestor.
@@ -575,17 +631,28 @@ static int Optimize_jumps(
 						opcode = UC_INVALID;
 						break;
 					}
-					if (opcode == UC_INVALID)
+					if (opcode == UC_INVALID) {
 						WriteOp(block, UC_NOT);
-					else {
+					} else {
 						PopOpcode(block);
-						if (opcode != UC_NOT)
+						if (opcode != UC_NOT) {
 							WriteOp(block, opcode);
+						}
 					}
 					// Set destinations.
-					block->set_taken(block->get_ntaken());
+					Basic_block *ntaken = block->get_ntaken();
 					block->set_ntaken(aux->get_taken());
+					block->set_taken(ntaken);
 					remove = true;
+				} else if (block->is_conditionaljump_block()
+					       || block->is_converse_case_block()
+						   || block->is_array_loop_block()) {
+					Basic_block *naux = block->get_ntaken();
+					if (naux->is_simple_jump_block()) {
+						block->set_ntaken(naux->get_taken());
+						++nremoved;
+						continue;
+					}
 				}
 			} else if (block->is_end_block() && (aux = blocks[i + 1])->is_end_block()
 			           && block->ends_in_return() && aux->is_simple_return_block()
@@ -606,10 +673,12 @@ static int Optimize_jumps(
 			}
 			i++;
 		}
-		if (!nremoved)
+		total_removed += nremoved;
+		if (nremoved == 0) {
 			break;
+		}
 	}
-	return niter;
+	return total_removed;
 }
 
 static inline int Compute_locations(
@@ -620,9 +689,9 @@ static inline int Compute_locations(
 	locs.push_back(0);  // First block is at zero.
 	// Get locations.
 	Basic_block *back = blocks.back();
-	for (auto it = blocks.begin();
-	        *it != back; ++it)
+	for (auto it = blocks.begin(); *it != back; ++it) {
 		locs.push_back(locs.back() + (*it)->get_block_size());
+	}
 	return locs.back() + back->get_block_size();
 }
 
@@ -648,9 +717,7 @@ static int Set_32bit_jump_flags(
 		vector<int> locs;
 		Compute_locations(blocks, locs);
 		// Determine base distances and which are 32-bit.
-		for (auto it = blocks.begin();
-		        it != blocks.end(); ++it) {
-			Basic_block *block = *it;
+		for (auto *block : blocks) {
 			// If the jump is already 32-bit, or if there is
 			// no jump (just a fall-through), then there is
 			// nothing to do.
@@ -675,10 +742,9 @@ void Uc_function::gen(
     std::ostream &out
 ) {
 	map<string, Basic_block *> label_blocks;
-	for (auto it = labels.begin();
-	        it != labels.end(); ++it)
+	for (const auto& label : labels)
 		// Fill up label <==> basic block map.
-		label_blocks.insert(pair<string, Basic_block *>(*it, new Basic_block()));
+		label_blocks.insert(pair<string, Basic_block *>(label, new Basic_block()));
 	auto *initial = new Basic_block(-1);
 	auto *endblock = new Basic_block(-1);
 	vector<Basic_block *> fun_blocks;
@@ -694,30 +760,40 @@ void Uc_function::gen(
 		fun_blocks.pop_back();
 		delete blk;
 	}
+	for (auto iter = fun_blocks.begin(); iter != fun_blocks.end(); ) {
+		Basic_block *block = *iter;
+		if (block->is_empty_block() && block->get_taken() != nullptr) {
+			block->link_through_block();
+			iter = fun_blocks.erase(iter);
+			delete block;
+			continue;
+		}
+		++iter;
+	}
 	// Mark all blocks reachable from initial block.
 	initial->mark_reachable();
-	if (!fun_blocks.empty() && !fun_blocks.back()->is_end_block())
-		fun_blocks.back()->set_targets(UC_INVALID, endblock);
 	// Labels map is no longer needed.
-	for (auto it = label_blocks.begin();
-	        it != label_blocks.end(); ++it) {
-		Basic_block *label = it->second;
+	for (auto &elem : label_blocks) {
+		Basic_block *label = elem.second;
 		if (!label->is_reachable()) {
 			// Label can't be reached from the initial block.
 			// Remove it from map and unlink references to it.
 			label->unlink_descendants();
 			label->unlink_predecessors();
-			it->second = nullptr;
-			delete label;
+			elem.second = nullptr;
+			// Note: unused labels get removed and deleted in Remove_dead_blocks
+			// so we should not delete them here.
 		}
 	}
 	label_blocks.clear();
 	// First round of optimizations.
-	Remove_dead_blocks(fun_blocks);
-	// Second round of optimizations.
-	Optimize_jumps(fun_blocks, proto->has_ret());
-	// Third round of optimizations.
-	Remove_dead_blocks(fun_blocks);
+	Remove_dead_blocks(fun_blocks, endblock);
+	int count1 = 0;
+	int count2 = 0;
+	do {
+		count1 = Optimize_jumps(fun_blocks, proto->has_ret());
+		count2 = Remove_dead_blocks(fun_blocks, endblock);
+	} while (count1 > 0 || count2 > 0);
 	// Set block indices.
 	for (size_t i = 0; i < fun_blocks.size(); i++) {
 		Basic_block *block = fun_blocks[i];
@@ -730,21 +806,20 @@ void Uc_function::gen(
 		Set_32bit_jump_flags(fun_blocks);
 		vector<int> locs;
 		// Get locations.
-		int size = Compute_locations(fun_blocks, locs) + 1;
+		const int size = Compute_locations(fun_blocks, locs) + 1;
 
 		code.reserve(size);
 		// Output code.
-		for (auto it = fun_blocks.begin();
-		        it != fun_blocks.end(); ++it) {
-			Basic_block *block = *it;
+		for (auto *block : fun_blocks) {
 			block->write(code);
 			if (block->does_not_jump())
 				continue;   // Not a jump.
-			int dist = Compute_jump_distance(block, locs);
-			if (is_sint_32bit(dist))
+			const int dist = Compute_jump_distance(block, locs);
+			if (is_sint_32bit(dist)) {
 				Write4(code, dist);
-			else
+			} else {
 				Write2(code, dist);
+			}
 		}
 	}
 
@@ -760,21 +835,20 @@ void Uc_function::gen(
 	}
 
 	// Free up the blocks.
-	for (auto it = fun_blocks.begin();
-	        it != fun_blocks.end(); ++it)
-		delete *it;
+	for (auto *fun_block : fun_blocks)
+		delete fun_block;
 	fun_blocks.clear();
 	delete initial;
 	delete endblock;
-	int codelen = code.size();  // Get its length.
-	int num_links = links.size();
+	const int codelen = code.size();  // Get its length.
+	const int num_links = links.size();
 	// Total: text_data_size + data +
 	//   #args + #locals + #links + links +
 	//   codelen.
 	int totallen =  2 + text_data_size + 2 + 2 + 2 + 2 * num_links + codelen;
 
 	// Special cases.
-	bool need_ext_header = (proto->get_usecode_num() == 0xffff) ||
+	const bool need_ext_header = (proto->get_usecode_num() == 0xffff) ||
 	                       (proto->get_usecode_num() == 0xfffe);
 
 	// Function # first.
@@ -802,8 +876,8 @@ void Uc_function::gen(
 	Write2(out, num_locals);
 	Write2(out, num_links);
 	// Write external links.
-	for (auto it = links.begin(); it != links.end(); ++it)
-		Write2(out, (*it)->get_usecode_num());
+	for (auto *link : links)
+		Write2(out, link->get_usecode_num());
 	char *ucstr = &code[0];     // Finally, the code itself.
 	out.write(ucstr, codelen);
 	out.flush();

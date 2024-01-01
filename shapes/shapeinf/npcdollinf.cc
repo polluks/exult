@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2008-2013 The Exult Team
+Copyright (C) 2008-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -34,7 +34,7 @@ bool Paperdoll_npc::read(
     Exult_Game game     // Loading BG file.
 ) {
 	ignore_unused_variable_warning(version, game);
-	int sexflag = ReadInt(in);
+	const int sexflag = ReadInt(in);
 	if (sexflag == -0xff) { // means delete entry.
 		set_invalid(true);
 		return true;

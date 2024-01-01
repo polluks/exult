@@ -9,6 +9,7 @@
 
 /*
 Copyright (C) 1998  Jeffrey S. Freedman
+Copyright (C) 2001-2022  The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -550,7 +551,7 @@ public:
 	}
 	void set_shape_flags(unsigned short flags) {
 		if (shape_flags != flags) {
-			int diff = (shape_flags ^ flags) * usecode_events_flag;
+			const int diff = (shape_flags ^ flags) * usecode_events_flag;
 			modified_flags |= diff;
 			shape_flags = flags;
 		}
@@ -771,7 +772,7 @@ public:
 		tfa[1] = (tfa[1]&~15) | static_cast<int>(c);
 	}
 	bool is_npc() const {
-		Shape_class c = get_shape_class();
+		const Shape_class c = get_shape_class();
 		return c == human || c == monster;
 	}
 	bool has_quantity() const {
@@ -781,7 +782,7 @@ public:
 		return get_shape_class() == quality_flags;
 	}
 	bool has_quality() const {
-		Shape_class c = get_shape_class();
+		const Shape_class c = get_shape_class();
 		return c == 2 || c == 6 || c == 7 || c == 11 || c == 12 || c == 13;
 		//      return qual[(int) c];
 	}

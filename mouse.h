@@ -1,7 +1,7 @@
 /*
  *  mouse.h - Mouse pointers.
  *
- *  Copyright (C) 2000-2013  The Exult Team
+ *  Copyright (C) 2000-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,8 +36,8 @@ protected:
 	Game_window *gwin;      // Where to draw.
 	Image_window8 *iwin;        // From gwin.
 	std::unique_ptr<Image_buffer> backup;       // Stores image below mouse shape.
-	Rectangle box;          // Area backed up.
-	Rectangle dirty;        // Dirty area from mouse move.
+	TileRect box;           // Area backed up.
+	TileRect dirty;         // Dirty area from mouse move.
 	int mousex, mousey;     // Last place where mouse was.
 	int cur_framenum;       // Frame # of current shape.
 	Shape_frame *cur;       // Current shape.
@@ -154,6 +154,9 @@ public:
 
 	// Sets hand or speed cursors
 	void set_speed_cursor();
+	
+	// only use touch input?
+	static bool use_touch_input;
 };
 
 #endif

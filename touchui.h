@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2015-2020 Litchie
+ * Copyright (C) 2015  Chaoji Li
+ * Copyright (C) 2015-2022  The Exult Team
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -20,7 +21,16 @@
 #ifndef TOUCHUI_H
 #define TOUCHUI_H
 
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
 #include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
+
 #include "common_types.h"
 
 class TouchUI {

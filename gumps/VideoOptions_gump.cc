@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2001-2013  The Exult Team
+ *  Copyright (C) 2001-2022  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,7 +26,15 @@
 #include <iterator>
 #include <set>
 
-#include "SDL_events.h"
+#ifdef __GNUC__
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Wold-style-cast"
+#	pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif    // __GNUC__
+#include <SDL.h>
+#ifdef __GNUC__
+#	pragma GCC diagnostic pop
+#endif    // __GNUC__
 
 #include "Configuration.h"
 #include "Gump_button.h"
@@ -47,8 +55,10 @@ using std::string;
 VideoOptions_gump *VideoOptions_gump::video_options_gump = nullptr;
 
 static const int rowy[] = { 5, 17, 29, 41, 53, 65, 77, 89, 101, 113, 130, 139, 156 };
-static const int colx[] = { 35, 50, 115, 127, 130, 148 };
+static const int colx[] = { 35, 50, 119, 127, 131, 153 };
 static const char *applytext = "APPLY";
+static const char *canceltext = "CANCEL";
+static const char *helptext = "HELP";
 
 static inline uint32 make_resolution(uint16 width, uint16 height) {
 	return (uint32(width) << 16) | uint32(height);
@@ -59,12 +69,12 @@ static inline uint16 get_width(uint32 resolution) {
 }
 
 static inline uint16 get_height(uint32 resolution) {
-	return (resolution & 0xffffu);
+	return resolution & 0xffffu;
 }
 
 static string resolutionstring(int w, int h) {
 	char buf[100];
-	sprintf(buf, "%ix%i", w, h);
+	snprintf(buf, sizeof(buf), "%ix%i", w, h);
 	return buf;
 }
 
@@ -88,6 +98,12 @@ void VideoOptions_gump::close() {
 
 void VideoOptions_gump::cancel() {
 	done = true;
+}
+
+void VideoOptions_gump::help() {
+#if SDL_VERSION_ATLEAST(2,0,14)
+	SDL_OpenURL("http://exult.info/docs.php#video_gump");
+#endif
 }
 
 void VideoOptions_gump::rebuild_buttons() {
@@ -162,7 +178,7 @@ void VideoOptions_gump::rebuild_dynamic_buttons() {
 	buttons[id_has_ac].reset();
 
 	const auto& resolutionsref = fullscreen ? resolutions : win_resolutions;
-	uint32 current_res = make_resolution(gwin->get_win()->get_display_width(), gwin->get_win()->get_display_height());
+	const uint32 current_res = make_resolution(gwin->get_win()->get_display_width(), gwin->get_win()->get_display_height());
 
 	std::vector<std::string> restext;
 	restext.reserve(resolutionsref.size());
@@ -191,9 +207,7 @@ void VideoOptions_gump::rebuild_dynamic_buttons() {
 		// the text arrays is freed by the destructor of the button
 		std::vector<std::string> scalingtext;
 		for (int i = 0; i < num_scales; i++) {
-			char buf[10];
-			snprintf(buf, sizeof(buf), "x%d", i + 1);
-			scalingtext.emplace_back(buf);
+			scalingtext.push_back('x' + std::to_string(i + 1));
 		}
 		buttons[id_scaling] = std::make_unique<VideoTextToggle>(this, &VideoOptions_gump::toggle_scaling,
 		        std::move(scalingtext), scaling, colx[2], rowy[4], 74);
@@ -207,7 +221,7 @@ void VideoOptions_gump::rebuild_dynamic_buttons() {
 	if (fill_mode == Image_window::Fit || fill_mode == Image_window::AspectCorrectFit || fill_mode == Image_window::Centre || fill_mode == Image_window::AspectCorrectCentre) {
 		std::vector<std::string> ac_text = {"Disabled", "Enabled"};
 		buttons[id_has_ac] = std::make_unique<VideoTextToggle>(this, &VideoOptions_gump::toggle_aspect_correction,
-		        std::move(ac_text), has_ac ? 1 : 0, colx[3], rowy[9], 62);
+		        std::move(ac_text), has_ac ? 1 : 0, colx[4], rowy[9], 62);
 	}
 }
 
@@ -237,15 +251,30 @@ void VideoOptions_gump::load_settings(bool Fullscreen) {
 			std::set<uint32> Resolutions{
 				make_resolution(320, 200),
 				make_resolution(320, 240),
+				make_resolution(400, 250),
 				make_resolution(400, 300),
+				make_resolution(480, 300),
+				make_resolution(480, 360),
+				make_resolution(512, 320),
 				make_resolution(512, 384),
 				make_resolution(640, 400),
 				make_resolution(640, 480),
+				make_resolution(800, 500),
 				make_resolution(800, 600),
 				make_resolution(960, 600),
 				make_resolution(960, 720),
+				make_resolution(1024, 640),
 				make_resolution(1024, 768),
-				make_resolution(1200, 900)
+				make_resolution(1200, 750),
+				make_resolution(1200, 900),
+				make_resolution(1280, 800),
+				make_resolution(1280, 960),
+				make_resolution(1440, 900),
+				make_resolution(1440, 1080),
+				make_resolution(1600, 1000),
+				make_resolution(1600, 1200),
+				make_resolution(1920, 1200),
+				make_resolution(1920, 1440)
 			};
 			auto it = std::find(Resolutions.cbegin(), Resolutions.cend(), resolution);
 			if (it == Resolutions.cend()) {
@@ -267,7 +296,7 @@ void VideoOptions_gump::load_settings(bool Fullscreen) {
 		game_resolutions.reserve(5);
 		game_resolutions.push_back(0);	// Auto
 		game_resolutions.push_back(make_resolution(320, 200));
-	#ifdef  __IPHONEOS__
+	#if defined(__IPHONEOS__) || defined(ANDROID)
 		game_resolutions.push_back(make_resolution(400, 250));
 		game_resolutions.push_back(make_resolution(480, 300));
 	#endif
@@ -292,12 +321,12 @@ VideoOptions_gump::VideoOptions_gump()
 		: Modal_gump(nullptr, EXULT_FLX_VIDEOOPTIONS_SHP, SF_EXULT_FLX),
 		  startup_fill_mode(static_cast<Image_window::FillMode>(0)) {
 	video_options_gump = this;
-	set_object_area(Rectangle(0, 0, 0, 0), 8, 170);
+	set_object_area(TileRect(0, 0, 0, 0), 8, 170);
 
 	const std::vector<std::string> enabledtext = {"Disabled", "Enabled"};
 
 	fullscreen = gwin->get_win()->is_fullscreen();
-#ifndef __IPHONEOS__
+#if !defined(__IPHONEOS__) && !defined(ANDROID)
 	buttons[id_fullscreen] = std::make_unique<VideoTextToggle>(this, &VideoOptions_gump::toggle_fullscreen,
 	        enabledtext, fullscreen, colx[2], rowy[0], 74);
 #endif
@@ -305,17 +334,25 @@ VideoOptions_gump::VideoOptions_gump()
 	buttons[id_high_dpi] = std::make_unique<VideoTextToggle>(this, &VideoOptions_gump::toggle_high_dpi,
 	        enabledtext, highdpi, colx[2], rowy[2], 74);
 	config->value("config/video/share_video_settings", share_settings, false);
-	
+
 	std::vector<std::string> yesNO = {"No", "Yes"};
-#ifndef __IPHONEOS__
+#if !defined(__IPHONEOS__) && !defined(ANDROID)
 	buttons[id_share_settings] = std::make_unique<VideoTextToggle>(this, &VideoOptions_gump::toggle_share_settings,
 	        std::move(yesNO), share_settings, colx[5], rowy[11], 40);
 #endif
 	o_share_settings = share_settings;
 
+	// Apply
 	buttons[id_apply] = std::make_unique<VideoOptions_button>(this, &VideoOptions_gump::save_settings,
-	        applytext, colx[4], rowy[12], 59);
-
+	        applytext, colx[0] - 2, rowy[12], 50);
+	// Cancel
+	buttons[id_cancel] = std::make_unique<VideoOptions_button>(this, &VideoOptions_gump::cancel,
+	        canceltext, colx[5] - 10, rowy[12], 50);
+#if SDL_VERSION_ATLEAST(2,0,14)
+	// Help
+	buttons[id_help] = std::make_unique<VideoOptions_button>(this, &VideoOptions_gump::help,
+	        helptext, colx[2] - 31, rowy[12], 50);
+#endif
 	load_settings(fullscreen);
 
 	rebuild_buttons();
@@ -389,7 +426,7 @@ void VideoOptions_gump::paint() {
 
 	Font *font = fontManager.get_font("SMALL_BLACK_FONT");
 	Image_window8 *iwin = gwin->get_win();
-#ifndef __IPHONEOS__
+#if !defined(__IPHONEOS__) && !defined(ANDROID)
 	font->paint_text(iwin->get_ib8(), "Full Screen:", x + colx[0], y + rowy[0] + 1);
 	if (fullscreen) font->paint_text(iwin->get_ib8(), "Display Mode:", x + colx[0], y + rowy[1] + 1);
 	else font->paint_text(iwin->get_ib8(), "Window Size:", x + colx[0], y + rowy[1] + 1);
@@ -403,9 +440,9 @@ void VideoOptions_gump::paint() {
 	font->paint_text(iwin->get_ib8(), "Fill Quality:", x + colx[0], y + rowy[7] + 1);
 	font->paint_text(iwin->get_ib8(), "Fill Mode:", x + colx[0], y + rowy[8] + 1);
 	if (buttons[id_has_ac] != nullptr) font->paint_text(iwin->get_ib8(), "AR Correction:", x + colx[0], y + rowy[9] + 1);
-#ifndef __IPHONEOS__
+#if !defined(__IPHONEOS__) && !defined(ANDROID)
 	font->paint_text(iwin->get_ib8(), "Same settings for window", x + colx[0], y + rowy[10] + 1);
-	font->paint_text(iwin->get_ib8(), "    and fullscreen:", x + colx[0], y + rowy[11] + 1);
+	font->paint_text(iwin->get_ib8(), "and fullscreen:", x + colx[0], y + rowy[11] + 1);
 #endif
 	gwin->set_painted();
 }

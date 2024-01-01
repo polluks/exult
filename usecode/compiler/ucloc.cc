@@ -5,7 +5,7 @@
  **/
 
 /*
-Copyright (C) 2000 The Exult Team
+Copyright (C) 2001-2022 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -41,6 +41,7 @@ std::vector<char *> Uc_location::source_names;
 char *Uc_location::cur_source = nullptr;
 int Uc_location::cur_line = 0;
 int Uc_location::num_errors = 0;
+bool Uc_location::strict_mode = false;
 
 /*
  *  Set current source and line #.
@@ -52,13 +53,13 @@ void Uc_location::set_cur(
 ) {
 	cur_line = l;
 	cur_source = nullptr;         // See if already here.
-	for (auto it = source_names.begin(); it != source_names.end(); ++it)
-		if (strcmp(s, *it) == 0) {
-			cur_source = *it;
+	for (auto *name : source_names)
+		if (strcmp(s, name) == 0) {
+			cur_source = name;
 			break;
 		}
 	if (!cur_source) {      // 1st time.
-		int len = strlen(s);
+		const int len = strlen(s);
 		cur_source = new char[len + 1];
 		strcpy(cur_source, s);
 		source_names.push_back(cur_source);

@@ -1,7 +1,6 @@
 ../exult_bg.flx
 BGmap.shp
 defaultkeys.txt
-mr_faces.shp
 u7menupal.pal
 bg_paperdol.vga
 bg_mr_faces.vga
@@ -13,3 +12,6 @@ avatar_data.txt
 blends.dat
 container.dat
 autonotes.txt
+intro_hand.shp
+introsfx_mt32.flx
+introsfx_sb.flx
