@@ -1,0 +1,142 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: ci-msvc
+
+on:
+  push:
+    paths:
+      - "**"
+      - "!android/**"
+      - "!docs/**"
+      - "!**Makefile**"
+      - "!ios/**"
+      - "!macosx/**"
+      - "!AUTHORS"
+      - "!ChangeLog"
+      - "!COPYING"
+      - "!FAQ"
+      - "!INSTALL"
+      - "!NEWS"
+      - "!**README**"
+      - "!**.ico"
+      - "!**.md"
+      - "!**.png"
+      - "!**.txt"
+      - "!.clang*"
+      - "!.gitignore"
+      - "!.gitattributes"
+      - "!.github/workflows/*"
+      - ".github/workflows/ci-msvc.yml"
+  pull_request:
+    paths:
+      - "**"
+      - "!android/**"
+      - "!docs/**"
+      - "!**Makefile**"
+      - "!ios/**"
+      - "!macosx/**"
+      - "!AUTHORS"
+      - "!ChangeLog"
+      - "!COPYING"
+      - "!FAQ"
+      - "!INSTALL"
+      - "!NEWS"
+      - "!**README**"
+      - "!**.ico"
+      - "!**.md"
+      - "!**.png"
+      - "!**.txt"
+      - "!.clang*"
+      - "!.gitignore"
+      - "!.gitattributes"
+      - "!.github/workflows/*"
+      - ".github/workflows/ci-msvc.yml"
+  
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: msvcstuff\vs2019
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+  #platform
+  BUILD_PLATFORM: x64
+
+  BUILD_PROJECTS: Exult
+
+permissions:
+  contents: read
+
+jobs:
+  ci-msvc:
+    runs-on: windows-2019
+    if: ${{ github.repository_owner == 'exult' || github.repository_owner == 'wench' }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore NuGet packages
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{env.BUILD_PLATFORM}} ${{env.SOLUTION_FILE_PATH}} /t:${{env.BUILD_PROJECTS}}
+  notify:
+    name: Exult-CI (IRC & Discord notification)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs:
+      - ci-msvc
+    if: ${{ always() && (github.repository_owner == 'exult' && github.event_name == 'push') }}
+    steps:
+      - name: IRC success notification (ircs://irc.libera.chat:6697/#exult)
+        uses: Gottox/irc-message-action@v2
+        continue-on-error: true
+        if: needs.ci-msvc.result == 'success'
+        with:
+          server: irc.libera.chat
+          port: 6697
+          channel: "#exult"
+          nickname: github-actions
+          tls: true
+          message: "\x0313exult\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The MSVC build \x033succeeded\x03."
+      - name: IRC failure notification (ircs://irc.libera.chat:6697/#exult)
+        uses: Gottox/irc-message-action@v2
+        continue-on-error: true
+        if: needs.ci-msvc.result != 'success'
+        with:
+          server: irc.libera.chat
+          port: 6697
+          channel: "#exult"
+          nickname: github-actions
+          tls: true
+          message: "\x0313exult\x03/\x0306${{ github.ref }}\x03 \x0314${{ github.sha }}\x03 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} The MSVC build \x034failed\x03."
+      - name: Discord success notification
+        uses: rjstone/discord-webhook-notify@master
+        continue-on-error: true
+        if: needs.ci-msvc.result == 'success'
+        with:
+          severity: info
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+          username: Exult github-actions
+          avatarUrl: https://avatars.githubusercontent.com/u/15114538?s=200&v=4
+          text: '**[The MSVC build succeeded:](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})**'
+      - name: Discord failure notification
+        uses: rjstone/discord-webhook-notify@master
+        continue-on-error: true
+        if: needs.ci-msvc.result != 'success'
+        with:
+          severity: error
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+          username: Exult github-actions
+          avatarUrl: https://avatars.githubusercontent.com/u/15114538?s=200&v=4
+          text: '**[The MSVC build failed:](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})**'

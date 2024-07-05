@@ -1,8 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.69])
-AC_INIT([Exult],[1.9.0git],[],[exult],[http://exult.info/])
+AC_INIT([Exult],[1.9.0git],[],[exult],[https://exult.info/])
 AC_CONFIG_SRCDIR([exult.cc])
-
 
 # ---------------------------------------------------------------------
 # System/version info
@@ -14,7 +13,7 @@ AC_CONFIG_SRCDIR([exult.cc])
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([-Wno-portability])
 AC_DEFINE_UNQUOTED(PACKAGE, "$PACKAGE", [Package Name])
 AC_DEFINE_UNQUOTED(VERSION, "$VERSION", [Package Version])
 
@@ -24,7 +23,6 @@ AC_CONFIG_MACRO_DIR([m4])
 AH_BOTTOM([
 #define USE_FMOPL_MIDI
 ])
-
 
 # ---------------------------------------------------------------------
 # Host system settings
@@ -45,64 +43,78 @@ cxx_compilers="g++ clang++ c++ gpp aCC CC cxx cc++ cl.exe FCC KCC RCC xlC_r xlC"
 AC_MSG_CHECKING([windowing system])
 case "$host_os" in
 	linux-android*)
+		# Android cross compiled from Linux, supported.
 		AC_DEFINE(ANDROID, 1, [Using Android])
 		ARCH=android
 		AC_MSG_RESULT([Android])
+		CXXFLAGS="$CXXFLAGS -pthread"
 		;;
 	linux*)
+		# Linux, supported.
 		WINDOWING_SYSTEM="-DXWIN"
 		AC_MSG_RESULT([X11 (GNU/Linux)])
+		CXXFLAGS="$CXXFLAGS -pthread"
 		;;
-	mingw32* )
+	mingw32*)
+		# Windows as MinGW, placeholder, true build by Makefile.mingw.
 		WINDOWING_SYSTEM="-D_WIN32"
 		AC_DEFINE(MINGW, 1, [Using MinGW])
 		AC_MSG_RESULT([Win32 (mingw32)])
-		CXXFLAGS="$CXXFLAGS -D_USE_MATH_DEFINES"
+		CXXFLAGS="$CXXFLAGS -D_USE_MATH_DEFINES -pthread"
 		SYSLIBS="-luuid -lole32 -lwinmm -lstdc++ -lws2_32"
 		ICON_FILE="win32/exultico.o"
 		;;
-	cygwin* )
+	cygwin*)
+		# Windows as Cygwin, placeholder, true build by Makefile.mingw.
 		WINDOWING_SYSTEM="-D_WIN32"
 		AC_DEFINE(CYGWIN, 1, [Using Cygwin])
 		AC_MSG_RESULT([Win32 (cygwin)])
-		CXXFLAGS="$CXXFLAGS -mno-cygwin"
+		CXXFLAGS="$CXXFLAGS -mno-cygwin -pthread"
 		SYSLIBS="-lwinmm"
 		ICON_FILE="win32/exultico.o"
 		;;
-	openbsd* )
+	openbsd*)
+		# OpenBSD, placeholder.
 		WINDOWING_SYSTEM="-DXWIN"
 		AC_DEFINE(OPENBSD, 1, [Using OpenBSD])
 		AC_MSG_RESULT([X11 (OpenBSD)])
+		CXXFLAGS="$CXXFLAGS -pthread"
 		SYSLIBS="-L/usr/X11R6/lib -lX11 -lXext -lXxf86vm -lXxf86dga"
 		;;
-	freebsd* )
+	freebsd*)
+		# FreeBSD, supported.
 		WINDOWING_SYSTEM="-DXWIN"
 		AC_DEFINE(FREEBSD, 1, [Using FreeBSD])
 		AC_MSG_RESULT([X11 (FreeBSD)])
-		CXXFLAGS="$CXXFLAGS -I/usr/local/include"
+		CXXFLAGS="$CXXFLAGS -pthread"
 		;;
-	netbsd* )
+	netbsd*)
+		# NetBSD, placeholder.
 		WINDOWING_SYSTEM="-DXWIN"
 		AC_MSG_RESULT([X11 (NetBSD)])
-		CXXFLAGS="$CXXFLAGS -I/usr/X11R6/include"
+		CXXFLAGS="$CXXFLAGS -pthread"
 		;;
-	solaris* )
+	solaris*)
+		# Solaris, placeholder.
 		WINDOWING_SYSTEM="-DXWIN"
 		AC_MSG_RESULT([X11 (Solaris)])
-		SYSLIBS="-lsocket -lX11"
+		CXXFLAGS="$CXXFLAGS -pthread"
+		SYSLIBS="-lsocket"
 		;;
 	darwin*)
+		# MacOS as Darwin, supported.
+		dnl
 		dnl We have a problem here: both Mac OS X and Darwin report
 		dnl the same signature "powerpc-apple-darwin*" - so we have
 		dnl to do more to distinguish them. Plain Darwin will propably
 		dnl use X-Windows; and it is of course lacking Cocoa. For
 		dnl now I am lazy and do not add proper detection code.
-
+		dnl
 		WINDOWING_SYSTEM="-DMACOSX"
 		AC_DEFINE(MACOSX, 1, [Using MacOSX])
 		AC_MSG_RESULT([Mac OS X])
 		SYSLIBS="-framework CoreFoundation -framework AudioUnit -framework AudioToolbox -framework CoreMIDI"
-		CXXFLAGS="$CXXFLAGS -stdlib=libc++"
+		CXXFLAGS="$CXXFLAGS -stdlib=libc++ -pthread"
 		EXULT_DATADIR="/Library/Application\ Support/Exult/data"
 		ARCH=macosx
 		dnl swap around clang for OSX
@@ -135,7 +147,7 @@ AC_PROG_CXX([$cxx_compilers])
 
 AC_LANG([C++])
 
-AX_CXX_COMPILE_STDCXX([17], [noext],[mandatory])
+AX_CXX_COMPILE_STDCXX([17], [noext], [mandatory])
 AC_PROG_CXXCPP
 
 AC_PROG_INSTALL
@@ -160,6 +172,7 @@ AC_SUBST(LIBTOOL_DEPS)
 # ---------------------------------------------------------------------
 # Checks for integer types with specific sizes.
 # ---------------------------------------------------------------------
+
 AC_CHECK_TYPES([int8_t, int16_t, int32_t, int64_t, intptr_t],
                [], [AC_MSG_ERROR([*** Cannot find suitably-sized signed integers!])],
                [#include <cstdint>])
@@ -170,19 +183,16 @@ AC_CHECK_TYPES([uint8_t, uint16_t, uint32_t, uint64_t, uintptr_t],
 # ---------------------------------------------------------------------
 # Checks for header files.
 # ---------------------------------------------------------------------
+
 AC_HEADER_DIRENT
 AC_CHECK_HEADERS(limits.h sys/time.h unistd.h)
 AC_CHECK_HEADERS(sys/types.h sys/socket.h netdb.h)
 AC_CHECK_HEADERS(sys/wait.h signal.h getopt.h)
-if test x$ARCH != xandroid; then
-	AC_CHECK_HEADERS(png.h, AM_CONDITIONAL(HAVE_PNG,true), AM_CONDITIONAL(HAVE_PNG, false))
-else
-	AM_CONDITIONAL(HAVE_PNG, false)
-fi
 
 # ---------------------------------------------------------------------
 # Checks for typedefs, structures, and compiler characteristics.
 # ---------------------------------------------------------------------
+
 AC_C_CONST
 AC_C_INLINE
 AC_TYPE_SIZE_T
@@ -192,6 +202,7 @@ AC_STRUCT_TM
 # ---------------------------------------------------------------------
 # Checks for library functions
 # ---------------------------------------------------------------------
+
 dnl Disabled this for now (undefined in autoconf < 2.5)
 dnl AC_FUNC_MALLOC
 
@@ -280,59 +291,72 @@ if test x$enable_android_apk != xno; then
 	# Checking against a known-good baseline gradle version
 	AC_MSG_CHECKING([gradle version])
 	gradle_version=`$GRADLE --version | grep Gradle | awk '{print $2;}' | tr -d '\r\n'`
-	AX_COMPARE_VERSION([$gradle_version], [ge], [6.8.2], [dnl
-		dnl $gradle_version >= 6.8.2
-		AC_MSG_RESULT([found $gradle_version >= 6.8.2])
+	AX_COMPARE_VERSION([$gradle_version], [ge], [7.5], [dnl
+		dnl $gradle_version >= 7.5
+		AC_MSG_RESULT([found $gradle_version >= 7.5])
 	], [
-		dnl $gradle_version < 6.8.2
-		AC_MSG_ERROR([found $gradle_version < 6.8.2])
+		dnl $gradle_version < 7.5
+		AC_MSG_ERROR([found $gradle_version < 7.5])
 	])
 
 	# Use sdkmanager to check Android package versions.
 	AC_PATH_PROGS(SDKMANAGER, sdkmanager)
 
 	# Check for required Android SDK version.
-	ANDROID_SDK_VERSION=30
+	AC_ARG_WITH(android_sdk,
+		AS_HELP_STRING([--with-android-sdk=sdk_version], [Android SDK version @<:@default 33@:>@]),
+		[with_android_sdk="$withval"],[with_android_sdk=33])
+	ANDROID_SDK_VERSION="$with_android_sdk"
 	AC_MSG_CHECKING([for Android SDK $ANDROID_SDK_VERSION])
 	if $SDKMANAGER --list|grep -q "platforms;android-$ANDROID_SDK_VERSION"; then
 		AC_MSG_RESULT([yes])
 	else
-		AC_MSG_ERROR([no])
+		AC_MSG_ERROR([$ANDROID_SDK_VERSION is not a valid Android SDK version.])
 	fi
 	AC_SUBST(ANDROID_SDK_VERSION, $ANDROID_SDK_VERSION)
 
 	# Check for required Android SDK Build-Tools version.
-	ANDROID_BUILD_TOOLS_VERSION=30.0.3
+	AC_ARG_WITH(android_build_tools,
+		AS_HELP_STRING([--with-android-build-tools=build_tools_version], [Android build tools version @<:@default 34.0.0@:>@]),
+		[with_android_build_tools="$withval"],[with_android_build_tools=34.0.0])
+	ANDROID_BUILD_TOOLS_VERSION="$with_android_build_tools"
 	AC_MSG_CHECKING([for Android SDK Build-Tools $ANDROID_BUILD_TOOLS_VERSION])
 	if $SDKMANAGER --list|grep -q "build-tools;$ANDROID_BUILD_TOOLS_VERSION"; then
 		AC_MSG_RESULT([yes])
 	else
-		AC_MSG_ERROR([no])
+		AC_MSG_ERROR([$ANDROID_BUILD_TOOLS_VERSION is not a valid Android build tools version.])
 	fi
 	AC_SUBST(ANDROID_BUILD_TOOLS_VERSION, $ANDROID_BUILD_TOOLS_VERSION)
 
 	# Check for required Android NDK version.
-	ANDROID_NDK_VERSION=21.4.7075529
+	AC_ARG_WITH(android_ndk,
+		AS_HELP_STRING([--with-android-ndk=ndk_version], [Android NDK version @<:@default 22.1.7171670@:>@]),
+		[with_android_sdk="$withval"],[with_android_ndk=22.1.7171670])
+	ANDROID_NDK_VERSION="$with_android_ndk"
 	AC_MSG_CHECKING([for Android NDK $ANDROID_NDK_VERSION])
 	if $SDKMANAGER --list|grep -q "ndk;$ANDROID_NDK_VERSION"; then
 		AC_MSG_RESULT([yes])
 	else
-		AC_MSG_ERROR([no])
+		AC_MSG_ERROR([$ANDROID_NDK_VERSION is not a valid Android NDK version.])
 	fi
 	AC_SUBST(ANDROID_NDK_VERSION, $ANDROID_NDK_VERSION)
 
 	# Check for required Android CMake version.
-	ANDROID_CMAKE_VERSION=3.18.1
+	AC_ARG_WITH(android_cmake,
+		AS_HELP_STRING([--with-android-cmake=cmake_version], [Android CMake version @<:@default 3.22.1@:>@]),
+		[with_android_cmake="$withval"],[with_android_cmake=3.22.1])
+	ANDROID_CMAKE_VERSION="$with_android_cmake"
 	AC_MSG_CHECKING([for Android CMake $ANDROID_CMAKE_VERSION])
 	if $SDKMANAGER --list|grep -q "cmake;$ANDROID_CMAKE_VERSION"; then
 		AC_MSG_RESULT([yes])
 	else
-		AC_MSG_ERROR([no])
+		AC_MSG_ERROR([$ANDROID_CMAKE_VERSION is not a valid Android CMake version.])
 	fi
 	AC_SUBST(ANDROID_CMAKE_VERSION, $ANDROID_CMAKE_VERSION)
 
-	# Pass down SDK directory
-	AC_SUBST(ANDROID_SDK_ROOT, `AS_DIRNAME(["$SDKMANAGER"])`/../../../..)
+	# Pass down SDK directory, keep _HOME and _SDK_ROOT in sync
+	AC_SUBST(ANDROID_HOME, `AS_DIRNAME(["$SDKMANAGER"])`/../../..)
+	AC_SUBST(ANDROID_SDK_ROOT, $ANDROID_HOME)
 
 	# Enable Android APK build
 	AM_CONDITIONAL(ANDROID_APK, true)
@@ -395,6 +419,13 @@ fi
 AC_ARG_ENABLE(static-libraries, AS_HELP_STRING([--enable-static-libraries], [Enable static linking of libraries]),,enable_static_libs=no)
 AC_MSG_CHECKING([if we want to statically compile libraries])
 if test x$enable_static_libs != xno; then
+	if test x$ARCH != xmacosx; then
+		# Assuming GCC. This is probably not portable.
+		STATIC_LD="-static"
+		LDFLAGS="$LDFLAGS -static"
+	else
+		AC_MSG_ERROR([*** static linking is not supported on macOS])
+	fi
 	AC_MSG_RESULT(yes)
 else
 	AC_MSG_RESULT(no)
@@ -415,7 +446,31 @@ fi
 # SDL
 # ---------------------------------------------------------------------
 
-EXULT_CHECK_SDL(:,AC_MSG_ERROR([[*** SDL not found!]]))
+if test x$enable_android_apk = xno; then
+	PKG_CHECK_MODULES(SDL, sdl2 >= 2.0.16, , AC_MSG_ERROR([[*** SDL not found!]]))
+	AC_DEFINE(HAVE_SDL_H, 1, [Define to 1 if you have the "SDL.h" header file])
+	AM_CONDITIONAL(HAVE_SDL, true)
+	AC_SUBST(SDL_CFLAGS)
+	AC_SUBST(SDL_LIBS)
+else
+	AM_CONDITIONAL(HAVE_SDL, false)
+fi
+
+# ---------------------------------------------------------------------
+# libpng
+# ---------------------------------------------------------------------
+
+if test x$ARCH != xandroid; then
+	PKG_CHECK_MODULES(PNG, libpng, have_png=yes, have_png=no)
+else
+	have_png=no
+fi
+if test x$have_png = xyes; then
+	AM_CONDITIONAL(HAVE_PNG, true)
+	AC_DEFINE(HAVE_PNG_H, 1, [Define to 1 if you have the <png.h> header file.])
+else
+	AM_CONDITIONAL(HAVE_PNG, false)
+fi
 
 # ---------------------------------------------------------------------
 # libogg, libvorbis, libvorbisfile
@@ -423,53 +478,6 @@ EXULT_CHECK_SDL(:,AC_MSG_ERROR([[*** SDL not found!]]))
 
 if test x$enable_android_apk = xno -a x$enable_exult = xyes; then
 	PKG_CHECK_MODULES(OGG, ogg >= 1.0 vorbis >= 1.0.1 vorbisfile, , AC_MSG_ERROR([*** must have Ogg/Vorbis installed!]))
-fi
-
-# ---------------------------------------------------------------------
-# Black magic for static linking.
-# ---------------------------------------------------------------------
-if test x$ARCH = xmacosx; then
-	AC_ARG_WITH(macosx-static-lib-path,
-		AS_HELP_STRING([--with-macosx-static-lib-path=path], [path to location of static library files (macOS bundles only)]),
-		[with_macosx_static_lib_path="$withval"],
-		[with_macosx_static_lib_path=""])
-	if test x$with_macosx_static_lib_path != x; then
-		if test ! -d $with_macosx_static_lib_path; then
-			AC_MSG_ERROR([*** a directory is expected for --macosx-static-lib-path!])
-		fi
-		with_macosx_static_lib_path=`echo "$with_macosx_static_lib_path" | sed 's/\/*$//'`
-	else
-		enable_static_libs=no
-	fi
-fi
-
-if test x$enable_static_libs != xno; then
-	if test x$ARCH != xmacosx; then
-		# Assuming GCC. This is probably not portable.
-		STATIC_LD="-static"
-		LDFLAGS="$LDFLAGS -static"
-	else
-		# Apple has done its best to prevent the above from working, so we
-		# need this stuff here.
-		# Using -static doesn't work because of system libraries that cannot be
-		# linked statically; using the usual -Wl,-static -lvorbis -Wl,-dynamic
-		# also fails if there is a non-static version of libvorbis in the lib
-		# search path before or at the same location as the static lib because
-		# the linker tries to use these even with the flags. The only way to get
-		# reliable static compiles in Mac OS X is to hard-code the path to the
-		# static library and link to *that*.
-		# Damn you, Apple!
-
-		# SDL Mac OS X readme lists this as needed.
-		# We should have sdl-config by this point, or we would have
-		# died in EXULT_CHECK_SDL.
-		SDL_LIBS=`$SDL_CONFIG $sdl_config_args --static-libs`
-		OGG_LIBS="$with_macosx_static_lib_path/libogg.a"
-		VORBISFILE_LIBS="$with_macosx_static_lib_path/libvorbisfile.a"
-		VORBIS_LIBS="$with_macosx_static_lib_path/libvorbis.a -lm"
-		ZLIB_LIBS="$with_macosx_static_lib_path/libz.a"
-		MT32EMU_LIBS="$with_macosx_static_lib_path/libmt32emu.a"
-	fi
 fi
 
 # ---------------------------------------------------------------------
@@ -503,7 +511,6 @@ AC_MSG_CHECKING([if we want to use timidity midi])
 if test x$enable_timidity_midi = xyes; then
 	AC_MSG_RESULT(yes)
 	AC_DEFINE(USE_TIMIDITY_MIDI, 1, [Enable timidity midi])
-
 	if test x$with_timidity != x; then
 		if test ! -d $with_timidity; then
 			with_timidity=`echo "$with_timidity" | sed 's/timidity.cfg//'`
@@ -564,15 +571,12 @@ else
 	AM_CONDITIONAL(BUILD_MT32EMU, false)
 fi
 
-
 # zipped savegame support
 AC_ARG_ENABLE(zip-support, AS_HELP_STRING([--enable-zip-support], [Enable zipped savegame support @<:@default yes@:>@]),,enable_zip_support=yes)
-AC_MSG_CHECKING([for zipped savegame support])
-
 if test x$enable_zip_support = xyes ; then
 	AC_CHECK_HEADER(zlib.h,,enable_zip_support=no)
 fi
-
+AC_MSG_CHECKING([for zipped savegame support])
 if test x$enable_zip_support = xyes ; then
 	# disabled for now (non-portable):
 
@@ -657,8 +661,6 @@ fi
 # ---------------------------------------------------------------------
 
 AC_ARG_ENABLE(exult-studio, AS_HELP_STRING([--enable-exult-studio], [Build Exult Studio @<:@default no@:>@]),,enable_exult_studio=no)
-AC_MSG_CHECKING([whether to build Exult Studio])
-
 if test x$enable_android_apk = xyes; then
 	enable_exult_studio=no
 fi
@@ -690,6 +692,7 @@ if test x$enable_exult_studio = xyes; then
 fi
 
 # Exult Studio
+AC_MSG_CHECKING([whether to build Exult Studio])
 if test x$enable_exult_studio = xyes; then
 	AC_MSG_RESULT(yes)
 	if test x$have_gtk = xno; then
@@ -700,6 +703,11 @@ if test x$enable_exult_studio = xyes; then
 	if test x$have_icu = xno; then
 		echo "Exult Studio requires the ICU (aka the International Components for Unicode), but it is not installed."
 		echo "Please try again, either with the ICU installed, or with '--disable-exult-studio'."
+		exit 1
+	fi
+	if test x$have_png = xno; then
+		echo "Exult Studio requires the PNG (aka the Portable Network Graphics), but it is not installed."
+		echo "Please try again, either with the PNG installed, or with '--disable-exult-studio'."
 		exit 1
 	fi
 	AM_CONDITIONAL(BUILD_STUDIO, true)
@@ -716,11 +724,6 @@ if test "$WINDOWING_SYSTEM" != -DXWIN -a "$WINDOWING_SYSTEM" != -D_WIN32 -a "$WI
 	enable_exult_studio_support=no
 fi
 
-AC_ARG_ENABLE(macosx-x11-studio-support, AS_HELP_STRING([--enable-macosx-x11-studio-support], [Force Exult Studio X11 support in macOS @<:@default no@:>@]),,enable_macosx_x11_studio_support=no)
-if test "$WINDOWING_SYSTEM" != -DMACOSX; then
-	enable_macosx_x11_studio_support=no
-fi
-
 if test x$enable_exult_studio = xyes; then
 	enable_exult_studio_support=yes
 fi
@@ -728,26 +731,6 @@ fi
 if test x$enable_exult_studio_support = xyes ; then
 	AC_MSG_RESULT(yes)
 	AC_DEFINE(USE_EXULTSTUDIO, 1, [Use Exult Studio])
-	AC_CHECK_FUNC(xwin, AC_DEFINE(XWIN))
-	if test "$WINDOWING_SYSTEM" = -DMACOSX -a "$ac_cv_func_xwin" != yes; then
-		if test $sdl_minor_version -eq "0" -a $sdl_patchlevel -lt "15"; then
-			echo "SDL2 2.0.15 or newer is needed for native drag'n'drop - switching to X11"
-			enable_macosx_x11_studio_support=yes
-		fi
-	fi
-
-	# Due to bug 2129731 and 3139441 some Linux distributions need -lX11 explicitly set
-	# when enabling Exult Studio support or linking fails
-	# 2022.08 : This does not appear relevant any longer
-	# 2022.08 : if test "$WINDOWING_SYSTEM" = -DXWIN ; then
-	# 2022.08 :     SYSLIBS="$SYSLIBS -lX11"
-	# 2022.08 : fi
-
-	if test x$enable_macosx_x11_studio_support = xyes ; then
-		enable_exult_studio_support=yes
-		SYSLIBS="$SYSLIBS -L/usr/X11R6/lib -lX11"
-		AC_DEFINE(XWIN, 1, [X11 (needed by Exult Studio X11 support in macOS)])
-	fi
 else
 	AC_MSG_RESULT(no)
 fi
@@ -814,11 +797,11 @@ if test x$enable_usecode_debugger = xconsole -o x$enable_usecode_debugger = xyes
 		AC_DEFINE(USECODE_CONSOLE_DEBUGGER, 1, [Enable Usecode debugging on console])
 	elif test x$enable_exult_studio != xyes; then
 		echo "But we are not building Exult Studio."
-		echo "Try again, either with --enable-exult-studio, or without the usecode debugger"
+		echo "Please try again, either with '--enable-exult-studio', or without the usecode debugger"
 		exit 1
 	elif test x$enable_exult_studio_support != xyes; then
 		echo "But we are not building Exult with Exult Studio support."
-		echo "Try again, either with --enable-exult-studio-support, or without the usecode debugger"
+		echo "Please try again, either with '--enable-exult-studio-support', or without the usecode debugger"
 		exit 1
 	fi
 	AC_DEFINE(USECODE_DEBUGGER, 1, [Enable Usecode debugging])
@@ -855,7 +838,12 @@ if test x$enable_gnome_shp_thumbnailer = xyes; then
 	PKG_CHECK_MODULES(GDK_PIXBUF, gdk-pixbuf-2.0, have_gdk_pixbuf=yes, have_gdk_pixbuf=no)
 	if test x$have_gdk_pixbuf = xno; then
 		echo "The Gnome shp thumbnailer requires Gdk-Pixbuf."
-		echo "Try again, either with Gdk-Pixbuf-2.0, or with --disable-gnome-shp-thumbnailer"
+		echo "Please try again, either with Gdk-Pixbuf-2.0, or with '--disable-gnome-shp-thumbnailer'."
+		exit 1
+	fi
+	if test x$have_png = xno; then
+		echo "The Gnome shp thumbnailer requires the PNG (aka the Portable Network Graphics)."
+		echo "Please try again, either with the PNG installed, or with '--disable-gnome-shp-thumbnailer'."
 		exit 1
 	fi
 	AM_CONDITIONAL(BUILD_GTHUMB, true)
@@ -930,7 +918,6 @@ AC_ARG_WITH([icondir],
 		;;
 	esac])
 AC_SUBST([ICONDIR])
-
 
 # ---------------------------------------------------------------------
 # Workaround for 'ar' warning in libtool
@@ -1018,7 +1005,6 @@ fi
 # link-time optimization
 GB_ENABLE_LTO
 DEBUG_LEVEL="$DEBUG_LEVEL $LTO_CFLAGS"
-
 
 # ---------------------------------------------------------------------
 # Debugging options
@@ -1119,7 +1105,7 @@ fi
 
 CHK_WARN="-Wall -Wextra -pedantic"
 CHK_WARN="$CHK_WARN -Walloc-zero -Walloca"
-CHK_WARN="$CHK_WARN -Wc++14-compat -Wc++17-compat -Wbool-compare -Wbool-operation"
+CHK_WARN="$CHK_WARN -Wc++17-compat -Wc++20-compat -Wbool-compare -Wbool-operation"
 CHK_WARN="$CHK_WARN -Wcatch-value=3 -Wcast-align -Wcast-align=strict -Wcast-qual -Wcast-function-type"
 CHK_WARN="$CHK_WARN -Wconditionally-supported -Wctor-dtor-privacy -Wdisabled-optimization"
 CHK_WARN="$CHK_WARN -Wduplicated-branches -Wduplicated-cond -Wextra-semi"
@@ -1170,22 +1156,22 @@ AM_CONDITIONAL(CROSS_COMPILING, test $cross_compiling = yes)
 
 AS_IF([ test $cross_compiling = yes ], [
 	if test x$enable_data = xyes; then
-		AC_PATH_PROG(EXPACK, expack, no)
+		AC_PATH_PROG(EXPACK_PROG, expack, no)
 		echo "While cross compiling you need to have a build system native"
 		echo "expack in your path to generate Exult's data files."
 		echo "After you natively compiled Exult you will find expack in the tools subfolder."
-		if test x$EXPACK = xno; then
+		if test x$EXPACK_PROG = xno; then
 			AC_MSG_ERROR([Could not find expack in your path, cannot generate data files.])
 		fi
 	fi
 
 	if test x$enable_tools = xyes; then
-		AC_PATH_PROG(HEAD2DATA, head2data, no)
+		AC_PATH_PROG(HEAD2DATA_PROG, head2data, no)
 		echo "While cross compiling you need to have a build system native"
 		echo "head2data in your path to build part of Exult's tools."
 		echo "After you natively compiled Exult you will find head2data"
 		echo "in the usecode/ucxt subfolder."
-		if test x$HEAD2DATA = xno; then
+		if test x$HEAD2DATA_PROG = xno; then
 			AC_MSG_ERROR([Could not find head2data in your path, cannot generate data files for tools.])
 		fi
 	fi
@@ -1281,7 +1267,6 @@ echo Exult Studio support....... : $enable_exult_studio_support
 echo Create data files.......... : $enable_data
 if test x$enable_android_apk != xno; then
 	echo Build Android APK.......... : $enable_android_apk
-	echo Gradle..................... : $gradle_version
 fi
 echo
 echo C++ Compiler............... : $CXX
@@ -1293,14 +1278,20 @@ if test "x$dbg_level" != "x"; then
 	echo C++ debug.................. : $dbg_level
 fi
 echo
-if test x$enable_android_apk = xno; then
 	echo Dependencies :
-	echo SDL........................ : `$SDL_CONFIG --version`
+if test x$enable_android_apk != xno; then
+	echo Android SDK................ : $ANDROID_SDK_VERSION
+	echo Android NDK................ : $ANDROID_NDK_VERSION
+	echo Android SDK CMake.......... : $ANDROID_CMAKE_VERSION
+	echo Gradle..................... : $gradle_version
+	echo
+else
+	echo SDL........................ : `$PKG_CONFIG --modversion sdl2`
 	PKG_CHECK_EXISTS(ogg,
 		echo Ogg.........................: `$PKG_CONFIG --modversion ogg`)
 	PKG_CHECK_EXISTS(vorbis,
 		echo Vorbis......................: `$PKG_CONFIG --modversion vorbis`)
-	if test x$ac_cv_header_png_h = xyes; then
+	if test x$have_png = xyes; then
 		PKG_CHECK_EXISTS(libpng,
 			echo libpng..................... : `$PKG_CONFIG --modversion libpng`)
 	fi
@@ -1379,10 +1370,10 @@ if test ${cross_compiling} = yes; then
 	echo
 	echo Cross Compiling for $host
 	if test x$enable_data = xyes; then
-		echo expack path................ : $EXPACK
+		echo expack path................ : $EXPACK_PROG
 	fi
 	if test x$enable_tools = xyes; then
-		echo head2data path............. : $HEAD2DATA
+		echo head2data path............. : $HEAD2DATA_PROG
 	fi
 fi
 echo

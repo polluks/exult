@@ -1,38 +1,36 @@
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#	include <config.h>
 #endif
 
-#include <iostream>
-#include <cstdlib>
-#include <string>
-#include <iomanip>
-#include <vector>
-#include <fstream>
-#include "array_size.h"
+#include "span.h"
 
-using std::cout;
+#include <array>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <string_view>
+
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::ostream;
-using std::string;
-using std::setfill;
-using std::setbase;
-using std::setw;
 using std::ios;
 using std::ofstream;
+using std::ostream;
+using std::setbase;
+using std::setfill;
+using std::setw;
+using std::string;
+using std::string_view;
 
-#ifndef TO_STRING
-#if defined __STDC__ && __STDC__
-#define TO_STRING(x) #x
-#else
-#define TO_STRING(x) "x"
-#endif
-#endif
+using namespace std::string_view_literals;
 
-void gen_intrinsic_table(ofstream& o, std::string const table[], unsigned int len) {
+void gen_intrinsic_table(
+		ofstream& o, const tcb::span<const string_view>& table) {
 	o << "<intrinsics>" << endl;
-	for (unsigned int i = 0; i < len; i++) {
+	for (size_t i = 0; i < table.size(); i++) {
 		o << "\t<0x" << setw(2) << i << "> " << table[i];
 		if (table[i] == "UNKNOWN") {
 			o << '_' << setw(2) << i;
@@ -42,7 +40,7 @@ void gen_intrinsic_table(ofstream& o, std::string const table[], unsigned int le
 	o << "</>" << endl;
 }
 
-void bg_out(const string &fname) {
+void bg_out(const string& fname) {
 	ofstream o;
 	o.open(fname.c_str());
 
@@ -54,17 +52,16 @@ void bg_out(const string &fname) {
 	o << setfill('0') << setbase(16);
 	o.setf(ios::uppercase);
 
-#define USECODE_INTRINSIC_PTR(NAME) std::string(TO_STRING(NAME))
-	std::string bgut[] = {
+#define USECODE_INTRINSIC_PTR(NAME) #NAME##sv
+	constexpr static const std::array bgut{
 #include "bgintrinsics.h"
 	};
 #undef USECODE_INTRINSIC_PTR
-
-	gen_intrinsic_table(o, bgut, array_size(bgut));
+	gen_intrinsic_table(o, bgut);
 	o.close();
 }
 
-void si_out(const string &fname) {
+void si_out(const string& fname) {
 	ofstream o;
 	o.open(fname.c_str());
 
@@ -76,18 +73,18 @@ void si_out(const string &fname) {
 	o << setfill('0') << setbase(16);
 	o.setf(ios::uppercase);
 
-#define USECODE_INTRINSIC_PTR(NAME) std::string(TO_STRING(NAME))
-	std::string siut[] = {
+#define USECODE_INTRINSIC_PTR(NAME) #NAME##sv
+	constexpr static const std::array siut{
 #include "siintrinsics.h"
 	};
 #undef USECODE_INTRINSIC_PTR
 
-	gen_intrinsic_table(o, siut, array_size(siut));
+	gen_intrinsic_table(o, siut);
 
 	o.close();
 }
 
-void sibeta_out(const string &fname) {
+void sibeta_out(const string& fname) {
 	ofstream o;
 	o.open(fname.c_str());
 
@@ -99,25 +96,31 @@ void sibeta_out(const string &fname) {
 	o << setfill('0') << setbase(16);
 	o.setf(ios::uppercase);
 
-#define USECODE_INTRINSIC_PTR(NAME) std::string(TO_STRING(NAME))
-	std::string sibut[] = {
+#define USECODE_INTRINSIC_PTR(NAME) #NAME##sv
+	constexpr static const std::array sibut{
 #include "sibetaintrinsics.h"
 	};
 #undef USECODE_INTRINSIC_PTR
 
-	gen_intrinsic_table(o, sibut, array_size(sibut));
+	gen_intrinsic_table(o, sibut);
 
 	o.close();
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 	if (argc != 4) {
 		cout << "usage:" << endl
-		     << "\thead2data <bg outputfile> <si outputfile> <si beta outputfile>" << endl
-		     << endl
-		     << "\tWhere the output files are the relative pathnames to the datafiles" << endl
-		     << "\tto be output." << endl
-		     << "\teg. head2data data/u7bgintrinsics.data data/u7siintrinsics.data data/u7sibetaintrinsics.data" << endl;
+			 << "\thead2data <bg outputfile> <si outputfile> <si beta "
+				"outputfile>"
+			 << endl
+			 << endl
+			 << "\tWhere the output files are the relative pathnames to the "
+				"datafiles"
+			 << endl
+			 << "\tto be output." << endl
+			 << "\teg. head2data data/u7bgintrinsics.data "
+				"data/u7siintrinsics.data data/u7sibetaintrinsics.data"
+			 << endl;
 		return 1;
 	}
 
@@ -127,4 +130,3 @@ int main(int argc, char **argv) {
 
 	return 0;
 }
-

@@ -20,9 +20,10 @@
 #	include <config.h>
 #endif
 
+#include "game.h"
+
 #include "Audio.h"
 #include "Configuration.h"
-#include "array_size.h"
 #include "databuf.h"
 #include "exult.h"
 #include "exult_constants.h"
@@ -31,7 +32,6 @@
 #include "files/U7fileman.h"
 #include "files/utils.h"
 #include "font.h"
-#include "game.h"
 #include "gameclk.h"
 #include "gamemgr/bggame.h"
 #include "gamemgr/devgame.h"
@@ -48,6 +48,7 @@
 
 #include <unistd.h>
 
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -78,8 +79,9 @@ Game::Game() {
 	try {    // Okay to fail if development game.
 		menushapes.load(MAINSHP_FLX, PATCH_MAINSHP);
 	} catch (const exult_exception&) {
-		if (!is_editing())
+		if (!is_editing()) {
 			throw;
+		}
 	}
 	jive    = false;
 	gwin    = Game_window::get_instance();
@@ -120,12 +122,13 @@ Game* Game::create_game(BaseGameInfo* mygame) {
 	sman->set_paperdoll_status(game_type == SERPENT_ISLE || str == "yes");
 	config->set("config/gameplay/bg_paperdolls", str, true);
 	char buf[256];
-	if (!mygame->get_mod_title().empty())
+	if (!mygame->get_mod_title().empty()) {
 		snprintf(
-				buf, 256, " with the '%s' modification.",
+				buf, sizeof(buf), " with the '%s' modification.",
 				mygame->get_mod_title().c_str());
-	else
+	} else {
 		buf[0] = 0;
+	}
 	switch (game_type) {
 	case BLACK_GATE:
 		cout << "Starting a BLACK GATE game" << buf << endl;
@@ -152,10 +155,11 @@ Game* Game::create_game(BaseGameInfo* mygame) {
 	cout << "Static  : " << get_system_path("<STATIC>") << endl;
 	cout << "Gamedat : " << get_system_path("<GAMEDAT>") << endl;
 	cout << "Savegame: " << get_system_path("<SAVEGAME>") << endl;
-	if (is_system_path_defined("<PATCH>"))
+	if (is_system_path_defined("<PATCH>")) {
 		cout << "Patch   : " << get_system_path("<PATCH>") << endl;
-	else
+	} else {
 		cout << "Patch   : none" << endl;
+	}
 	cout << endl;
 
 	return game;
@@ -200,6 +204,7 @@ void Game::show_congratulations(Palette* pal0) {
 				TokenNegativeTime,
 				TokenCount
 			};
+
 			std::stringstream        reader(message);
 			std::vector<std::string> tokens;
 			tokens.reserve(TokenCount);
@@ -306,8 +311,9 @@ int Game::get_shape(const char* name) {
 		int          ret;
 		xml->value(key, ret, 0);
 		return ret;
-	} else
+	} else {
 		return shapes[name];
+	}
 }
 
 void Game::add_resource(const char* name, const char* str, int num) {
@@ -317,9 +323,9 @@ void Game::add_resource(const char* name, const char* str, int num) {
 
 const str_int_pair& Game::get_resource(const char* name) {
 	auto it = resources.find(name);
-	if (it != resources.end())
+	if (it != resources.end()) {
 		return it->second;
-	else if (xml) {
+	} else if (xml) {
 		string key = string(xml_root) + "/resources/" + name;
 		string str;
 		xml->value(key, str, "");
@@ -336,7 +342,7 @@ const str_int_pair& Game::get_resource(const char* name) {
 	} else {
 		char buf[250];
 		snprintf(
-				buf, array_size(buf),
+				buf, sizeof(buf),
 				"Game::get_resource: Illegal resource requested: '%s'", name);
 		throw exult_exception(buf);
 	}
@@ -349,8 +355,9 @@ void Game::write_game_xml() {
 	const string name = get_system_path("<PATCH>/exultgame.xml");
 
 	U7mkdir("<PATCH>", 0755);    // Create dir. if not already there.
-	if (U7exists(name))
+	if (U7exists(name)) {
 		U7remove(name.c_str());
+	}
 	const string  root = xml_root;
 	Configuration xml(name, root);
 	for (auto& resource : resources) {
@@ -358,8 +365,9 @@ void Game::write_game_xml() {
 		key += "/resources/";
 		key += resource.first;
 		const str_int_pair& val = resource.second;
-		if (val.str)
+		if (val.str) {
 			xml.set(key.c_str(), val.str, false);
+		}
 		if (val.num != 0) {
 			key += "/num";
 			xml.set(key.c_str(), val.num, false);
@@ -383,11 +391,12 @@ void Game::write_game_xml() {
 bool Game::read_game_xml(const char* name1) {
 	const char* nm;
 
-	if (name1 && U7exists(name1))
+	if (name1 && U7exists(name1)) {
 		nm = name1;
-	else if (!U7exists(nm = "<PATCH>/exultgame.xml")) {
-		if (!U7exists(nm = "<STATIC>/exultgame.xml"))
+	} else if (!U7exists(nm = "<PATCH>/exultgame.xml")) {
+		if (!U7exists(nm = "<STATIC>/exultgame.xml")) {
 			return false;
+		}
 	}
 	xml                  = new Configuration;
 	const string namestr = get_system_path(nm);
@@ -402,8 +411,9 @@ bool Game::show_menu(bool skip) {
 	// Brand-new game in development?
 	if (skip || (is_editing() && !U7exists(MAINSHP_FLX))) {
 		const bool first = !U7exists(IDENTITY);
-		if (first)
+		if (first) {
 			set_avname("Newbie");
+		}
 		return gwin->init_gamedat(first);
 	}
 	IExultDataSource mouse_data(MAINSHP_FLX, PATCH_MAINSHP, 19);
@@ -412,12 +422,12 @@ bool Game::show_menu(bool skip) {
 	top_menu();
 	MenuList* menu = nullptr;
 
-	const int menuchoices[] = {0x04, 0x05, 0x08, 0x06, 0x11, 0x12, 0x07};
-	const int num_choices   = array_size(menuchoices);
+	constexpr static const std::array menuchoices{0x04, 0x05, 0x08, 0x06,
+												  0x11, 0x12, 0x07};
 
 	const Vga_file exult_flx(BUNDLE_CHECK(BUNDLE_EXULT_FLX, EXULT_FLX));
 	char           npc_name[16];
-	snprintf(npc_name, 16, "Exult");
+	snprintf(npc_name, sizeof(npc_name), "Exult");
 	bool play     = false;
 	bool fadeout  = true;
 	bool exitmenu = false;
@@ -426,7 +436,7 @@ bool Game::show_menu(bool skip) {
 		if (!menu) {
 			menu       = new MenuList();
 			int offset = 0;
-			for (int i = 0; i < num_choices; i++) {
+			for (size_t i = 0; i < menuchoices.size(); i++) {
 				if ((i != 4 && i != 5)
 					|| (i == 4 && U7exists("<SAVEGAME>/quotes.flg"))
 					|| (i == 5 && U7exists("<SAVEGAME>/endgame.flg"))) {
@@ -457,8 +467,9 @@ bool Game::show_menu(bool skip) {
 			throw quit_exception();
 #endif
 		case 0:    // Intro
-			if (game_type == EXULT_DEVEL_GAME)
+			if (game_type == EXULT_DEVEL_GAME) {
 				break;
+			}
 			pal->fade_out(c_fade_out_time);
 			play_intro();
 			gwin->clear_screen(true);
@@ -478,10 +489,11 @@ bool Game::show_menu(bool skip) {
 			play     = true;
 			break;
 		case 1:    // New Game
-			if (new_game(menushapes))
+			if (new_game(menushapes)) {
 				exitmenu = true;
-			else
+			} else {
 				break;
+			}
 			fadeout = false;
 			play    = true;
 			break;
@@ -498,8 +510,9 @@ bool Game::show_menu(bool skip) {
 			top_menu();
 			break;
 		case 5:    // End Game
-			if (game_type == EXULT_DEVEL_GAME)
+			if (game_type == EXULT_DEVEL_GAME) {
 				break;
+			}
 			pal->fade_out(c_fade_out_time);
 			end_game(true, false);
 			top_menu();
@@ -537,8 +550,9 @@ void Game::journey_failed_text() {
 
 int Game::waitforspeech() {
 	Audio* audio = Audio::get_ptr();
-	if (!audio->is_speech_playing())
+	if (!audio->is_speech_playing()) {
 		return -1;
+	}
 	// uh oh speech from ingame is playing. We will wait for it to finish
 	//
 	// but first grey out the screen
@@ -557,15 +571,17 @@ int Game::waitforspeech() {
 }
 
 const char* Game::get_avname() {
-	if (av_name[0])
+	if (av_name[0]) {
 		return av_name;
-	else
+	} else {
 		return nullptr;
+	}
 }
 
 int Game::get_avsex() {
 	return av_sex;
 }
+
 int Game::get_avskin() {
 	return av_skin;
 }
@@ -606,8 +622,9 @@ int wait_delay(int ms, int startcol, int ncol, int rotspd) {
 	int           loops;
 
 	const int loopinterval = (ncol == 0) ? 50 : 10;
-	if (!ms)
+	if (!ms) {
 		ms = 1;
+	}
 	if (ms <= 2 * loopinterval) {
 		delay = ms;
 		loops = 1;
@@ -642,8 +659,9 @@ int wait_delay(int ms, int startcol, int ncol, int rotspd) {
 					break;
 				case SDLK_s:
 					if ((event.key.keysym.mod & KMOD_ALT)
-						&& (event.key.keysym.mod & KMOD_CTRL))
+						&& (event.key.keysym.mod & KMOD_CTRL)) {
 						make_screenshot(true);
+					}
 					break;
 				case SDLK_ESCAPE:
 					return 1;
@@ -659,8 +677,9 @@ int wait_delay(int ms, int startcol, int ncol, int rotspd) {
 				break;
 			case SDL_MOUSEBUTTONUP: {
 				if (event.button.button == 3 || event.button.button == 1) {
-					if (ticks1 - last_b3_click < 500)
+					if (ticks1 - last_b3_click < 500) {
 						return 1;
+					}
 					last_b3_click = ticks1;
 				}
 				break;
@@ -670,14 +689,16 @@ int wait_delay(int ms, int startcol, int ncol, int rotspd) {
 			}
 		}
 		const unsigned long ticks2 = SDL_GetTicks();
-		if (ticks2 - ticks1 > delay)
+		if (ticks2 - ticks1 > delay) {
 			i += (ticks2 - ticks1) / delay - 1;
-		else
+		} else {
 			SDL_Delay(delay - (ticks2 - ticks1));
+		}
 		if (abs(ncol) > 1 && ticks2 > last_rotate + rot_speed) {
 			gwin->get_win()->rotate_colors(startcol, ncol, 1);
-			while (ticks2 > last_rotate + rot_speed)
+			while (ticks2 > last_rotate + rot_speed) {
 				last_rotate += rot_speed;
+			}
 			gwin->get_win()->show();
 		}
 	}

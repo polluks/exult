@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2022 The Exult Team
+Copyright (C) 2000-2024 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -29,96 +29,112 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 class Gump_button : public Gump_widget {
 private:
-	int pushed_button;      // 1 if in pushed state.
+	MouseButton pushed_button;    // MouseButton::Unknown if in unpushed state.
 
 public:
 	friend class Gump;
-	Gump_button(Gump *par, int shnum, int px, int py,
-	            ShapeFile shfile = SF_GUMPS_VGA)
-		: Gump_widget(par, shnum, px, py, shfile), pushed_button(0)
-	{  }
-	// Is a given point on the checkmark?
-	bool on_button(int mx, int my) const override {
-		return on_widget(mx, my);
+
+	Gump_button(
+			Gump_Base* par, int shnum, int px, int py,
+			ShapeFile shfile = SF_GUMPS_VGA)
+			: Gump_widget(par, shnum, px, py, 0, shfile),
+			  pushed_button(MouseButton::Unknown) {}
+
+	Gump_button* on_button(int mx, int my) override {
+		return on_widget(mx, my) ? this : nullptr;
 	}
+
 	// What to do when 'clicked':
-	virtual bool activate(int button) = 0;
+	virtual bool activate(MouseButton button);
 	// Or double-clicked.
 	virtual void double_clicked(int x, int y);
-	virtual bool push(int button);  // Redisplay as pushed.
-	virtual void unpush(int button);
-	void paint() override;
-	int get_pushed() {
+	virtual bool push(MouseButton button);    // Redisplay as pushed.
+	virtual void unpush(MouseButton button);
+	void         paint() override;
+
+	MouseButton get_pushed() {
 		return pushed_button;
 	}
+
 	bool is_pushed() {
-		return pushed_button != 0;
+		return pushed_button != MouseButton::Unknown;
 	}
-	void set_pushed(int button) {
+
+	void set_pushed(MouseButton button) {
 		pushed_button = button;
 	}
+
 	void set_pushed(bool set) {
-		pushed_button = set ? 1 : 0;
+		pushed_button = set ? MouseButton::Left : MouseButton::Unknown;
 	}
+
 	virtual bool is_checkmark() const {
 		return false;
 	}
-	Gump_button *as_button() override {
+
+	Gump_button* as_button() override {
 		return this;
 	}
 };
 
 template <class Callable, class Tuple, size_t... Is>
-inline auto call(Callable&& func, Tuple&& args,
-                       std::index_sequence<Is...>) {
+inline auto call(Callable&& func, Tuple&& args, std::index_sequence<Is...>) {
 	return func(std::get<Is>(args)...);
 }
 
 template <typename Parent, typename Base, typename... Args>
 class CallbackButtonBase : public Base {
 public:
-	using CallbackType = void (Parent::*)(Args...);
+	using CallbackType   = void (Parent::*)(Args...);
 	using CallbackParams = std::tuple<Args...>;
 
 	template <typename... Ts>
-	CallbackButtonBase(Parent* par, CallbackType&& callback, CallbackParams&& params, Ts&&... args)
-		: Base(par, std::forward<Ts>(args)...),
-		  parent(par), on_click(std::forward<CallbackType>(callback)),
-		  parameters(std::forward<CallbackParams>(params)) {}
+	CallbackButtonBase(
+			Parent* par, CallbackType&& callback, CallbackParams&& params,
+			Ts&&... args)
+			: Base(par, std::forward<Ts>(args)...), parent(par),
+			  on_click(std::forward<CallbackType>(callback)),
+			  parameters(std::forward<CallbackParams>(params)) {}
 
-	bool activate(int button) override {
-		if (button != 1) return false;
-		call([this](Args... args) {
-				(parent->*on_click)(args...);
-			}, parameters, std::make_index_sequence<sizeof...(Args)>{});
+	bool activate(Gump_Base::MouseButton button) override {
+		if (button != Gump_Base::MouseButton::Left) {
+			return false;
+		}
+		call(
+				[this](Args... args) {
+					(parent->*on_click)(args...);
+				},
+				parameters, std::make_index_sequence<sizeof...(Args)>{});
 		return true;
 	}
 
 private:
-	Parent* parent;
-	CallbackType on_click;
+	Parent*        parent;
+	CallbackType   on_click;
 	CallbackParams parameters;
 };
 
 template <typename Parent, typename Base>
 class CallbackButtonBase<Parent, Base> : public Base {
 public:
-	using CallbackType = void (Parent::*)();
+	using CallbackType   = void (Parent::*)();
 	using CallbackParams = std::tuple<>;
 
 	template <typename... Ts>
 	CallbackButtonBase(Parent* par, CallbackType&& callback, Ts&&... args)
-		: Base(par, std::forward<Ts>(args)...),
-		  parent(par), on_click(std::forward<CallbackType>(callback)) {}
+			: Base(par, std::forward<Ts>(args)...), parent(par),
+			  on_click(std::forward<CallbackType>(callback)) {}
 
-	bool activate(int button) override {
-		if (button != 1) return false;
+	bool activate(Gump_Base::MouseButton button) override {
+		if (button != Gump_Base::MouseButton::Left) {
+			return false;
+		}
 		(parent->*on_click)();
 		return true;
 	}
 
 private:
-	Parent* parent;
+	Parent*      parent;
 	CallbackType on_click;
 };
 

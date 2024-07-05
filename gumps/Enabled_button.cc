@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2022 The Exult Team
+Copyright (C) 2001-2024 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,22 +17,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
 #include "Enabled_button.h"
+
 #include "gamewin.h"
 
-const char *Enabled_button::selections[] = { "Disabled", "Enabled" };
+const char* Enabled_button::selections[] = {"Disabled", "Enabled"};
 
 /*
  *  Redisplay as 'pushed'.
  */
 
-bool Enabled_button::push(
-    int button
-) {
-	if (button == 1 || button == 3) {
+bool Enabled_button::push(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Middle) {
 		set_pushed(button);
 		paint();
 		gwin->set_painted();
@@ -45,21 +44,23 @@ bool Enabled_button::push(
  *  Redisplay as 'unpushed'.
  */
 
-void Enabled_button::unpush(
-    int button
-) {
-	if (button == 1 || button == 3) {
+void Enabled_button::unpush(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Right) {
 		set_pushed(false);
 		paint();
 		gwin->set_painted();
 	}
 }
 
-bool Enabled_button::activate(int button) {
-	if (button != 1 && button != 3) return false;
+bool Enabled_button::activate(MouseButton button) {
+	if (button != MouseButton::Left && button != MouseButton::Right) {
+		return false;
+	}
 
 	set_frame(get_framenum() + 1);
-	if (get_framenum() >= 2) set_frame(0);
+	if (get_framenum() >= 2) {
+		set_frame(0);
+	}
 	text = selections[get_framenum()];
 	init();
 	toggle(get_framenum());

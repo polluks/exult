@@ -1,5 +1,6 @@
 /*
- *  Copyright (C) 2016-2022  The Exult Team
+ *
+ *  Copyright (C) 2024  The Exult Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,15 +17,22 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifndef ARRAY_SIZE_H
-#define ARRAY_SIZE_H
-
-#include <cstddef>
-
-template <typename T, size_t N>
-constexpr inline size_t array_size(const T(&)[N]) {
-	return N;
+void MoonshadeBanquet shape#(0x32E)() {
+	if (FILBERCIO->get_npc_id() == 13) {
+		try {
+			MoonshadeBanquet.original();
+		} catch() {
+			if (gflags[POTHOS_RETURNED]) {
+				var joinables = getJoinableNPCNumbers();
+				for (npc in joinables) {
+					if (npc->get_npc_id() == 11
+						&& !npc->get_item_flag(IN_PARTY)) {
+						npc->add_to_party();
+					}
+				}
+			}
+			abort;
+		}
+	}
+	MoonshadeBanquet.original();
 }
-
-#endif // ARRAY_SIZE_H
-

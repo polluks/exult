@@ -292,5 +292,26 @@ ios/libogg
 ios/libvorbis
 project.xcworkspace
 
+#Visual studio garbage
 *.ilk
 *.pdb
+*.iobj
+*.ipdb
+/Exult Source Code.url
+
+docs/xml/*.txt
+docs/xml/*.dat
+docs/xml/*.html
+gitinfo.h
+
+#Android
+android/app/build.gradle
+android/app/src/main/res/drawable/*.png
+
+#files in data thatshould not be in git
+data/exult_studio.glade
+/data/music
+/data/jmsfx.flx
+/data/sqsfxsi.flx
+/data/sqsfxbg.flx
+/data/jmsisfx.flx

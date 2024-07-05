@@ -1,6 +1,7 @@
 /*
  * mockup
- * converts a 8 bpp BMP file into a u7map format based on colour<->u7chunk association found in reference file
+ * converts a 8 bpp BMP file into a u7map format based on colour<->u7chunk
+ * association found in reference file
  *
  * author: Aurelien Marchand
  * licence: GPL
@@ -12,36 +13,38 @@
  * where ffffff is the hex value of a colour and 9999 is a the u7chunk number
  */
 
+#include "main.h"
 
+#include "defs.h"
+
+#include <SDL.h>
+#include <SDL_image.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <SDL.h>
-#include <SDL_image.h>
-
-#include "defs.h"
-#include "main.h"
 
 #ifdef _MSC_VER
-#define strcasecmp _stricmp
+#	define strcasecmp _stricmp
 #endif
 
-Uint32 getpixel(SDL_Surface *surface, int x, int y) {
+Uint32 getpixel(SDL_Surface* surface, int x, int y) {
 	int bpp = surface->format->BytesPerPixel;
 	/* Here p is the address to the pixel we want to retrieve */
-	Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
+	Uint8* p = (Uint8*)surface->pixels + y * surface->pitch + x * bpp;
 
 	switch (bpp) {
 	case 1:
 		return *p;
 	default:
-		return 0;       /* shouldn't happen, but avoids warnings */
+		return 0; /* shouldn't happen, but avoids warnings */
 	}
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 	if (argc < 3 || argc > 3) {
-		printf("Usage: %s <image file> <mapping file>\nYou can name <image file> and <mapping file> the way you want.\n", argv[0]);
+		printf("Usage: %s <image file> <mapping file>\nYou can name <image "
+			   "file> and <mapping file> the way you want.\n",
+			   argv[0]);
 		exit(-1);
 	}
 
@@ -54,16 +57,41 @@ int main(int argc, char **argv) {
 	atexit(SDL_Quit);
 
 	// need to read the mockup map
-	SDL_Surface *mock_map = IMG_Load(argv[1]);
+	SDL_Surface* mock_map = IMG_Load(argv[1]);
 	if (mock_map == NULL) {
 		fprintf(stderr, "Couldn't load %s: %s\n", argv[1], SDL_GetError());
 		exit(-1);
 	}
 
-	// check if mock_map is in 8bpp format
-	SDL_PixelFormat *fmt = mock_map->format;
+	// SDL 2 can return 1, 2, 4 bits per pixel SDL_Surface
+	if (mock_map->format->BitsPerPixel < 8) {
+		printf("The image file is not in 8 bpp ( reported %d ). Converting it "
+			   "to 8 bpp.\n",
+			   mock_map->format->BitsPerPixel);
+		SDL_PixelFormat* format8 = SDL_AllocFormat(SDL_PIXELFORMAT_INDEX8);
+		if (SDL_SetPixelFormatPalette(format8, mock_map->format->palette) < 0) {
+			fprintf(stderr, "Couldn't transfer palette %s: %s\n", argv[1],
+					SDL_GetError());
+			SDL_FreeSurface(mock_map);
+			exit(-1);
+		}
+		SDL_Surface* converted8 = SDL_ConvertSurface(mock_map, format8, 0);
+		if (converted8 == NULL) {
+			fprintf(stderr, "Couldn't convert %s: %s\n", argv[1],
+					SDL_GetError());
+			SDL_FreeSurface(mock_map);
+			exit(-1);
+		}
+		SDL_FreeSurface(mock_map);
+		mock_map = converted8;
+		SDL_FreeFormat(format8);
+	}
+
+	SDL_PixelFormat* fmt = mock_map->format;
 	if (fmt->BitsPerPixel != 8) {
-		printf("The image file is not in 8 bpp. Please convert it.\n");
+		printf("The image file is not in 8 bpp ( reported %d ). Please convert "
+			   "it.\n",
+			   mock_map->format->BitsPerPixel);
 		exit(-1);
 	}
 
@@ -74,56 +102,77 @@ int main(int argc, char **argv) {
 
 	printf("The image file uses %d colours\n", fmt->palette->ncolors);
 
-	FILE *f = fopen(argv[2], "ra");
+	FILE* f = fopen(argv[2], "ra");
 
 	// we can now prepare the mapping
-	int mapping[MAX_COLOURS];
+	int   mapping[MAX_COLOURS];
+	int   found[MAX_COLOURS];
+	int   converted[MAX_COLOURS];
+	Uint8 origRed[MAX_COLOURS];
+	Uint8 origGreen[MAX_COLOURS];
+	Uint8 origBlue[MAX_COLOURS];
 	for (int i = 0; i < fmt->palette->ncolors; i++) {
-		int found = 0;
-		Uint8 red;
-		Uint8 green;
-		Uint8 blue;
-		SDL_GetRGB(i, fmt, &red, &green, &blue);
+		found[i]     = 0;
+		mapping[i]   = 0;
+		converted[i] = 0;
+		SDL_GetRGB(i, fmt, &origRed[i], &origGreen[i], &origBlue[i]);
 		char buff[7];
-		snprintf(buff, sizeof(buff), "%02x%02x%02x", red, green, blue);
-		// red, green and blue contains the colour definition. Now we need to enter the u7chunk retrieved for that one
+		snprintf(
+				buff, sizeof(buff), "%02x%02x%02x", origRed[i], origGreen[i],
+				origBlue[i]);
+		// red, green and blue contains the colour definition. Now we need to
+		// enter the u7chunk retrieved for that one
 
-		fseek(f, 0, SEEK_SET); // back to the beginning for each colour
-		while ((!feof(f)) && found == 0) {
+		fseek(f, 0, SEEK_SET);    // back to the beginning for each colour
+		while ((!feof(f)) && found[i] == 0) {
 			unsigned j;
-			char cmd[256];
+			char     cmd[256];
 			fscanf(f, "%s %u", cmd, &j);
-			//printf("DEBUG: I've read: %s %d and I'm looking for %s\n",cmd,j,buff);
-			if (strcasecmp(cmd, buff) == 0) { // chains match
-				//printf("DEBUG:  and I've found a match!\n");
-				found = 1;
+			if (strcasecmp(cmd, buff) == 0) {    // chains match
+				found[i]   = 1;
 				mapping[i] = j;
 			}
-		}
-		if (!found) {
-			printf("Colour in %s (#%02x%02x%02x) not defined in %s!\n", argv[1], red, green, blue, argv[2]);
-			exit(-1);
 		}
 	}
 	printf("Colour map is successfully loaded from %s\n", argv[2]);
 	fclose(f);
 
-	/*  for(i=0;i<fmt->palette->ncolors;i++){
-	  printf("mapping[%d] = %04x\n",i,mapping[i]);
+	for (int i = 0; i < fmt->palette->ncolors; i++) {
+		if (found[i] == 1) {
+			printf("mapping[%3d] = color %02x%02x%02x %3d %3d %3d -> "
+				   "chunk %04x (%5d)\n",
+				   i, origRed[i], origGreen[i], origBlue[i], origRed[i],
+				   origGreen[i], origBlue[i], mapping[i], mapping[i]);
+		}
 	}
-	*/
-	u7map mymap;            // a table in which the map is created and is then written to a file
+	u7map mymap;    // a table in which the map is created and is then written
+					// to a file
 	// need to read all pixels one after the other
 	for (int j = 0; j < mock_map->h; j++) {
 		for (int i = 0; i < mock_map->w; i++) {
 			Uint32 pix = getpixel(mock_map, i, j);
 
 			// calculate offset in u7map based on i,j coordinate of point in map
-			long int offset = 256 * sizeof(chunk) * ((i / 16)  + ((j / 16) * 12)) + sizeof(chunk) * ((i % 16) + ((j % 16) * 16));
-			//printf("DEBUG: offset = %ld, i=%d, j=%d\n",offset,i,j);
-
-			mymap[offset] = mapping[pix] & 0xFF;
-			mymap[offset + 1] = (mapping[pix] >> 8) & 0xFF;
+			long int offset = 256 * sizeof(chunk) * ((i / 16) + ((j / 16) * 12))
+							  + sizeof(chunk) * ((i % 16) + ((j % 16) * 16));
+			// printf("DEBUG: offset = %ld, i=%d, j=%d\n",offset,i,j);
+			if (found[pix] == 1) {
+				converted[pix]    = converted[pix] + 1;
+				mymap[offset]     = mapping[pix] & 0xFF;
+				mymap[offset + 1] = (mapping[pix] >> 8) & 0xFF;
+			} else {
+				printf("Picture at %3d x %3d, Not expected pixel is %02x\n", i,
+					   j, pix);
+			}
+		}
+	}
+	for (int i = 0; i < fmt->palette->ncolors; i++) {
+		if (found[i] == 1) {
+			printf("mapping[%3d] = color %02x%02x%02x %3d %3d %3d -> "
+				   "chunk %04x (%5d), converted %5d times\n",
+				   i, origRed[i], origGreen[i], origBlue[i], origRed[i],
+				   origGreen[i], origBlue[i], mapping[i], mapping[i],
+				   converted[i]);
 		}
 	}
 
@@ -142,4 +191,3 @@ int main(int argc, char **argv) {
 	printf("Done!\n");
 	return 0;
 }
-

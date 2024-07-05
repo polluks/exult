@@ -26,6 +26,9 @@
 		8A2C52621DE6E9000016E16A /* U7fileman.cc in Sources */ = {isa = PBXBuildFile; fileRef = E700DD7A1A6E3161006C8BE4 /* U7fileman.cc */; };
 		8A2C52631DE6E9040016E16A /* U7obj.cc in Sources */ = {isa = PBXBuildFile; fileRef = E700DD7C1A6E3161006C8BE4 /* U7obj.cc */; };
 		8A2C52641DE6E9070016E16A /* utils.cc in Sources */ = {isa = PBXBuildFile; fileRef = E700DD7E1A6E3161006C8BE4 /* utils.cc */; };
+		8A33B5DE2C2051B800075AF4 /* Mixer_gump.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8A33B5DA2C2051B800075AF4 /* Mixer_gump.cc */; };
+		8A33B5DF2C2051B800075AF4 /* Modal_gump.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8A33B5DC2C2051B800075AF4 /* Modal_gump.cc */; };
+		8A33B5E02C2051B800075AF4 /* Slider_widget.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8A33B5DD2C2051B800075AF4 /* Slider_widget.cc */; };
 		8A45A3B8247C068500F12F4D /* joythumb-glass.png in Resources */ = {isa = PBXBuildFile; fileRef = 8A45A3AC247C068500F12F4D /* joythumb-glass.png */; };
 		8A5252C4257188A5005AD385 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A5252A725718897005AD385 /* libSDL2.a */; };
 		8A599C2224605925006E3252 /* libmt32emu.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A599C21246058A9006E3252 /* libmt32emu.a */; };
@@ -399,6 +402,11 @@
 		8A0C19E11D6D9F1800B9105A /* sibetaintrinsics.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sibetaintrinsics.h; sourceTree = "<group>"; };
 		8A1C581B1FE7D91B00738E40 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		8A204E1D29F572DF00E7D3E2 /* FluidSynth.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = FluidSynth.xcodeproj; path = "fluidsynth-sans-glib/xcode-ios/FluidSynth.xcodeproj"; sourceTree = "<group>"; };
+		8A33B5C92C2051B800075AF4 /* Slider_widget.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Slider_widget.h; path = ../gumps/Slider_widget.h; sourceTree = "<group>"; };
+		8A33B5DA2C2051B800075AF4 /* Mixer_gump.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Mixer_gump.cc; path = ../gumps/Mixer_gump.cc; sourceTree = "<group>"; };
+		8A33B5DB2C2051B800075AF4 /* Mixer_gump.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Mixer_gump.h; path = ../gumps/Mixer_gump.h; sourceTree = "<group>"; };
+		8A33B5DC2C2051B800075AF4 /* Modal_gump.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Modal_gump.cc; path = ../gumps/Modal_gump.cc; sourceTree = "<group>"; };
+		8A33B5DD2C2051B800075AF4 /* Slider_widget.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Slider_widget.cc; path = ../gumps/Slider_widget.cc; sourceTree = "<group>"; };
 		8A45A3AC247C068500F12F4D /* joythumb-glass.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "joythumb-glass.png"; sourceTree = "<group>"; };
 		8A52528E25718896005AD385 /* SDL.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = SDL.xcodeproj; path = SDL/Xcode/SDL/SDL.xcodeproj; sourceTree = "<group>"; };
 		8A599C1C246058A9006E3252 /* libmt32emu.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = libmt32emu.xcodeproj; sourceTree = "<group>"; };
@@ -431,7 +439,7 @@
 		8AB53D8B1C9CA0A90084C69D /* ShortcutBar_gump.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ShortcutBar_gump.h; path = ../gumps/ShortcutBar_gump.h; sourceTree = "<group>"; };
 		8AC797C51C8D0E4F001AF014 /* unzip.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = unzip.cc; sourceTree = "<group>"; };
 		8AC797C61C8D0E4F001AF014 /* zip.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = zip.cc; sourceTree = "<group>"; };
-		8AD2C46A1DF8390E006D6005 /* array_size.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = array_size.h; path = ../headers/array_size.h; sourceTree = "<group>"; };
+		8AD2C46A1DF8390E006D6005 /* span.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = span.h; path = ../headers/span.h; sourceTree = "<group>"; };
 		8AD2C46F1DF83918006D6005 /* ios_state.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = ios_state.hpp; path = ../headers/ios_state.hpp; sourceTree = "<group>"; };
 		8AD4A92F1A92B9DB0004762D /* InputOptions_gump.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = InputOptions_gump.cc; path = ../gumps/InputOptions_gump.cc; sourceTree = "<group>"; };
 		8AD4A9301A92B9DB0004762D /* InputOptions_gump.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = InputOptions_gump.h; path = ../gumps/InputOptions_gump.h; sourceTree = "<group>"; };
@@ -683,6 +691,7 @@
 		E700DD7D1A6E3161006C8BE4 /* U7obj.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = U7obj.h; path = ../files/U7obj.h; sourceTree = "<group>"; };
 		E700DD7E1A6E3161006C8BE4 /* utils.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = utils.cc; path = ../files/utils.cc; sourceTree = "<group>"; };
 		E700DD7F1A6E3161006C8BE4 /* utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = utils.h; path = ../files/utils.h; sourceTree = "<group>"; };
+		1E8448CF81742D9F535F9713 /* endianio.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = endianio.h; path = ../files/endianio.h; sourceTree = "<group>"; };
 		E700DD881A6E3161006C8BE4 /* unzip.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = unzip.h; sourceTree = "<group>"; };
 		E700DD8A1A6E3161006C8BE4 /* zip.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zip.h; sourceTree = "<group>"; };
 		E700DDDF1A6E3425006C8BE4 /* ArbScaler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ArbScaler.h; path = ../imagewin/ArbScaler.h; sourceTree = "<group>"; };
@@ -1115,7 +1124,7 @@
 			isa = PBXGroup;
 			children = (
 				8AD2C46F1DF83918006D6005 /* ios_state.hpp */,
-				8AD2C46A1DF8390E006D6005 /* array_size.h */,
+				8AD2C46A1DF8390E006D6005 /* span.h */,
 				8AB0AE1B1CBEF522001DBB16 /* ignore_unused_variable_warning.h */,
 				E700DC2E1A6E2DBC006C8BE4 /* common_types.h */,
 				E700DC2F1A6E2DBC006C8BE4 /* exceptions.h */,
@@ -1355,6 +1364,7 @@
 				E700DD7D1A6E3161006C8BE4 /* U7obj.h */,
 				E700DD7E1A6E3161006C8BE4 /* utils.cc */,
 				E700DD7F1A6E3161006C8BE4 /* utils.h */,
+				1E8448CF81742D9F535F9713 /* endianio.h */,
 				8A9EB724281878EC0025C639 /* sdlrwopsistream.cc */,
 				8A9EB723281878EC0025C639 /* sdlrwopsistream.h */,
 				8A9EB722281878EC0025C639 /* sdlrwopsostream.cc */,
@@ -1427,6 +1437,11 @@
 		E700DE351A6E3478006C8BE4 /* gumps */ = {
 			isa = PBXGroup;
 			children = (
+				8A33B5DA2C2051B800075AF4 /* Mixer_gump.cc */,
+				8A33B5DB2C2051B800075AF4 /* Mixer_gump.h */,
+				8A33B5DC2C2051B800075AF4 /* Modal_gump.cc */,
+				8A33B5DD2C2051B800075AF4 /* Slider_widget.cc */,
+				8A33B5C92C2051B800075AF4 /* Slider_widget.h */,
 				8AB53D8A1C9CA0A90084C69D /* ShortcutBar_gump.cc */,
 				8AB53D8B1C9CA0A90084C69D /* ShortcutBar_gump.h */,
 				8AD4A92F1A92B9DB0004762D /* InputOptions_gump.cc */,
@@ -1719,6 +1734,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1D6058960D05DD3E006BFB54 /* Build configuration list for PBXNativeTarget "Exult" */;
 			buildPhases = (
+				8ADCFD632BF3AFA2004702F9 /* ShellScript */,
 				1D60588D0D05DD3D006BFB54 /* Resources */,
 				1D60588E0D05DD3D006BFB54 /* Sources */,
 				1D60588F0D05DD3D006BFB54 /* Frameworks */,
@@ -1967,6 +1983,24 @@
 			shellPath = /bin/sh;
 			shellScript = "$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/flx.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/bg/bg_mr_faces.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/bg/bg_paperdol.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/bg/introsfx_mt.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/bg/introsfx_sb.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/bg/flx.in\n$TARGET_BUILD_DIR/expack  -i $PROJECT_DIR/../data/si/flx.in\n[[ -d $PROJECT_DIR/data ]] || mkdir $PROJECT_DIR/data\ncp -p $PROJECT_DIR/../data/*.flx $PROJECT_DIR/data/\n";
 		};
+		8ADCFD632BF3AFA2004702F9 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if git rev-parse HEAD >/dev/null 2>&1;then  \\\n    echo //this file is generated by the exult build process >gitinfo.h; \\\n    echo \"#define GIT_REVISION \\\"`git rev-parse HEAD`\\\"\" >> gitinfo.h; \\\n    echo >> gitinfo.h; \\\n    git tag -l --points-at HEAD --format=\"#define GIT_TAG \\\"%(refname:short)\\\"\" >>gitinfo.h; \\\n    echo >>gitinfo.h; \\\n    git branch --points-at=HEAD --format=\"#define GIT_REMOTE_BRANCH \\\"%(upstream:strip=-1)\\\"\" >> gitinfo.h; \\\n    echo >>gitinfo.h; \\\n    echo \"#define GIT_REMOTE_URL \\\"`git ls-remote --get-url`\\\"\" >> gitinfo.h; \\\n    echo >>gitinfo.h; \\\nfi\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -1980,6 +2014,7 @@
 				E700DF751A6E34C6006C8BE4 /* useval.cc in Sources */,
 				E700DD5E1A6E3121006C8BE4 /* sfxinf.cc in Sources */,
 				E700DCAE1A6E30A7006C8BE4 /* shapeid.cc in Sources */,
+				8A33B5E02C2051B800075AF4 /* Slider_widget.cc in Sources */,
 				E700DE241A6E344D006C8BE4 /* ibuf8.cc in Sources */,
 				8A9A03B029F42948000AF341 /* FluidSynthMidiDriver.cpp in Sources */,
 				E700DD511A6E3121006C8BE4 /* bodyinf.cc in Sources */,
@@ -2119,6 +2154,7 @@
 				E700DCD71A6E30D8006C8BE4 /* animate.cc in Sources */,
 				E700DD601A6E3121006C8BE4 /* weaponinf.cc in Sources */,
 				E700DFB51A6E372A006C8BE4 /* Astar.cc in Sources */,
+				8A33B5DF2C2051B800075AF4 /* Modal_gump.cc in Sources */,
 				E700DC931A6E30A7006C8BE4 /* cheat.cc in Sources */,
 				E700DCB01A6E30A7006C8BE4 /* tqueue.cc in Sources */,
 				E700DC921A6E30A7006C8BE4 /* cheat_screen.cc in Sources */,
@@ -2148,6 +2184,7 @@
 				E700DE7F1A6E3497006C8BE4 /* Book_gump.cc in Sources */,
 				E700DE851A6E3497006C8BE4 /* Gamemenu_gump.cc in Sources */,
 				E700DE311A6E344D006C8BE4 /* scale_hq4x.cc in Sources */,
+				8A33B5DE2C2051B800075AF4 /* Mixer_gump.cc in Sources */,
 				E700DCA51A6E30A7006C8BE4 /* monsters.cc in Sources */,
 				E700DBBC1A6E2CE7006C8BE4 /* AudioMixer.cc in Sources */,
 				E700DFD11A6E3943006C8BE4 /* bggame.cc in Sources */,
@@ -2314,7 +2351,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_IDENTITY = "-";
 				DEAD_CODE_STRIPPING = YES;
@@ -2344,7 +2381,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_IDENTITY = "-";
 				DEAD_CODE_STRIPPING = YES;

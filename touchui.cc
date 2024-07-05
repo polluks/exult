@@ -19,20 +19,21 @@
  */
 
 #include "touchui.h"
+
 #include <cstring>
+#include <limits>
 
-uint32 TouchUI::eventType = ~uint32(0);
+uint32 TouchUI::eventType = std::numeric_limits<uint32>::max();
 
-void TouchUI::onTextInput(const char *text) {
-	SDL_Event event;
-
+void TouchUI::onTextInput(const char* text) {
 	if (text == nullptr) {
 		return;
 	}
 
+	SDL_Event event;
 	SDL_zero(event);
-	event.type = TouchUI::eventType;
-	event.user.code = TouchUI::EVENT_CODE_TEXT_INPUT;
+	event.type       = TouchUI::eventType;
+	event.user.code  = TouchUI::EVENT_CODE_TEXT_INPUT;
 	event.user.data1 = strdup(text);
 	event.user.data2 = nullptr;
 	SDL_PushEvent(&event);

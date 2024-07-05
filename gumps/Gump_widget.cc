@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2022 The Exult Team
+Copyright (C) 2022-2024 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -16,25 +16,24 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#include "gamewin.h"
-#include "Gump.h"
 #include "Gump_widget.h"
+
+#include "Gump.h"
+#include "gamewin.h"
 
 /*
  *  Is a given screen point on this widget?
  */
 
 bool Gump_widget::on_widget(
-    int mx, int my          // Point in window.
+		int mx, int my    // Point in window.
 ) const {
-	mx -= parent->get_x() + x;  // Get point rel. to gump.
-	my -= parent->get_y() + y;
-	Shape_frame *cshape = get_shape();
+	screen_to_local(mx, my);
+	Shape_frame* cshape = get_shape();
 	return (cshape != nullptr) ? cshape->has_point(mx, my) : false;
 }
 
@@ -42,17 +41,13 @@ bool Gump_widget::on_widget(
  *  Repaint checkmark, etc.
  */
 
-void Gump_widget::paint(
-) {
-	int px = 0;
-	int py = 0;
+void Gump_widget::paint() {
+	int sx = 0;
+	int sy = 0;
 
-	if (parent) {
-		px = parent->get_x();
-		py = parent->get_y();
-	}
+	local_to_screen(sx, sy);
 
-	paint_shape(x + px, y + py);
+	paint_shape(sx, sy);
 }
 
 /*
@@ -60,18 +55,18 @@ void Gump_widget::paint(
  */
 
 TileRect Gump_widget::get_rect() {
-	int px = x;
-	int py = y;
+	int sx = 0;
+	int sy = 0;
 
-	if (parent) {
-		px += parent->get_x();
-		py += parent->get_y();
+	local_to_screen(sx, sy);
+
+	Shape_frame* s = get_shape();
+
+	if (!s) {
+		return TileRect(0, 0, 0, 0);
 	}
 
-	Shape_frame *s = get_shape();
-
-	if (!s) return TileRect(0, 0, 0, 0);
-
-	return TileRect(px - s->get_xleft(),   py - s->get_yabove(),
-	                 s->get_width(), s->get_height());
+	return TileRect(
+			sx - s->get_xleft(), sy - s->get_yabove(), s->get_width(),
+			s->get_height());
 }

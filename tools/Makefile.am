@@ -1,7 +1,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/headers -I$(top_srcdir)/files -I$(top_srcdir)/usecode \
 	-I$(top_srcdir) -I$(top_srcdir)/shapes -I$(top_srcdir)/imagewin \
 	-I$(top_srcdir)/conf $(DEBUG_LEVEL) $(OPT_LEVEL) $(WARNINGS) $(CPPFLAGS) $(SDL_CFLAGS) \
-	$(GDK_PIXBUF_CFLAGS)
+	$(GDK_PIXBUF_CFLAGS) $(PNG_CFLAGS)
 
 if CROSS_COMPILING
 if BUILD_TOOLS
@@ -43,40 +43,40 @@ expack_SOURCES = \
 	expack.cc
 
 expack_LDADD = \
-	../files/libu7file.la \
+	$(top_builddir)/files/libu7file.la \
 	$(SYSLIBS)
 
 ipack_SOURCES = \
 	ipack.cc
 
 ipack_LDADD = \
-	../files/libu7file.la \
-	../shapes/libshapes.la \
-	../imagewin/libimagewin.la \
-	-lpng -lz $(SYSLIBS)
+	$(top_builddir)/files/libu7file.la \
+	$(top_builddir)/shapes/libshapes.la \
+	$(top_builddir)/imagewin/libimagewin.la \
+	$(PNG_LIBS) $(ZLIB_LIBS) $(SYSLIBS)
 
 gnome_shp_thumbnailer_SOURCES = \
 	gnome_shp_thumbnailer.cc
 
 gnome_shp_thumbnailer_LDADD = \
-	../shapes/libshapes.la \
-	../imagewin/libimagewin.la \
-	../files/libu7file.la \
-	-lpng -lz $(SYSLIBS) $(GDK_PIXBUF_LIBS)
+	$(top_builddir)/shapes/libshapes.la \
+	$(top_builddir)/imagewin/libimagewin.la \
+	$(top_builddir)/files/libu7file.la \
+	$(PNG_LIBS) $(ZLIB_LIBS) $(SYSLIBS) $(GDK_PIXBUF_LIBS)
 
 if BUILD_GTHUMB
 ## Does not work:
 #thumbnailerdir=$(datadir)/thumbnailers
 ## Needs to be in /usr/share/thumbnailers
 thumbnailerdir=/usr/share/thumbnailers
-thumbnailer_in_files=gnome_u7shapes.thumbnailer.in
+thumbnailer_in_files=$(top_srcdir)/tools/gnome_u7shapes.thumbnailer.in
 thumbnailer_DATA=$(thumbnailer_in_files:.thumbnailer.in=.thumbnailer)
 gnome_shp_thumbnailer_DATA=x-shapefile.xml
 gnome_shp_thumbnailerdir=$(DESTDIR)$(datadir)/mime/packages
 
 # Rule to make the service file with bindir expanded
 $(thumbnailer_DATA): $(thumbnailer_in_files)
-	@$(SED) -e "s|\@bindir\@|$(bindir)|" $< > $@
+	@$(SED) -e "s|\@bindir\@|$(bindir)|" $(thumbnailer_in_files) > $@
 endif
 
 wuc_SOURCES = \
@@ -98,21 +98,21 @@ splitshp_LDADD = $(SYSLIBS)
 textpack_SOURCES = textpack.cc
 
 textpack_LDADD = \
-	../files/libu7file.la \
+	$(top_builddir)/files/libu7file.la \
 	$(SYSLIBS)
 
 u7voice2syx_SOURCES = u7voice2syx.cc
 
 u7voice2syx_LDADD = \
-	../files/libu7file.la \
+	$(top_builddir)/files/libu7file.la \
 	$(SYSLIBS)
 
 cmanip_SOURCES = \
 	cmanip.cc
 
 cmanip_LDADD = \
-	../conf/libconf.la \
-	../files/libu7file.la \
+	$(top_builddir)/conf/libconf.la \
+	$(top_builddir)/files/libu7file.la \
 	$(SYSLIBS)
 
 if BUILD_GTHUMB

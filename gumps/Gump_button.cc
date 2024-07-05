@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2000-2022 The Exult Team
+Copyright (C) 2000-2024 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,22 +17,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
-#include "gamewin.h"
 #include "Gump_button.h"
+
 #include "Gump.h"
+#include "gamewin.h"
 #include "ignore_unused_variable_warning.h"
 
 /*
  *  Redisplay as 'pushed'.
  */
 
-bool Gump_button::push(
-    int button
-) {
-	if (button == 1) {
+bool Gump_button::push(MouseButton button) {
+	if (button == MouseButton::Left) {
 		set_pushed(button);
 		paint();
 		gwin->set_painted();
@@ -45,10 +44,8 @@ bool Gump_button::push(
  *  Redisplay as 'unpushed'.
  */
 
-void Gump_button::unpush(
-    int button
-) {
-	if (button == 1) {
+void Gump_button::unpush(MouseButton button) {
+	if (button == MouseButton::Left) {
 		set_pushed(false);
 		paint();
 		gwin->set_painted();
@@ -59,9 +56,12 @@ void Gump_button::unpush(
  *  Default method for double-click.
  */
 
-void Gump_button::double_clicked(
-    int x, int y
-) {
+bool Gump_button::activate(MouseButton button) {
+	ignore_unused_variable_warning(button);
+	return false;
+}
+
+void Gump_button::double_clicked(int x, int y) {
 	ignore_unused_variable_warning(x, y);
 }
 
@@ -69,18 +69,14 @@ void Gump_button::double_clicked(
  *  Repaint checkmark, etc.
  */
 
-void Gump_button::paint(
-) {
-	int px = 0;
-	int py = 0;
+void Gump_button::paint() {
+	int sx = 0;
+	int sy = 0;
 
-	if (parent) {
-		px = parent->get_x();
-		py = parent->get_y();
-	}
+	local_to_screen(sx, sy);
 
 	const int prev_frame = get_framenum();
 	set_frame(prev_frame + (is_pushed() ? 1 : 0));
-	paint_shape(x + px, y + py);
+	paint_shape(sx, sy);
 	set_frame(prev_frame);
 }

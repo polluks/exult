@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2022 The Exult Team
+Copyright (C) 2001-2024 The Exult Team
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,21 +17,23 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#	include <config.h>
 #endif
 
 #include "Gump_ToggleButton.h"
-#include "gamewin.h"
-#include "Gump.h"
 
-bool Gump_ToggleButton::activate(int button) {
+#include "Gump.h"
+#include "gamewin.h"
+
+bool Gump_ToggleButton::activate(MouseButton button) {
 	int delta;
-	if (button == 1)
+	if (button == MouseButton::Left) {
 		delta = 2;
-	else if (button == 3)
+	} else if (button == MouseButton::Right) {
 		delta = 2 * numselections - 2;
-	else
+	} else {
 		return false;
+	}
 
 	set_frame((get_framenum() + delta) % (2 * numselections));
 	toggle(get_framenum() / 2);
@@ -40,8 +42,8 @@ bool Gump_ToggleButton::activate(int button) {
 	return true;
 }
 
-bool Gump_ToggleButton::push(int button) {
-	if (button == 1 || button == 3) {
+bool Gump_ToggleButton::push(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Right) {
 		set_pushed(button);
 		paint();
 		gwin->set_painted();
@@ -50,26 +52,24 @@ bool Gump_ToggleButton::push(int button) {
 	return false;
 }
 
-
-void Gump_ToggleButton::unpush(
-    int button
-) {
-	if (button == 1 || button == 3) {
+void Gump_ToggleButton::unpush(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Right) {
 		set_pushed(false);
 		paint();
 		gwin->set_painted();
 	}
 }
 
-bool Gump_ToggleTextButton::activate(int button) {
-	int delta;
+bool Gump_ToggleTextButton::activate(MouseButton button) {
+	int       delta;
 	const int numselections = selections.size();
-	if (button == 1)
+	if (button == MouseButton::Left) {
 		delta = 1;
-	else if (button == 3)
+	} else if (button == MouseButton::Right) {
 		delta = numselections - 1;
-	else
+	} else {
 		return false;
+	}
 
 	set_frame((get_framenum() + delta) % numselections);
 	text = selections[get_framenum()];
@@ -80,8 +80,8 @@ bool Gump_ToggleTextButton::activate(int button) {
 	return true;
 }
 
-bool Gump_ToggleTextButton::push(int button) {
-	if (button == 1 || button == 3) {
+bool Gump_ToggleTextButton::push(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Right) {
 		set_pushed(button);
 		paint();
 		gwin->set_painted();
@@ -90,11 +90,8 @@ bool Gump_ToggleTextButton::push(int button) {
 	return false;
 }
 
-
-void Gump_ToggleTextButton::unpush(
-    int button
-) {
-	if (button == 1 || button == 3) {
+void Gump_ToggleTextButton::unpush(MouseButton button) {
+	if (button == MouseButton::Left || button == MouseButton::Right) {
 		set_pushed(false);
 		paint();
 		gwin->set_painted();
