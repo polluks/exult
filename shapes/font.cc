@@ -747,6 +747,7 @@ int Font::load_internal(IDataSource& data, int hlead, int vlead) {
 		font_shapes.reset();
 		hor_lead = 0;
 		ver_lead = 0;
+		return -1;
 	} else {
 		// Is it an IFF archive?
 		char hdr[5] = {0};
@@ -763,27 +764,12 @@ int Font::load_internal(IDataSource& data, int hlead, int vlead) {
 	return 0;
 }
 
-/**
- *  Loads a font from a File_spec.
- *  @param fname0   First file spec.
- *  @param index    Number of font to load.
- *  @param hleah    Horizontal lead of the font.
- *  @param vleah    Vertical lead of the font.
- */
 int Font::load(const File_spec& fname0, int index, int hlead, int vlead) {
 	clean_up();
 	IExultDataSource data(fname0, index);
 	return load_internal(data, hlead, vlead);
 }
 
-/**
- *  Loads a font from a File_spec.
- *  @param fname0   First file spec.
- *  @param fname1   Second file spec.
- *  @param index    Number of font to load.
- *  @param hleah    Horizontal lead of the font.
- *  @param vleah    Vertical lead of the font.
- */
 int Font::load(
 		const File_spec& fname0, const File_spec& fname1, int index, int hlead,
 		int vlead) {
@@ -839,7 +825,7 @@ void FontManager::add_font(
 		int vlead) {
 	remove_font(name);
 
-	Font* font = new Font(fname0, index, hlead, vlead);
+	auto font = std::make_shared<Font>(fname0, index, hlead, vlead);
 
 	fonts[name] = font;
 }
@@ -858,26 +844,19 @@ void FontManager::add_font(
 		int index, int hlead, int vlead) {
 	remove_font(name);
 
-	Font* font = new Font(fname0, fname1, index, hlead, vlead);
+	auto font = std::make_shared<Font>(fname0, fname1, index, hlead, vlead);
 
 	fonts[name] = font;
 }
 
 void FontManager::remove_font(const char* name) {
-	if (fonts[name] != nullptr) {
-		delete fonts[name];
-		fonts.erase(name);
-	}
+	fonts.erase(name);
 }
 
-Font* FontManager::get_font(const char* name) {
+std::shared_ptr<Font> FontManager::get_font(const char* name) {
 	return fonts[name];
 }
 
 void FontManager::reset() {
-	for (auto& font : fonts) {
-		delete font.second;
-	}
-
 	fonts.clear();
 }

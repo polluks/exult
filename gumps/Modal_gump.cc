@@ -32,7 +32,8 @@ Modal_gump::Modal_gump(
 		Container_game_object* cont, int initx, int inity, int shnum,
 		ShapeFile shfile)
 		: Gump(cont, initx, inity, shnum, shfile), done(false), pushed(nullptr),
-		  drag_mx(INT_MIN), drag_my(INT_MIN), no_dragging(false) {
+		  drag_mx(INT_MIN), drag_my(INT_MIN), no_dragging(false),
+		  procedural_background(0, 0, 0, 0) {
 	GetDragType();
 }
 
@@ -40,7 +41,8 @@ Modal_gump::Modal_gump(
 
 Modal_gump::Modal_gump(Container_game_object* cont, int shnum, ShapeFile shfile)
 		: Gump(cont, shnum, shfile), done(false), pushed(nullptr),
-		  drag_mx(INT_MIN), drag_my(INT_MIN), no_dragging(false) {
+		  drag_mx(INT_MIN), drag_my(INT_MIN), no_dragging(false),
+		  procedural_background(0, 0, 0, 0) {
 	GetDragType();
 }
 
@@ -264,13 +266,13 @@ void Modal_gump::paint() {
 
 	// if we have a message to display, check the timeout
 	if (!popup_message.empty()) {
-		Font* font     = fontManager.get_font("SMALL_BLACK_FONT");
-		int   messagew = font->get_text_width(popup_message.c_str());
-		int   messageh = font->get_text_height() + 8;
-		int   messagex = backrect.x + backrect.w / 2 - messagew / 2;
-		int   messagey = backrect.y - messageh;
-		int   boxx     = std::min(backrect.x, messagex - 2);
-		int   boxw     = std::max(messagew + 4, backrect.w);
+		std::shared_ptr<Font> font = fontManager.get_font("SMALL_BLACK_FONT");
+		int messagew = font->get_text_width(popup_message.c_str());
+		int messageh = font->get_text_height() + 8;
+		int messagex = backrect.x + backrect.w / 2 - messagew / 2;
+		int messagey = backrect.y - messageh;
+		int boxx     = std::min(backrect.x, messagex - 2);
+		int boxw     = std::max(messagew + 4, backrect.w);
 		ib->draw_box(
 				boxx, messagey, boxw, messageh, 0,
 				procedural_colours.Background, 0xff);

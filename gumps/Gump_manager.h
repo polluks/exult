@@ -105,13 +105,13 @@ public:
 
 	void set_gumps_dont_pause_game(bool p);
 
-	bool okay_to_quit();
+	bool okay_to_quit(Paintable* paint = nullptr);
 	int  prompt_for_number(
 			 int minval, int maxval, int step, int def,
 			 Paintable* paint = nullptr);
 	bool do_modal_gump(
 			Modal_gump*, Mouse::Mouse_shapes, Paintable* paint = nullptr);
-	void paint_num(int num, int x, int y, Font* font = nullptr);
+	void paint_num(int num, int x, int y, std::shared_ptr<Font> font = nullptr);
 
 	Gump_manager();
 
@@ -121,6 +121,8 @@ public:
 
 private:
 	bool handle_modal_gump_event(Modal_gump* gump, SDL_Event& event);
+
+	BackgroundPaintable* background = nullptr;
 };
 
 #endif    // GUMP_MANAGER_INCLUDED

@@ -32,6 +32,7 @@
 #include "ignore_unused_variable_warning.h"
 #include "utils.h"
 
+#include <algorithm>
 #include <cstring>
 
 #ifdef __GNUC__
@@ -525,12 +526,24 @@ const Palette::Ramp* Palette::get_ramps(unsigned int& num_ramps) {
 		unsigned int r    = 0;
 		int          last = pal1[3] + pal1[4] + pal1[5];
 		ramps[0].start    = 1;
-		for (int c = 2; c < 256; c++) {
+		// Where the palette sycling ramps start
+		uint8 palette_cycling[] = {
+				0xe0, 0xe8, 0xf0, 0xf4, 0xf8, 0xfc, 0xff,
+		};
+
+		for (unsigned int c = 2; c < 256; c++) {
 			int brightness = pal1[c * 3] + pal1[c * 3 + 1] + pal1[c * 3 + 2];
 
 			// Big change in brightness means start of a ramp (note 6 bit colour
 			// so 48 is equiv to 192 in 8 bit)
-			if (std::abs(brightness - last) > 48) {
+			// Special handling for palette cycling ranges so they behave better
+			if ((c < palette_cycling[0] && std::abs(brightness - last) > 48)
+				|| c
+						   == *std::find(
+								   palette_cycling,
+								   palette_cycling + std::size(palette_cycling)
+										   - 1,
+								   c)) {
 				// set the end point of the previous ramp
 				ramps[r].end = c - 1;
 				r++;
@@ -610,7 +623,7 @@ uint8 Palette::remap_colour_to_ramp(uint8 colindex, unsigned int newramp) {
 	return ramps[newramp].start + newoffset;
 }
 
-void Palette::Generate_remap_xformtable(uint8 table[256], int* remaps) {
+void Palette::Generate_remap_xformtable(uint8 table[256], const int* remaps) {
 	unsigned int num_ramps = 0;
 	auto         ramps     = get_ramps(num_ramps);
 

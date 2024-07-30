@@ -67,7 +67,24 @@ public:
 	Font(Font&&) noexcept            = default;
 	Font& operator=(Font&&) noexcept = default;
 	~Font() noexcept                 = default;
+	/**
+	 *  Loads a font from a File_spec.
+	 *  @param fname0   First file spec.
+	 *  @param index    Number of font to load.
+	 *  @param hleah    Horizontal lead of the font.
+	 *  @param vleah    Vertical lead of the font.
+	 *  @return 0 on success
+	 */
 	int load(const File_spec& fname0, int index, int hlead = 0, int vlead = 1);
+	/**
+	 *  Loads a font from a File_spec.
+	 *  @param fname0   First file spec.
+	 *  @param fname1   Second file spec.
+	 *  @param index    Number of font to load.
+	 *  @param hleah    Horizontal lead of the font.
+	 *  @param vleah    Vertical lead of the font.
+	 *  @return 0 on success
+	 */
 	int load(
 			const File_spec& fname0, const File_spec& fname1, int index,
 			int hlead = 0, int vlead = 1);
@@ -128,7 +145,8 @@ public:
  */
 class FontManager {
 private:
-	std::unordered_map<const char*, Font*, hashstr, eqstr> fonts;
+	std::unordered_map<const char*, std::shared_ptr<Font>, hashstr, eqstr>
+			fonts;
 
 public:
 	~FontManager();
@@ -138,8 +156,8 @@ public:
 	void add_font(
 			const char* name, const File_spec& fname0, const File_spec& fname1,
 			int index, int hlead = 0, int vlead = 1);
-	void  remove_font(const char* name);
-	Font* get_font(const char* name);
+	void                  remove_font(const char* name);
+	std::shared_ptr<Font> get_font(const char* name);
 
 	void reset();
 };

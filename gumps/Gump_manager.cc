@@ -473,6 +473,9 @@ void Gump_manager::update_gumps() {
  *  Paint the gumps
  */
 void Gump_manager::paint(bool modal) {
+	if (modal && background) {
+		background->paint();
+	}
 	for (Gump_list* gmp = open_gumps; gmp; gmp = gmp->next) {
 		if (gmp->gump->is_modal() == modal) {
 			gmp->gump->paint();
@@ -485,10 +488,17 @@ void Gump_manager::paint(bool modal) {
  *
  *  Output: true to quit.
  */
-bool Gump_manager::okay_to_quit() {
-	if (Yesno_gump::ask("Do you really want to quit?")) {
+bool Gump_manager::okay_to_quit(Paintable* paint) {
+	// Prevent reentering this function
+	static bool inthis = false;
+	if (inthis) {
+		return false;
+	}
+	inthis = true;
+	if (Yesno_gump::ask("Do you really want to quit?", paint)) {
 		quitting_time = QUIT_TIME_YES;
 	}
+	inthis = false;
 	return quitting_time != QUIT_TIME_NO;
 }
 
@@ -633,8 +643,8 @@ bool Gump_manager::handle_modal_gump_event(Modal_gump* gump, SDL_Event& event) {
 	case SDL_KEYDOWN:
 	case SDL_TEXTINPUT:
 		if (event.type == SDL_TEXTINPUT) {
-			event.key.keysym.sym = SDLK_UNKNOWN;
 			keysym_unicode       = event.text.text[0];
+			event.key.keysym.sym = SDLK_UNKNOWN;
 		}
 		{
 			if (event.key.keysym.sym == SDLK_ESCAPE) {
@@ -645,6 +655,14 @@ bool Gump_manager::handle_modal_gump_event(Modal_gump* gump, SDL_Event& event) {
 				&& (event.key.keysym.mod & KMOD_CTRL)) {
 				make_screenshot(true);
 				return true;
+			}
+			// Alt-x for quit
+			if ((event.key.keysym.sym == SDLK_x)
+				&& (event.key.keysym.mod & KMOD_ALT
+					|| event.key.keysym.mod & KMOD_GUI)) {
+				if (okay_to_quit()) {
+					return false;
+				}
 			}
 
 			if (event.key.keysym.sym > +'~') {
@@ -790,6 +808,10 @@ bool Gump_manager::do_modal_gump(
 		Mouse::mouse->set_shape(shape);
 	}
 	bool escaped = false;
+	background   = dynamic_cast<BackgroundPaintable*>(paint);
+	if (background) {
+		paint = nullptr;
+	}
 	add_gump(gump);
 	gump->run();
 	gwin->paint();    // Show everything now.
@@ -816,12 +838,13 @@ bool Gump_manager::do_modal_gump(
 				paint->paint();
 			}
 		}
+		gwin->rotatecolours();
 		Mouse::mouse->show();         // Re-display mouse.
 		if (!gwin->show() &&          // Blit to screen if necessary.
 			Mouse::mouse_update) {    // If not, did mouse change?
 			Mouse::mouse->blit_dirty();
 		}
-	} while (!gump->is_done() && !escaped);
+	} while (!gump->is_done() && !escaped && quitting_time == QUIT_TIME_NO);
 	Mouse::mouse->hide();
 	remove_gump(gump);
 	Mouse::mouse->set_shape(saveshape);
@@ -841,6 +864,7 @@ bool Gump_manager::do_modal_gump(
 			touchui->showGameControls();
 		}
 	}
+	background = nullptr;
 	return !escaped;
 }
 
@@ -868,10 +892,10 @@ int Gump_manager::prompt_for_number(
  */
 
 void Gump_manager::paint_num(
-		int   num,
-		int   x,    // Coord. of right edge of #.
-		int   y,    // Coord. of top of #.
-		Font* font) {
+		int                   num,
+		int                   x,    // Coord. of right edge of #.
+		int                   y,    // Coord. of top of #.
+		std::shared_ptr<Font> font) {
 	//  Shape_manager *sman = Shape_manager::get_instance();
 	char buf[20];
 	snprintf(buf, sizeof(buf), "%d", num);

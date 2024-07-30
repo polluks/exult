@@ -102,8 +102,10 @@ static bool is_path_separator(char cc) {
 static string remove_trailing_slash(const string& value) {
 	string new_path = value;
 	if (is_path_separator(new_path.back())) {
+#ifdef EXTRA_DEBUG
 		std::cerr << "Warning, trailing slash in path: \"" << new_path << "\""
 				  << std::endl;
+#endif
 		new_path.resize(new_path.size() - 1);
 	}
 
@@ -190,11 +192,10 @@ string get_system_path(const string& path) {
 	switch_slashes(new_path);
 #ifdef _WIN32
 	if (new_path.back() == '/' || new_path.back() == '\\') {
-		// std::cerr << "Trailing slash in path: \"" << new_path << "\"" <<
-		// std::endl << "...compensating, but go complain to Colourless anyway"
-		// << std::endl;
+#	ifdef EXTRA_DEBUG
 		std::cerr << "Warning, trailing slash in path: \"" << new_path << "\""
 				  << std::endl;
+#	endif
 		new_path += '.';
 	}
 #	ifdef NO_WIN32_PATH_SPACES
@@ -712,7 +713,7 @@ string Get_home() {
 #	ifdef PORTABLE_EXULT_WIN32
 	home_directory = ".";
 #	else
-	if (get_system_path("<HOME>") == ".") {
+	if (is_system_path_defined("<HOME>") && get_system_path("<HOME>") == ".") {
 		home_directory = ".";
 	} else {
 		shell32_wrapper shell32;
@@ -932,7 +933,7 @@ void setup_program_paths() {
 	const string savehome_dir(Get_savehome_dir(home_dir, config_dir));
 	const string gamehome_dir(Get_gamehome_dir(home_dir, config_dir));
 
-	if (get_system_path("<HOME>") != ".") {
+	if (!is_system_path_defined("<HOME>") || get_system_path("<HOME>") != ".") {
 		add_system_path("<HOME>", home_dir);
 	}
 	add_system_path("<CONFIG>", config_dir);

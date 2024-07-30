@@ -27,10 +27,12 @@
 
 #include <memory>
 #include <vector>
+#include <optional>
 
 class Shape_frame;
 class Shape_info;
 class Font;
+class Image_buffer;
 class Image_buffer8;
 struct Cursor_info;
 
@@ -176,9 +178,11 @@ public:
 	int paint_text(int fontnum, const char* text, int xoff, int yoff);
 	int paint_text(
 			int fontnum, const char* text, int textlen, int xoff, int yoff);
-	int paint_text(Font* font, const char* text, int xoff, int yoff);
 	int paint_text(
-			Font* font, const char* text, int textlen, int xoff, int yoff);
+			std::shared_ptr<Font> font, const char* text, int xoff, int yoff);
+	int paint_text(
+			std::shared_ptr<Font> font, const char* text, int textlen, int xoff,
+			int yoff);
 	// Get text width.
 	int get_text_width(int fontnum, const char* text);
 	int get_text_width(int fontnum, const char* text, int textlen);
@@ -188,7 +192,7 @@ public:
 	int find_cursor(
 			int fontnum, const char* text, int x, int y, int w, int h, int cx,
 			int cy, int vert_lead);
-	Font* get_font(int fontnum);
+	std::shared_ptr<Font> get_font(int fontnum);
 
 	size_t get_xforms_cnt() const {
 		return xforms.size();
@@ -322,7 +326,9 @@ public:
 		shapefile = shfile;
 	}
 
-	void paint_shape(int xoff, int yoff, bool force_trans = false) const {
+	void paint_shape(
+			int xoff, int yoff,
+			std::optional<bool> force_trans = std::nullopt) const {
 		auto           cache      = cache_shape();
 		unsigned char* transtable = nullptr;
 		unsigned char  table[256];
@@ -330,7 +336,8 @@ public:
 			transtable = Get_palette_transform_table(table);
 		}
 		sman->paint_shape(
-				xoff, yoff, cache.shape, cache.has_trans || force_trans,
+				xoff, yoff, cache.shape,
+				force_trans?*force_trans:cache.has_trans,
 				transtable);
 	}
 
@@ -362,7 +369,7 @@ public:
 };
 
 /*
- *  An interface used in Get_click():
+ *  An interface used in Get_click(): This will be painted on top of everything else
  */
 class Paintable {
 public:
@@ -370,4 +377,26 @@ public:
 	virtual ~Paintable() = default;
 };
 
+// A paintable that should be painted as a background and not on top of everything.
+class BackgroundPaintable : public Paintable {
+};
+
+class ImageBufferPaintable : public BackgroundPaintable {
+	std::unique_ptr<Image_buffer> buffer;
+	int x,y;
+
+public:
+	// Construct from an existing Image_buffer
+	ImageBufferPaintable(std::unique_ptr<Image_buffer>&& buffer, int x, int y) :
+			buffer(std::move(buffer)),
+			x(x),y(y) {
+	}
+
+	// Construct from a screenshot of the current screen
+	ImageBufferPaintable();
+
+	virtual ~ImageBufferPaintable() = default;
+	// Inherited via Paintable
+	void paint() override;
+};
 #endif

@@ -36,6 +36,7 @@
 #include "font.h"
 #include "game.h"
 #include "gamewin.h"
+#include "gump_utils.h"
 #include "items.h"
 #include "keys.h"
 #include "shapeid.h"
@@ -81,8 +82,18 @@ void ShapeBrowser::browse_shapes() {
 	Game_window*   gwin = Game_window::get_instance();
 	Shape_manager* sman = Shape_manager::get_instance();
 	Image_buffer8* ibuf = gwin->get_win()->get_ib8();
-	Font*          font = fontManager.get_font("MENU_FONT");
 
+	// Try to get the Font form Blackgate first because it looks better than the
+	// SI one
+	auto font = std::make_shared<Font>();
+	if (font->load(U7MAINSHP_FLX, 9, 1) != 0) {
+		font.reset();
+	}
+
+	// Get the font for this game if don't already have it
+	if (!font) {
+		font = fontManager.get_font("MENU_FONT");
+	}
 	const int   maxx    = gwin->get_width();
 	const int   centerx = maxx / 2;
 	const int   maxy    = gwin->get_height();
@@ -96,8 +107,9 @@ void ShapeBrowser::browse_shapes() {
 	if (!shapes) {
 		shapes = new Vga_file(fname);
 	}
-	bool      looping = true;
-	bool      redraw  = true;
+	bool      looping             = true;
+	bool      redraw              = true;
+	bool      do_palette_rotation = true;
 	SDL_Event event;
 	// int active;
 
@@ -201,8 +213,8 @@ void ShapeBrowser::browse_shapes() {
 			pal.apply();
 			redraw = false;
 		}
-		SDL_WaitEvent(&event);
-		if (event.type == SDL_KEYDOWN) {
+		Delay();
+		if (SDL_PollEvent(&event) && event.type == SDL_KEYDOWN) {
 			redraw           = true;
 			const bool shift = event.key.keysym.mod & KMOD_SHIFT;
 			// int ctrl = event.key.keysym.mod & KMOD_CTRL;
@@ -223,6 +235,10 @@ void ShapeBrowser::browse_shapes() {
 				handle_key(shift, current_palette, num_palettes);
 				current_xform = -1;
 				break;
+			case SDLK_r:
+				do_palette_rotation = !do_palette_rotation;
+				break;
+
 			case SDLK_x:
 				handle_key(shift, current_xform, num_xforms);
 				break;
@@ -273,6 +289,9 @@ void ShapeBrowser::browse_shapes() {
 
 				break;
 			}
+		}
+		if (do_palette_rotation && gwin->rotatecolours()) {
+			gwin->show();
 		}
 	} while (looping);
 }

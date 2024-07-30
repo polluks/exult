@@ -262,13 +262,12 @@ void Shape_manager::load() {
 	{
 		const auto& blendsflexspec
 				= GAME_BG ? File_spec(
-									BUNDLE_CHECK(
-											BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX),
-									EXULT_BG_FLX_BLENDS_DAT)
+						  BUNDLE_CHECK(BUNDLE_EXULT_BG_FLX, EXULT_BG_FLX),
+						  EXULT_BG_FLX_BLENDS_DAT)
 						  : File_spec(
-									BUNDLE_CHECK(
-											BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX),
-									EXULT_SI_FLX_BLENDS_DAT);
+								  BUNDLE_CHECK(
+										  BUNDLE_EXULT_SI_FLX, EXULT_SI_FLX),
+								  EXULT_SI_FLX_BLENDS_DAT);
 		const U7multiobject in(BLENDS, blendsflexspec, PATCH_BLENDS, 0);
 		size_t              len;
 		ptr = in.retrieve(len);
@@ -437,12 +436,13 @@ int Shape_manager::paint_text(
 }
 
 int Shape_manager::paint_text(
-		Font* font, const char* text, int xoff, int yoff) {
+		std::shared_ptr<Font> font, const char* text, int xoff, int yoff) {
 	return font->paint_text(gwin->get_win()->get_ib8(), text, xoff, yoff);
 }
 
 int Shape_manager::paint_text(
-		Font* font, const char* text, int textlen, int xoff, int yoff) {
+		std::shared_ptr<Font> font, const char* text, int textlen, int xoff,
+		int yoff) {
 	return font->paint_text(
 			gwin->get_win()->get_ib8(), text, textlen, xoff, yoff);
 }
@@ -469,7 +469,7 @@ int Shape_manager::find_cursor(
 	return fonts->find_cursor(fontnum, text, x, y, w, h, cx, cy, vert_lead);
 }
 
-Font* Shape_manager::get_font(int fontnum) {
+std::shared_ptr<Font> Shape_manager::get_font(int fontnum) {
 	return fonts->get_font(fontnum);
 }
 
@@ -564,4 +564,17 @@ uint8* ShapeID::Get_palette_transform_table(uint8 table[256]) const {
 		return sman->get_xform(index).colors;
 	}
 	return table;
+}
+
+ImageBufferPaintable::ImageBufferPaintable() : x(0),y(0) {
+	auto gwin = Game_window::get_instance();
+	auto iwin = gwin->get_win();
+	buffer = iwin->create_buffer(iwin->get_full_width(), iwin->get_full_height());
+	iwin->get(buffer.get(),x, y);
+}
+
+void ImageBufferPaintable::paint() {
+	auto gwin = Game_window::get_instance();
+	auto iwin = gwin->get_win();
+	iwin->put(buffer.get(), x, y);
 }

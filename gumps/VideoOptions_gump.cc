@@ -390,7 +390,7 @@ void VideoOptions_gump::save_settings() {
 	if (tw / (scaling + 1) < 320 || th / (scaling + 1) < 200) {
 		if (!Yesno_gump::ask(
 					"Scaled size less than 320x200.\nExult may be "
-					"unusable.\nApply anyway?",
+					"unusable.\nApply anyway?",nullptr,
 					"TINY_BLACK_FONT")) {
 			return;
 		}
@@ -398,7 +398,7 @@ void VideoOptions_gump::save_settings() {
 	if (highdpi != o_highdpi) {
 		if (!Yesno_gump::ask(
 					"After toggling HighDPI you will need to restart "
-					"Exult!\nApply anyway?",
+					"Exult!\nApply anyway?",nullptr,
 					"TINY_BLACK_FONT")) {
 			return;
 		}
@@ -460,8 +460,8 @@ void VideoOptions_gump::paint() {
 		}
 	}
 
-	Font*          font = fontManager.get_font("SMALL_BLACK_FONT");
-	Image_window8* iwin = gwin->get_win();
+	std::shared_ptr<Font> font = fontManager.get_font("SMALL_BLACK_FONT");
+	Image_window8*        iwin = gwin->get_win();
 #if !defined(__IPHONEOS__) && !defined(ANDROID)
 	font->paint_text(
 			iwin->get_ib8(), "Full Screen:", x + colx[0], y + rowy[0] + 1);
