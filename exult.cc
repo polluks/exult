@@ -249,7 +249,7 @@ static bool                 show_items_clicked = false;
 static int                  left_down_x = 0, left_down_y = 0;
 static int                  joy_aim_x = 0, joy_aim_y = 0;
 Mouse::Avatar_Speed_Factors joy_speed_factor = Mouse::medium_speed_factor;
-
+static Uint32               last_speed_cursor = 0; // When we last updated the mouse cursor
 #if defined _WIN32
 void        do_cleanup_output() {
     cleanup_output("std");
@@ -1203,7 +1203,6 @@ static void Select_for_combo(
 
 static void Handle_events() {
 	uint32 last_repaint = 0;    // For insuring animation repaints.
-	uint32 last_rotate  = 0;
 	uint32 last_rest    = 0;
 #ifdef DEBUG
 	uint32 last_fps = 0;
@@ -1262,12 +1261,9 @@ static void Handle_events() {
 		// always check every loop
 		if ((!gwin->is_moving() || gwin->get_step_tile_delta() == 1)
 			&& gwin->main_actor_can_act_charmed()) {
-			int       x;
-			int       y;    // Check for 'stuck' Avatar.
-			const int ms = SDL_GetMouseState(&x, &y);
-			// mouse movement needs to be adjusted for HighDPI
-			gwin->get_win()->screen_to_game_hdpi(
-					x, y, gwin->get_fastmouse(), x, y);
+			int       x  = Mouse::mouse->get_mousex();
+			int       y  = Mouse::mouse->get_mousey();
+			const int ms = SDL_GetMouseState(nullptr,nullptr);
 			if ((SDL_BUTTON(3) & ms) && !right_on_gump) {
 				gwin->start_actor(x, y, Mouse::mouse->avatar_speed);
 			} else if (ticks > last_rest) {
@@ -1337,6 +1333,12 @@ static void Handle_events() {
 			}
 			// Reset it for lerping.
 			last_x = last_y = -1;
+		}
+		// update mousecursor appearance if needed
+		if (last_speed_cursor + 100 < SDL_GetTicks() && !dragging) {
+			last_speed_cursor = SDL_GetTicks();
+			Mouse::mouse->set_speed_cursor();
+			Mouse::mouse_update = true;
 		}
 		Mouse::mouse->show();    // Re-display mouse.
 		gwin->rotatecolours();
@@ -1729,6 +1731,7 @@ static void Handle_event(SDL_Event& event) {
 
 		Mouse::mouse->move(mx, my);
 		if (!dragging) {
+			last_speed_cursor = SDL_GetTicks();
 			Mouse::mouse->set_speed_cursor();
 		}
 		Mouse::mouse_update = true;    // Need to blit mouse.
@@ -1793,7 +1796,7 @@ static void Handle_event(SDL_Event& event) {
 			int y;
 			SDL_GetMouseState(&x, &y);
 			gwin->get_win()->screen_to_game(x, y, gwin->get_fastmouse(), x, y);
-			Mouse::mouse->set_location(x, y);
+			Mouse::mouse->move(x, y);
 			gwin->set_painted();
 		}
 
@@ -2263,14 +2266,10 @@ void Wizard_eye(long msecs    // Length of time in milliseconds.
 		// Show animation every 1/20 sec.
 		if (ticks > last_repaint + 50 || gwin->was_painted()) {
 			// Right mouse button down?
-			int       x;
-			int       y;
-			const int ms = SDL_GetMouseState(&x, &y);
-			int       mx;
-			int       my;
-			// mouse movement of the eye needs to adjust for HighDPI
-			gwin->get_win()->screen_to_game_hdpi(
-					x, y, gwin->get_fastmouse(), mx, my);
+
+			const int ms = SDL_GetMouseState(nullptr,nullptr);
+			int       mx  = Mouse::mouse->get_mousex();
+			int       my  = Mouse::mouse->get_mousey();
 			if (SDL_BUTTON(3) & ms) {
 				Shift_wizards_eye(mx, my);
 			}
@@ -2422,7 +2421,7 @@ void change_gamma(bool down) {
 	// Message
 	Image_window8::get_gamma(r, g, b);
 	snprintf(
-			text, sizeof(text), "Gamma Set to R: %01.2f G: %01.2f B: %01.2f", r,
+			text, sizeof(text), "Gamma Set to R: %04.2f G: %04.2f B: %04.2f", r,
 			g, b);
 	gwin->get_effects()->center_text(text);
 
@@ -2430,11 +2429,11 @@ void change_gamma(bool down) {
 	snprintf(text, sizeof(text), "%d.%04d", igam / 10000, igam % 10000);
 	config->set("config/video/gamma/red", text, true);
 
-	igam = std::lround(b * 10000);
+	igam = std::lround(g * 10000);
 	snprintf(text, sizeof(text), "%d.%04d", igam / 10000, igam % 10000);
 	config->set("config/video/gamma/green", text, true);
 
-	igam = std::lround(g * 10000);
+	igam = std::lround(b * 10000);
 	snprintf(text, sizeof(text), "%d.%04d", igam / 10000, igam % 10000);
 	config->set("config/video/gamma/blue", text, true);
 }

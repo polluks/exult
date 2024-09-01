@@ -93,11 +93,7 @@ void Mixer_gump::cancel() {
 }
 
 void Mixer_gump::help() {
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-	// Pointing at Audio section for help as there is no item for the mixer
-	// yet
-	SDL_OpenURL("http://exult.info/docs.php#volume_mixer_gump");
-#endif
+	SDL_OpenURL("https://exult.info/docs.php#volume_mixer_gump");
 }
 
 void Mixer_gump::load_settings() {
@@ -231,11 +227,9 @@ Mixer_gump::Mixer_gump() : Modal_gump(nullptr, -1) {
 	buttons[id_cancel] = std::make_unique<Mixer_Textbutton>(
 			this, &Mixer_gump::cancel, canceltext, colx[4], rowy[num_sliders],
 			50);
-#if SDL_VERSION_ATLEAST(2, 0, 14)
 	// Help
 	buttons[id_help] = std::make_unique<Mixer_Textbutton>(
 			this, &Mixer_gump::help, helptext, colx[3], rowy[num_sliders], 50);
-#endif
 }
 
 Mixer_gump::~Mixer_gump() {

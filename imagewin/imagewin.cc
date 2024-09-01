@@ -36,10 +36,17 @@ Boston, MA  02111-1307, USA.
 #include "common_types.h"
 #include "istring.h"
 #include "manip.h"
+#include "mouse.h"
 
 #include <cstdlib>
 #include <iostream>
 #include <string>
+
+// Simulate HighDPI mode without OS or Display Support for it
+// uncomment the define and set to a value greater than 1.0 to multiply the
+// fullscreen render surface resolution This should only be used for testing and
+// development and will likely degrade performance and quality 
+//#define SIMULATE_HIDPI 2.0f
 
 #ifdef __GNUC__
 #	pragma GCC diagnostic push
@@ -59,7 +66,7 @@ using std::cout;
 using std::endl;
 using std::exit;
 
-#define SCALE_BIT(factor) (1 << ((factor) - 1))
+#define SCALE_BIT(factor) (1 << ((factor)-1))
 
 const Image_window::ScalerType  Image_window::NoScaler(-1);
 const Image_window::ScalerConst Image_window::point("Point");
@@ -632,8 +639,10 @@ void Image_window::create_surface(unsigned int w, unsigned int h) {
  */
 
 bool Image_window::create_scale_surfaces(int w, int h, int bpp) {
-	int    hwdepth = bpp;
-	uint32 flags   = SDL_SWSURFACE | SDL_WINDOW_ALLOW_HIGHDPI;
+	int  hwdepth = bpp;
+	bool highdpi;
+	config->value("config/video/highdpi", highdpi, false);
+	uint32 flags = SDL_SWSURFACE | (highdpi ? SDL_WINDOW_ALLOW_HIGHDPI : 0);
 	if (fullscreen) {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
@@ -665,6 +674,13 @@ bool Image_window::create_scale_surfaces(int w, int h, int bpp) {
 		int dh;
 		// with HighDPi this returns the higher resolutions
 		SDL_GetRendererOutputSize(screen_renderer, &dw, &dh);
+#ifdef SIMULATE_HIDPI
+		constexpr float simulated = SIMULATE_HIDPI + 0.f;
+		if (simulated && dw == w && dh == h) {
+			dw = w * simulated;
+			dh = h * simulated;
+		}
+#endif
 		w                            = dw;
 		h                            = dh;
 		const Resolution res         = {w, h};
@@ -1053,6 +1069,34 @@ int Image_window::get_display_width() {
 
 int Image_window::get_display_height() {
 	return display_surface->h;
+}
+
+void Image_window::screen_to_game(int sx, int sy, bool fast, int& gx, int& gy) {
+	if (fast) {
+		gx = sx + get_start_x();
+		gy = sy + get_start_y();
+		if (Mouse::mouse) {
+			Mouse::mouse->apply_fast_offset(gx, gy);
+		}
+	} else {
+		gx = (sx * inter_width) / (scale * get_display_width()) + get_start_x();
+		gy = (sy * inter_height) / (scale * get_display_height())
+			 + get_start_y();
+	}
+}
+
+void Image_window::game_to_screen(int gx, int gy, bool fast, int& sx, int& sy) {
+	if (fast) {
+		if (Mouse::mouse) {
+			Mouse::mouse->unapply_fast_offset(gx, gy);
+		}
+		sx = gx - get_start_x();
+		sy = gy - get_start_y();
+	} else {
+		sx = ((gx - get_start_x()) * scale * get_display_width()) / inter_width;
+		sy = ((gy - get_start_y()) * scale * get_display_height())
+			 / inter_height;
+	}
 }
 
 bool Image_window::get_draw_dims(
